@@ -4,6 +4,7 @@ import { orderItemParamsSchema } from './order.schema.js';
 import { subscribe, writeLocationEvent, writeClosedEvent, type LocationEvent } from '../realtime/location-stream.js';
 import { AppError } from '../../middleware/error.middleware.js';
 import { metrics } from '../../utils/metrics.js';
+import { logger } from '../../utils/logger.js';
 
 /** How often an open stream re-checks whether its order is still trackable
  * (plan §7): the stream closes within one interval of the actual state
@@ -85,14 +86,21 @@ export async function streamOrderLocation(req: Request, res: Response, next: Nex
       if (closed) return;
       try {
         const stillTrackable = await orderRepository.findTrackableLocationForCustomer(orderId, req.user!.id);
+        // Re-check after the await: the client can disconnect (req.on('close')
+        // sets closed=true, clears this interval, unsubscribes) while this
+        // query is in flight. Without this second check, a tick that was
+        // already running when the disconnect happened would fall through
+        // and write to (or end()) a response whose socket is already gone.
+        if (closed) return;
         if (!stillTrackable) {
           end('delivery_closed');
           return;
         }
         res.write(': heartbeat\n\n');
-      } catch {
+      } catch (err) {
         // Best-effort: a transient DB error on a heartbeat re-check should
         // not tear down an otherwise-healthy stream; the next tick retries.
+        logger.warn({ err, orderId }, 'Location stream heartbeat re-check failed; will retry next tick');
       }
     }, HEARTBEAT_MS);
 

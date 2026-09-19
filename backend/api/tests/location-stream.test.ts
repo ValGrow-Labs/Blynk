@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import http from 'http';
 import { subscribe, broadcastLocation, subscriberCount, closeAllStreams, type LocationEvent } from '../src/modules/realtime/location-stream.js';
 import { createApp } from '../src/app.js';
 import { pool } from '../src/database/connection.js';
 import { generateAccessToken } from '../src/modules/auth/token.service.js';
+import { orderRepository } from '../src/modules/orders/order.repository.js';
+import { streamOrderLocation } from '../src/modules/orders/order.location.controller.js';
 
 function fakeRes() {
   return { write: vi.fn(), end: vi.fn() } as unknown as import('express').Response;
@@ -187,5 +189,98 @@ describe('Customer location stream (HTTP)', () => {
     await request(app).patch(`/api/v1/riders/deliveries/${deliveryId}/status`).set('Authorization', `Bearer ${tokens.riderA}`).send({ status: 'ARRIVED_AT_CUSTOMER' });
     const raw = await readStream(orderId, tokens.customer, (raw) => raw.includes('event: closed'));
     expect(raw).toContain('not_trackable');
+  });
+});
+
+/**
+ * Deterministic reproduction of the disconnect-vs-in-flight-heartbeat race
+ * (review follow-up on Task B4): the client can disconnect while a
+ * heartbeat's `findTrackableLocationForCustomer` re-check is still
+ * in-flight. Without a second `closed` check after that `await`, the tick
+ * would resume and write to (or end()) a response whose socket is already
+ * gone. This exercises `streamOrderLocation` directly with fake timers and
+ * a controllable, never-auto-resolving repository call instead of a real
+ * HTTP server and a real 15s wait, so the race is triggered on demand
+ * rather than by chance.
+ */
+describe('Customer location stream heartbeat race (unit)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('does not write to the response if the client disconnects while a heartbeat re-check is still in flight', async () => {
+    vi.useFakeTimers();
+
+    const orderId = 'c0000001-0000-0000-0000-000000000001';
+    const customerId = 'c0000002-0000-0000-0000-000000000002';
+    const trackableRow = {
+      current_latitude: 6.4,
+      current_longitude: 80.0,
+      location_accuracy_m: 5,
+      location_captured_at: new Date('2026-09-19T10:00:00.000Z'),
+      location_received_at: new Date('2026-09-19T10:00:01.000Z'),
+    };
+
+    // Held open deliberately: this is the heartbeat's in-flight DB call.
+    let resolveHeartbeatQuery!: (value: typeof trackableRow) => void;
+    const heartbeatQuery = new Promise<typeof trackableRow>((resolve) => {
+      resolveHeartbeatQuery = resolve;
+    });
+
+    let trackableCalls = 0;
+    vi.spyOn(orderRepository, 'findOrderById').mockResolvedValue({ id: orderId, customer_id: customerId } as any);
+    vi.spyOn(orderRepository, 'findTrackableLocationForCustomer').mockImplementation(async () => {
+      trackableCalls += 1;
+      // Call 1 is the on-connect check (resolves immediately). Call 2 is
+      // the first heartbeat tick - held pending so the test can simulate a
+      // disconnect while it is still awaiting the DB.
+      return trackableCalls === 1 ? trackableRow : heartbeatQuery;
+    });
+
+    let closeHandler: (() => void) | undefined;
+    const req = {
+      params: { id: orderId },
+      user: { id: customerId, phone: '+94770000000', role: 'CUSTOMER' as const },
+      on: vi.fn((event: string, cb: () => void) => {
+        if (event === 'close') closeHandler = cb;
+      }),
+    } as unknown as import('express').Request;
+    const res = {
+      writeHead: vi.fn(),
+      write: vi.fn(),
+      end: vi.fn(),
+    } as unknown as import('express').Response;
+    const next = vi.fn();
+
+    await streamOrderLocation(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.writeHead).toHaveBeenCalledTimes(1);
+    expect(typeof closeHandler).toBe('function');
+    expect(res.write).toHaveBeenCalledTimes(1); // the initial on-connect snapshot only
+
+    // Fire the first heartbeat tick. Its DB call is the held `heartbeatQuery`
+    // promise, so the tick is now suspended mid-`await`, exactly like a
+    // real in-flight query at the moment a client disconnects.
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(trackableCalls).toBe(2);
+
+    // The client disconnects while that query is still in flight.
+    closeHandler!();
+
+    // The DB call finally resolves - still trackable - after the disconnect
+    // was already processed.
+    resolveHeartbeatQuery(trackableRow);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Pre-fix, this resumed tick would fall through the (unguarded)
+    // trackable branch straight into `res.write(': heartbeat\n\n')` on an
+    // already-torn-down response. Post-fix, the re-check right after the
+    // `await` returns before touching `res` at all, so the write count
+    // must still be exactly the one from the initial on-connect snapshot.
+    expect(res.write).toHaveBeenCalledTimes(1);
+    expect((res.write as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain('event: location');
+    expect(res.end).not.toHaveBeenCalled();
   });
 });
