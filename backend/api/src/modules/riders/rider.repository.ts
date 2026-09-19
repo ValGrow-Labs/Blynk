@@ -174,6 +174,63 @@ export class RiderRepository {
     };
   }
 
+  /**
+   * The one row a location write needs (plan §5.1, §5.2): this delivery,
+   * owned by this rider, plus the parent order's status and this delivery's
+   * own last-accepted point - all read in a single plain SELECT, no
+   * FOR UPDATE. A location write never goes through lifecycle/engine.ts.
+   */
+  async findTrackableDelivery(deliveryId: string, riderId: string, executor: DBConnection = db) {
+    return await executor
+      .selectFrom('deliveries')
+      .innerJoin('orders', 'orders.id', 'deliveries.order_id')
+      .select([
+        'deliveries.id',
+        'deliveries.order_id',
+        'deliveries.assignment_status',
+        'deliveries.location_captured_at',
+        'deliveries.location_received_at',
+        'orders.order_status',
+      ])
+      .where('deliveries.id', '=', deliveryId)
+      .where('deliveries.rider_id', '=', riderId)
+      .executeTakeFirst();
+  }
+
+  /**
+   * A single-row overwrite of the latest-location columns (plan §6). No
+   * FOR UPDATE: Postgres MVCC already makes one row's UPDATE atomic, and this
+   * never races against anything that needs stronger isolation (it never
+   * touches order_status or assignment_status).
+   */
+  async writeLocation(
+    deliveryId: string,
+    input: { latitude: number; longitude: number; accuracy: number; capturedAt: Date },
+    executor: DBConnection = db
+  ) {
+    const now = new Date();
+    return await executor
+      .updateTable('deliveries')
+      .set({
+        current_latitude: input.latitude,
+        current_longitude: input.longitude,
+        location_accuracy_m: input.accuracy,
+        location_captured_at: input.capturedAt,
+        location_received_at: now,
+        updated_at: now,
+      })
+      .where('id', '=', deliveryId)
+      .returning([
+        'order_id',
+        'current_latitude',
+        'current_longitude',
+        'location_accuracy_m',
+        'location_captured_at',
+        'location_received_at',
+      ])
+      .executeTakeFirstOrThrow();
+  }
+
 }
 
 export const riderRepository = new RiderRepository();

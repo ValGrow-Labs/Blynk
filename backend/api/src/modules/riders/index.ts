@@ -43,6 +43,13 @@ ridersRouter.post(
   riderController.collectCod.bind(riderController)
 );
 
+ridersRouter.post(
+  '/deliveries/:id/location',
+  requireAuth,
+  requireRoles('RIDER'),
+  riderController.updateLocation.bind(riderController)
+);
+
 export * from './rider.repository.js';
 export * from './rider.service.js';
 export * from './rider.controller.js';

@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { riderService } from './rider.service.js';
 import { riderRepository } from './rider.repository.js';
 import { updateDeliveryStatusSchema, collectCodSchema, deliveryParamsSchema } from './rider.schema.js';
+import { updateLocationSchema } from './rider.location.schema.js';
+import { riderLocationService } from './rider.location.service.js';
 
 export class RiderController {
   async getActiveDeliveries(req: Request, res: Response, next: NextFunction) {
@@ -61,6 +63,17 @@ export class RiderController {
         success: true,
         data: { settlement },
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateLocation(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = deliveryParamsSchema.parse(req.params);
+      const input = updateLocationSchema.parse(req.body);
+      const result = await riderLocationService.recordLocation(id, req.user!.id, input);
+      res.status(202).json({ success: true, data: result });
     } catch (err) {
       next(err);
     }

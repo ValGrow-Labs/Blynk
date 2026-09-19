@@ -37,6 +37,11 @@ export interface MetricsSnapshot {
     failed: number;
     permanentlyFailed: number;
   };
+  locationUpdates: {
+    received: number;
+    rejectedNotNewer: number;
+    rejectedRateLimited: number;
+  };
   errors: {
     /** HTTP 4xx client errors */
     clientErrors: number;
@@ -78,6 +83,11 @@ class MetricsService {
   private _notificationsFailed = 0;
   private _notificationsPermanentlyFailed = 0;
 
+  // ── Location Updates ─────────────────────────────────────────────────────
+  private _locationUpdatesReceived = 0;
+  private _locationUpdatesRejectedNotNewer = 0;
+  private _locationUpdatesRejectedRateLimited = 0;
+
   // ── Errors ────────────────────────────────────────────────────────────────
   private _clientErrors = 0;
   private _serverErrors = 0;
@@ -109,6 +119,15 @@ class MetricsService {
   incrementNotificationsDispatched(): void        { this._notificationsDispatched++; }
   incrementNotificationsFailed(): void            { this._notificationsFailed++; }
   incrementNotificationsPermanentlyFailed(): void { this._notificationsPermanentlyFailed++; }
+
+  // ── Location Update Counters ─────────────────────────────────────────────
+  /** A rider-reported point that was validated, stored and (usually) broadcast. */
+  locationUpdatesReceived(): void { this._locationUpdatesReceived++; }
+  /** A point accepted by validation but not stored: not newer, or rate-limited. No PII here - counts only. */
+  locationUpdatesRejected(reason: 'not_newer' | 'rate_limited'): void {
+    if (reason === 'not_newer') this._locationUpdatesRejectedNotNewer++;
+    else this._locationUpdatesRejectedRateLimited++;
+  }
 
   // ── Error Counters ────────────────────────────────────────────────────────
   incrementClientErrors(): void       { this._clientErrors++; }
@@ -147,6 +166,11 @@ class MetricsService {
         failed: this._notificationsFailed,
         permanentlyFailed: this._notificationsPermanentlyFailed,
       },
+      locationUpdates: {
+        received: this._locationUpdatesReceived,
+        rejectedNotNewer: this._locationUpdatesRejectedNotNewer,
+        rejectedRateLimited: this._locationUpdatesRejectedRateLimited,
+      },
       errors: {
         clientErrors: this._clientErrors,
         serverErrors: this._serverErrors,
@@ -178,6 +202,9 @@ class MetricsService {
     this._notificationsDispatched = 0;
     this._notificationsFailed = 0;
     this._notificationsPermanentlyFailed = 0;
+    this._locationUpdatesReceived = 0;
+    this._locationUpdatesRejectedNotNewer = 0;
+    this._locationUpdatesRejectedRateLimited = 0;
     this._clientErrors = 0;
     this._serverErrors = 0;
     this._unhandledRejections = 0;

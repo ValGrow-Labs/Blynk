@@ -1,0 +1,97 @@
+import { riderRepository } from './rider.repository.js';
+import { AppError } from '../../middleware/error.middleware.js';
+import { broadcastLocation } from '../realtime/location-stream.js';
+import { metrics } from '../../utils/metrics.js';
+import type { UpdateLocationInput } from './rider.location.schema.js';
+
+/** No two accepted writes closer together than this, per delivery (plan §5.3, §D.6). */
+export const MIN_LOCATION_INTERVAL_MS = 5_000;
+/** A capture more than this far in the future is a clock-skew problem, not a real point. */
+const MAX_FUTURE_SKEW_MS = 60_000;
+/** Older than this, a point is still accepted and stored but not broadcast live (plan §5.1). */
+const STALE_BROADCAST_THRESHOLD_MS = 5 * 60_000;
+
+export type RecordLocationResult =
+  | { accepted: true }
+  | { accepted: false; reason: 'not_newer' | 'rate_limited' };
+
+/**
+ * Records one rider-reported position for one delivery (plan §5). This is
+ * deliberately NOT a lifecycle action: it never imports lifecycle/engine.ts,
+ * lifecycle/catalogue.ts or lifecycle/actions/* (plan §D.5), and its only
+ * database effect is overwriting the five latest-location columns - it can
+ * never change order_status or assignment_status.
+ */
+export class RiderLocationService {
+  private async getRiderOrThrow(userId: string) {
+    const rider = await riderRepository.findRiderByUserId(userId);
+    if (!rider) throw new AppError('Rider profile not found for this user account.', 403, 'RIDER_PROFILE_NOT_FOUND');
+    if (!rider.is_active) throw new AppError('This rider profile is inactive.', 403, 'RIDER_INACTIVE');
+    return rider;
+  }
+
+  async recordLocation(deliveryId: string, userId: string, input: UpdateLocationInput): Promise<RecordLocationResult> {
+    const rider = await this.getRiderOrThrow(userId);
+
+    const delivery = await riderRepository.findTrackableDelivery(deliveryId, rider.id);
+    if (!delivery) {
+      throw new AppError('Delivery assignment not found.', 404, 'DELIVERY_NOT_FOUND');
+    }
+    // The trackable window (plan §2.3, §D.1): PICKED_UP and the order still
+    // OUT_FOR_DELIVERY, checked fresh against the DB every time - never
+    // cached, and independently covers a cancelled order that left this
+    // delivery row ASSIGNED (plan §2.2 gotcha #1) because that state is
+    // neither PICKED_UP nor OUT_FOR_DELIVERY.
+    if (delivery.assignment_status !== 'PICKED_UP' || delivery.order_status !== 'OUT_FOR_DELIVERY') {
+      throw new AppError('This delivery is not currently trackable.', 409, 'DELIVERY_NOT_TRACKABLE', {
+        assignment_status: delivery.assignment_status,
+        order_status: delivery.order_status,
+      });
+    }
+
+    const capturedAt = new Date(input.captured_at);
+    const nowMs = Date.now();
+    if (capturedAt.getTime() - nowMs > MAX_FUTURE_SKEW_MS) {
+      throw new AppError('captured_at is too far in the future.', 400, 'VALIDATION_ERROR', [
+        { path: ['captured_at'], message: 'timestamp is ahead of the server clock' },
+      ]);
+    }
+
+    // Out-of-order or duplicate: a point no newer than what is already
+    // stored must never regress the customer's map backward (plan §11).
+    if (delivery.location_captured_at && capturedAt.getTime() <= delivery.location_captured_at.getTime()) {
+      metrics.locationUpdatesRejected('not_newer');
+      return { accepted: false, reason: 'not_newer' };
+    }
+
+    // Server-side rate floor, independent of the rider app's own throttle
+    // (plan §5.3, §D.6) - abuse protection that doesn't trust the client.
+    if (delivery.location_received_at && nowMs - delivery.location_received_at.getTime() < MIN_LOCATION_INTERVAL_MS) {
+      metrics.locationUpdatesRejected('rate_limited');
+      return { accepted: false, reason: 'rate_limited' };
+    }
+
+    const updated = await riderRepository.writeLocation(deliveryId, {
+      latitude: input.latitude,
+      longitude: input.longitude,
+      accuracy: input.accuracy,
+      capturedAt,
+    });
+    metrics.locationUpdatesReceived();
+
+    const isStale = nowMs - capturedAt.getTime() > STALE_BROADCAST_THRESHOLD_MS;
+    if (!isStale) {
+      broadcastLocation(updated.order_id, {
+        latitude: Number(updated.current_latitude),
+        longitude: Number(updated.current_longitude),
+        accuracy: Number(updated.location_accuracy_m),
+        captured_at: updated.location_captured_at!.toISOString(),
+        received_at: updated.location_received_at!.toISOString(),
+      });
+    }
+
+    return { accepted: true };
+  }
+}
+
+export const riderLocationService = new RiderLocationService();
