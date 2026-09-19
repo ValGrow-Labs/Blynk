@@ -201,4 +201,65 @@ describe('Rider location updates', () => {
       expect([a.status, b.status]).toEqual([202, 202]);
     }
   });
+
+  it('an older write that commits after a newer one is already stored can never regress the position (TOCTOU)', async () => {
+    // Reproduces the exact race the plain pre-read cannot close on its own:
+    // a request for an OLDER point whose own read happens before any other
+    // write exists (so its in-service fast path sees nothing to reject),
+    // but whose UPDATE is forced - via a held row lock on a second raw
+    // connection - to reach Postgres only after a NEWER point has already
+    // been committed. The fix (a conditional UPDATE ... WHERE
+    // location_captured_at IS NULL OR location_captured_at < $capturedAt in
+    // rider.repository.ts's writeLocation) must reject the older write at
+    // that point, not from the stale read. Same held-lock-then-delayed-
+    // commit technique as rider-delivery.test.ts's "checks the amount
+    // against the total read under the lock, not an earlier read".
+    const { deliveryId } = await assignedOrder();
+    await request(app).patch(`/api/v1/riders/deliveries/${deliveryId}/status`).set('Authorization', `Bearer ${tokens.riderA}`).send({ status: 'PICKED_UP' });
+
+    const newerCapturedAt = new Date();
+    const olderCapturedAt = new Date(newerCapturedAt.getTime() - 10_000);
+
+    const other = await pool.connect();
+    try {
+      await other.query('BEGIN');
+      // Commits the newer point first, but holds the row lock open until
+      // this transaction commits below - the older write's UPDATE (fired
+      // concurrently, over the real HTTP API) will block on this same row
+      // and only get to evaluate its own WHERE clause once this lock is
+      // released and its result is visible.
+      await other.query(
+        `UPDATE deliveries
+           SET current_latitude = 6.99, current_longitude = 80.99, location_accuracy_m = 5,
+               location_captured_at = $2, location_received_at = now()
+         WHERE id = $1`,
+        [deliveryId, newerCapturedAt]
+      );
+
+      // supertest's Test object is lazy - it does not actually dispatch the
+      // HTTP request until awaited or given a .then handler. Attaching one
+      // here (rather than at the final `await pending` below) is what
+      // forces the request to fire now, while the lock above is still
+      // held, instead of only after COMMIT - matching the technique in
+      // rider-delivery.test.ts's own lock-and-delay concurrency test.
+      const pending = send(deliveryId, tokens.riderA, point({ latitude: 6.10, captured_at: olderCapturedAt.toISOString() })).then((r) => r);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await other.query('COMMIT');
+      const res = await pending;
+
+      expect(res.status).toBe(202);
+      expect(res.body.data.accepted).toBe(false);
+      expect(res.body.data.reason).toBe('not_newer');
+    } finally {
+      other.release();
+    }
+
+    const row = await pool.query(
+      'SELECT current_latitude, current_longitude, location_captured_at FROM deliveries WHERE id = $1',
+      [deliveryId]
+    );
+    expect(Number(row.rows[0].current_latitude)).toBeCloseTo(6.99, 3);
+    expect(Number(row.rows[0].current_longitude)).toBeCloseTo(80.99, 3);
+    expect(new Date(row.rows[0].location_captured_at).getTime()).toBe(newerCapturedAt.getTime());
+  });
 });

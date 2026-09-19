@@ -57,8 +57,13 @@ export class RiderLocationService {
       ]);
     }
 
-    // Out-of-order or duplicate: a point no newer than what is already
-    // stored must never regress the customer's map backward (plan §11).
+    // Out-of-order or duplicate, fast path: a point no newer than the point
+    // this same read just saw stored must never regress the customer's map
+    // backward (plan §11). This is only a cheap early exit - it is NOT the
+    // authoritative check, because the row can change between this read and
+    // the write below (two riders' apps retrying, or one delivery updated
+    // from two devices). The write itself re-checks under its own WHERE
+    // clause (see writeLocation) and is what actually decides the outcome.
     if (delivery.location_captured_at && capturedAt.getTime() <= delivery.location_captured_at.getTime()) {
       metrics.locationUpdatesRejected('not_newer');
       return { accepted: false, reason: 'not_newer' };
@@ -66,17 +71,37 @@ export class RiderLocationService {
 
     // Server-side rate floor, independent of the rider app's own throttle
     // (plan §5.3, §D.6) - abuse protection that doesn't trust the client.
+    // Soft/best-effort: based on the same read as above, not re-checked
+    // atomically by the write. Unlike the not_newer decision, an occasional
+    // over-frequent write slipping through under a race is not a
+    // correctness problem (plan §D.6 is abuse mitigation, not a data
+    // integrity guarantee), so it is left as-is.
     if (delivery.location_received_at && nowMs - delivery.location_received_at.getTime() < MIN_LOCATION_INTERVAL_MS) {
       metrics.locationUpdatesRejected('rate_limited');
       return { accepted: false, reason: 'rate_limited' };
     }
 
+    // The authoritative not_newer check: writeLocation's UPDATE only
+    // matches a row whose stored location_captured_at is still NULL or
+    // older than this point, evaluated atomically against whatever is
+    // currently in the row at the moment Postgres grants this UPDATE the
+    // row lock - not against the stale read above. Two concurrent writes to
+    // the same delivery are serialized by that per-row lock, so whichever
+    // one's UPDATE runs second re-evaluates its WHERE clause against the
+    // first one's already-committed result. This closes the TOCTOU gap the
+    // fast path above cannot: an older captured_at can never overwrite a
+    // newer one, regardless of which request's UPDATE reaches Postgres
+    // last.
     const updated = await riderRepository.writeLocation(deliveryId, {
       latitude: input.latitude,
       longitude: input.longitude,
       accuracy: input.accuracy,
       capturedAt,
     });
+    if (!updated) {
+      metrics.locationUpdatesRejected('not_newer');
+      return { accepted: false, reason: 'not_newer' };
+    }
     metrics.locationUpdatesReceived();
 
     const isStale = nowMs - capturedAt.getTime() > STALE_BROADCAST_THRESHOLD_MS;

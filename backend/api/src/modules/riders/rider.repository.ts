@@ -198,10 +198,25 @@ export class RiderRepository {
   }
 
   /**
-   * A single-row overwrite of the latest-location columns (plan §6). No
-   * FOR UPDATE: Postgres MVCC already makes one row's UPDATE atomic, and this
-   * never races against anything that needs stronger isolation (it never
-   * touches order_status or assignment_status).
+   * A single-row, conditional overwrite of the latest-location columns
+   * (plan §6). The "is this point newer" decision is made here, inside the
+   * UPDATE's own WHERE clause, not by the caller from an earlier plain
+   * SELECT: two concurrent writes racing the same delivery both lock the
+   * row in turn (Postgres serializes UPDATEs per row), and each one's WHERE
+   * is (re-)evaluated against whatever the row holds *at that moment* -
+   * which may already reflect the other write's commit. That closes the
+   * check-then-act gap a SELECT-then-UPDATE pair could not: it is
+   * impossible for an older captured_at to overwrite a newer one no matter
+   * which request's UPDATE happens to reach Postgres last. Still no
+   * explicit transaction or FOR UPDATE needed - the conditional UPDATE
+   * itself is the atomic unit, and this never touches order_status or
+   * assignment_status so it never races anything that needs stronger
+   * isolation.
+   *
+   * Returns undefined when the WHERE clause found no matching row - either
+   * the delivery id doesn't exist, or (the expected, common case under a
+   * race) the stored point was already the same age or newer. The caller
+   * treats that as `not_newer`.
    */
   async writeLocation(
     deliveryId: string,
@@ -220,6 +235,9 @@ export class RiderRepository {
         updated_at: now,
       })
       .where('id', '=', deliveryId)
+      .where((eb) =>
+        eb.or([eb('location_captured_at', 'is', null), eb('location_captured_at', '<', input.capturedAt)])
+      )
       .returning([
         'order_id',
         'current_latitude',
@@ -228,7 +246,7 @@ export class RiderRepository {
         'location_captured_at',
         'location_received_at',
       ])
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
   }
 
 }
