@@ -458,6 +458,36 @@ export class OrderRepository {
     const row = await executor.selectFrom('orders').select('order_status').where('id', '=', orderId).executeTakeFirst();
     return row?.order_status ?? null;
   }
+
+  // --------------------------------------------------------------------------
+  // LIVE LOCATION TRACKING (read side, Task B4)
+  // --------------------------------------------------------------------------
+
+  /**
+   * The one row the live-tracking stream needs (plan §7, §9): ownership plus
+   * the current delivery's position, only while the trackable window (plan
+   * §2.3 - PICKED_UP with the order OUT_FOR_DELIVERY) is open. A re-staged
+   * order's old FAILED delivery can never match this query, by construction
+   * (plan §2.2 gotcha #2) - at most one delivery row can be PICKED_UP at a
+   * time per uq_deliveries_active_assignment.
+   */
+  async findTrackableLocationForCustomer(orderId: string, customerId: string, executor: DBConnection = db) {
+    return await executor
+      .selectFrom('orders')
+      .innerJoin('deliveries', 'deliveries.order_id', 'orders.id')
+      .select([
+        'deliveries.current_latitude',
+        'deliveries.current_longitude',
+        'deliveries.location_accuracy_m',
+        'deliveries.location_captured_at',
+        'deliveries.location_received_at',
+      ])
+      .where('orders.id', '=', orderId)
+      .where('orders.customer_id', '=', customerId)
+      .where('deliveries.assignment_status', '=', 'PICKED_UP')
+      .where('orders.order_status', '=', 'OUT_FOR_DELIVERY')
+      .executeTakeFirst();
+  }
 }
 
 export const orderRepository = new OrderRepository();

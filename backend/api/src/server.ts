@@ -22,6 +22,12 @@ async function bootstrap() {
     logger.info(`🩺 Health check: http://localhost:${env.PORT}/health`);
   });
 
+  // Long-lived SSE connections (order location streams) need this raised
+  // above Node's short defaults; headersTimeout must stay above
+  // keepAliveTimeout (Node's own documented requirement).
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+
   // 3. Start Notification Outbox Worker daemon (if enabled)
   const { notificationWorker } = await import('./modules/notifications/index.js');
   if (env.NOTIFICATION_WORKER_ENABLED) {
@@ -45,6 +51,12 @@ async function bootstrap() {
         logger.error({ err: workerErr }, 'Error stopping notification worker');
       }
     }
+
+    // Close every open customer location stream (plan §7) so server.close()
+    // never waits on a long-lived SSE connection that would otherwise never
+    // end on its own.
+    const { closeAllStreams } = await import('./modules/realtime/location-stream.js');
+    closeAllStreams();
 
     server.close(async () => {
       logger.info('HTTP server closed.');

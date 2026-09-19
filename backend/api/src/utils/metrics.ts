@@ -42,6 +42,11 @@ export interface MetricsSnapshot {
     rejectedNotNewer: number;
     rejectedRateLimited: number;
   };
+  locationStreams: {
+    opened: number;
+    closedNotTrackable: number;
+    closedDeliveryClosed: number;
+  };
   errors: {
     /** HTTP 4xx client errors */
     clientErrors: number;
@@ -88,6 +93,11 @@ class MetricsService {
   private _locationUpdatesRejectedNotNewer = 0;
   private _locationUpdatesRejectedRateLimited = 0;
 
+  // ── Location Streams (customer SSE) ──────────────────────────────────────
+  private _locationStreamsOpened = 0;
+  private _locationStreamsClosedNotTrackable = 0;
+  private _locationStreamsClosedDeliveryClosed = 0;
+
   // ── Errors ────────────────────────────────────────────────────────────────
   private _clientErrors = 0;
   private _serverErrors = 0;
@@ -127,6 +137,15 @@ class MetricsService {
   locationUpdatesRejected(reason: 'not_newer' | 'rate_limited'): void {
     if (reason === 'not_newer') this._locationUpdatesRejectedNotNewer++;
     else this._locationUpdatesRejectedRateLimited++;
+  }
+
+  // ── Location Stream Counters ─────────────────────────────────────────────
+  /** A customer SSE location stream was opened (connection accepted, headers written). */
+  streamsOpened(): void { this._locationStreamsOpened++; }
+  /** A customer SSE location stream was closed server-side. No PII here - counts only. */
+  streamsClosed(reason: 'not_trackable' | 'delivery_closed'): void {
+    if (reason === 'not_trackable') this._locationStreamsClosedNotTrackable++;
+    else this._locationStreamsClosedDeliveryClosed++;
   }
 
   // ── Error Counters ────────────────────────────────────────────────────────
@@ -171,6 +190,11 @@ class MetricsService {
         rejectedNotNewer: this._locationUpdatesRejectedNotNewer,
         rejectedRateLimited: this._locationUpdatesRejectedRateLimited,
       },
+      locationStreams: {
+        opened: this._locationStreamsOpened,
+        closedNotTrackable: this._locationStreamsClosedNotTrackable,
+        closedDeliveryClosed: this._locationStreamsClosedDeliveryClosed,
+      },
       errors: {
         clientErrors: this._clientErrors,
         serverErrors: this._serverErrors,
@@ -205,6 +229,9 @@ class MetricsService {
     this._locationUpdatesReceived = 0;
     this._locationUpdatesRejectedNotNewer = 0;
     this._locationUpdatesRejectedRateLimited = 0;
+    this._locationStreamsOpened = 0;
+    this._locationStreamsClosedNotTrackable = 0;
+    this._locationStreamsClosedDeliveryClosed = 0;
     this._clientErrors = 0;
     this._serverErrors = 0;
     this._unhandledRejections = 0;
