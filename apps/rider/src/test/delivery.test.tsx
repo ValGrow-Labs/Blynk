@@ -5,6 +5,23 @@ import { tokenStore } from '../api/client';
 import type { DeliveryDetail } from '../api/types';
 import { RIDER, TIMED_OUT, detail, fail, ok, renderAs } from './helpers';
 
+// The real capacitorTrackingPlugin talks to a native bridge that doesn't
+// exist in jsdom; requesting permission there fails closed ('unavailable'),
+// which would leave tracking inert in every test. Faking it as an
+// already-granted, always-succeeding plugin lets these tests exercise
+// Delivery.tsx's actual start/stop wiring and TrackingStatus's real
+// "sharing" state, deterministically and without a network call - the
+// coordinate-secrecy test below relies on this to prove the guarantee holds
+// while tracking is genuinely active, not merely while its UI is unmounted.
+vi.mock('../lib/tracking-plugin', () => ({
+  capacitorTrackingPlugin: {
+    checkPermission: vi.fn(async () => 'granted'),
+    requestPermission: vi.fn(async () => 'granted'),
+    start: vi.fn(async () => undefined),
+    stop: vi.fn(async () => undefined),
+  },
+}));
+
 afterEach(() => {
   tokenStore.clear();
   vi.unstubAllGlobals();
@@ -50,23 +67,42 @@ describe('Delivery', () => {
     expect(screen.getByRole('list', { name: 'Progress' })).toHaveTextContent('Pick up');
   });
 
-  it('never renders coordinates, costs or supplier details even if the API sent them', async () => {
+  it('never renders coordinates, costs or supplier details even if the API sent them - including once tracking is actively sharing', async () => {
+    // The trackable window (plan §2.3) opens on pickup, and TrackingStatus
+    // now legitimately renders passive sharing-state copy while it's open.
+    // The guarantee this test protects is narrower than "no location UI at
+    // all": the rider screen must never render the raw number, even once a
+    // location genuinely is being tracked. So this drives a real pickup (via
+    // the mocked plugin above) rather than just rendering a static screen,
+    // to prove the guarantee holds in the state where it actually matters.
+    const user = userEvent.setup();
+    // These fields aren't part of DeliveryDetail (the API contract the rider
+    // app types against) - built via `unknown`, like the API response
+    // parsing itself, so the leak these guard against isn't type-checked
+    // away before it ever reaches the render the test inspects.
+    const leaked = {
+      delivery_latitude: 6.4351,
+      delivery_longitude: 80.0243,
+      actual_unit_cost: 450,
+      supplier_name: 'Hidden Supplier',
+    };
+    let current: unknown = { ...detail(), ...leaked };
     const { container } = renderAs(RIDER, ROUTE, {
-      'GET /riders/deliveries/:id': () =>
-        ok({
-          delivery: {
-            ...detail(),
-            delivery_latitude: 6.4351,
-            delivery_longitude: 80.0243,
-            actual_unit_cost: 450,
-            supplier_name: 'Hidden Supplier',
-          },
-        }),
+      'GET /riders/deliveries/:id': () => ok({ delivery: current }),
+      'PATCH /riders/deliveries/:id/status': () => {
+        current = { ...detail(onRoad), ...leaked };
+        return ok({ delivery: current });
+      },
     });
-    await screen.findByText('No. 1, Test Lane');
+    await user.click(await screen.findByRole('button', { name: 'Picked up' }));
+
+    // Confirm tracking is genuinely active - not just that TrackingStatus
+    // failed to mount - before checking that it still leaked nothing.
+    expect(await screen.findByText(/sharing your location/i)).toBeInTheDocument();
+
     const text = container.textContent ?? '';
-    for (const leaked of ['6.4351', '80.0243', '450', 'Hidden Supplier', 'cost', 'supplier']) {
-      expect(text).not.toContain(leaked);
+    for (const leakedValue of ['6.4351', '80.0243', '450', 'Hidden Supplier', 'cost', 'supplier']) {
+      expect(text).not.toContain(leakedValue);
     }
   });
 

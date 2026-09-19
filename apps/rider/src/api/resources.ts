@@ -36,6 +36,11 @@ export const deliveriesApi = {
         body: { amount },
       })
     ).settlement,
+  sendLocation: (id: string, point: { latitude: number; longitude: number; accuracy: number; captured_at: string }) =>
+    apiRequest<{ accepted: boolean; reason?: string }>(`/riders/deliveries/${id}/location`, {
+      method: 'POST',
+      body: point,
+    }),
 };
 
 async function setStatus(id: string, body: Record<string, unknown>) {

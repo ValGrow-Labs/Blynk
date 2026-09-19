@@ -7,9 +7,12 @@ import { Banner } from '../components/Banner';
 import { Header } from '../components/Header';
 import { Sheet } from '../components/Sheet';
 import { StatusRail } from '../components/StatusRail';
+import { TrackingStatus } from '../components/TrackingStatus';
 import { canReportFailure, nextAction, stage, statusLabel, statusTone } from '../lib/delivery';
 import { MESSAGES, errorCode, errorMessage } from '../lib/errors';
 import { formatMoney, formatPhone, formatTime, shortOrderNumber } from '../lib/format';
+import { DeliveryTracker, type TrackingState } from '../lib/tracking';
+import { capacitorTrackingPlugin } from '../lib/tracking-plugin';
 import { useLoad } from '../lib/useLoad';
 import { useRevalidate } from '../lib/useRevalidate';
 import { owesCash } from './Queue';
@@ -34,6 +37,32 @@ export function Delivery() {
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<'collect' | 'fail' | null>(null);
   const inFlight = useRef(false);
+
+  // One tracker for the life of this screen (plan §2.3, §13). It only ever
+  // reports a location while a delivery is actively being tracked (started
+  // on pickup, stopped on arrive/fail below) - this effect just wires up the
+  // status readout, it never starts tracking on its own.
+  const trackerRef = useRef<DeliveryTracker | null>(null);
+  const [trackingState, setTrackingState] = useState<TrackingState>({
+    permission: 'not_requested',
+    active: false,
+    lastSentAt: null,
+    lastError: null,
+  });
+  useEffect(() => {
+    const tracker = new DeliveryTracker(capacitorTrackingPlugin, (deliveryId, point) =>
+      deliveriesApi
+        .sendLocation(deliveryId, {
+          latitude: point.latitude,
+          longitude: point.longitude,
+          accuracy: point.accuracy,
+          captured_at: point.capturedAt.toISOString(),
+        })
+        .then(() => undefined)
+    );
+    trackerRef.current = tracker;
+    return tracker.subscribe(setTrackingState);
+  }, []);
 
   const leaveWith = useCallback(
     (message: string) => navigate('/', { replace: true, state: { notice: message } }),
@@ -99,15 +128,29 @@ export function Delivery() {
             Loading the delivery…
           </p>
         ) : null}
-        {data ? <Slip delivery={data} /> : null}
+        {data ? <Slip delivery={data} trackingState={trackingState} /> : null}
       </main>
 
       {data ? (
         <ActionBar
           delivery={data}
           busy={busy}
-          onPickUp={() => void run(() => deliveriesApi.pickUp(data.delivery_id))}
-          onArrive={() => void run(() => deliveriesApi.arrive(data.delivery_id))}
+          onPickUp={() =>
+            void run(async () => {
+              const updated = await deliveriesApi.pickUp(data.delivery_id);
+              // Trackable window opens here (plan §2.3): PICKED_UP, order OUT_FOR_DELIVERY.
+              void trackerRef.current?.start(data.delivery_id);
+              return updated;
+            })
+          }
+          onArrive={() =>
+            void run(async () => {
+              const updated = await deliveriesApi.arrive(data.delivery_id);
+              // Trackable window closes on arrival - terminal, same as a failure below.
+              void trackerRef.current?.stop();
+              return updated;
+            })
+          }
           onCollect={() => setSheet('collect')}
           onFail={() => setSheet('fail')}
         />
@@ -140,14 +183,21 @@ export function Delivery() {
         <FailSheet
           busy={busy}
           onClose={() => setSheet(null)}
-          onSubmit={(reason) => void run(() => deliveriesApi.fail(data.delivery_id, reason))}
+          onSubmit={(reason) =>
+            void run(async () => {
+              const updated = await deliveriesApi.fail(data.delivery_id, reason);
+              // Trackable window closes on a reported failure too - the other terminal path.
+              void trackerRef.current?.stop();
+              return updated;
+            })
+          }
         />
       ) : null}
     </>
   );
 }
 
-function Slip({ delivery: d }: { delivery: DeliveryDetail }) {
+function Slip({ delivery: d, trackingState }: { delivery: DeliveryDetail; trackingState: TrackingState }) {
   const action = nextAction(d);
   const done = action.kind === 'none' && action.reason === 'done';
   const closed = action.kind === 'none' && (action.reason === 'cancelled' || action.reason === 'failed');
@@ -162,6 +212,9 @@ function Slip({ delivery: d }: { delivery: DeliveryDetail }) {
         ) : null}
       </div>
       {closed || done ? null : <StatusRail stage={stage(d)} />}
+      {/* Only inside the trackable window (plan §2.3): PICKED_UP through
+          ARRIVED_AT_CUSTOMER - the same window that opens "Can't deliver". */}
+      {canReportFailure(d) ? <TrackingStatus state={trackingState} /> : null}
 
       {done ? (
         <section className="settled" aria-label="Delivered">
