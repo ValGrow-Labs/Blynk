@@ -289,6 +289,11 @@ export interface DeliveriesTable {
   delivered_at: Date | null;
   failed_at: Date | null;
   failure_reason: string | null;
+  current_latitude: ColumnType<number, number | string, number | string> | null;
+  current_longitude: ColumnType<number, number | string, number | string> | null;
+  location_accuracy_m: ColumnType<number, number | string, number | string> | null;
+  location_captured_at: Date | null;
+  location_received_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
