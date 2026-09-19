@@ -1,8 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { DeliveryDetail } from '../api/types';
+import { capacitorTrackingPlugin } from '../lib/tracking-plugin';
 import { RIDER, TIMED_OUT, detail, fail, ok, renderAs } from './helpers';
 
 // The real capacitorTrackingPlugin talks to a native bridge that doesn't
@@ -21,6 +22,10 @@ vi.mock('../lib/tracking-plugin', () => ({
     stop: vi.fn(async () => undefined),
   },
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 afterEach(() => {
   tokenStore.clear();
@@ -124,6 +129,50 @@ describe('Delivery', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].body).toEqual({ status: 'PICKED_UP' });
     expect(within(actionBar()).getByRole('button', { name: "Can't deliver" })).toBeInTheDocument();
+  });
+
+  it('starts tracking on pickup and stops it once the rider arrives - both terminal edges, not just one', async () => {
+    const user = userEvent.setup();
+    const { state, handler } = serving(detail());
+    renderAs(RIDER, ROUTE, {
+      'GET /riders/deliveries/:id': handler,
+      'PATCH /riders/deliveries/:id/status': (call) => {
+        state.current =
+          call.body.status === 'PICKED_UP' ? detail(onRoad) : detail(atDoor);
+        return ok({ delivery: state.current });
+      },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Picked up' }));
+    await waitFor(() => expect(capacitorTrackingPlugin.start).toHaveBeenCalledTimes(1));
+    expect(capacitorTrackingPlugin.stop).not.toHaveBeenCalled();
+
+    await user.click(await screen.findByRole('button', { name: "I've arrived" }));
+    await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('stops tracking when a failure is reported - the other terminal edge', async () => {
+    const user = userEvent.setup();
+    const { state, handler } = serving(detail(onRoad));
+    renderAs(RIDER, ROUTE, {
+      'GET /riders/deliveries/:id': handler,
+      'PATCH /riders/deliveries/:id/status': (call) => {
+        state.current = detail({
+          assignment_status: 'FAILED',
+          order_status: 'FAILED',
+          failure_reason: call.body.failure_reason,
+        });
+        return ok({ delivery: state.current });
+      },
+    });
+    await user.click(await screen.findByRole('button', { name: "Can't deliver" }));
+    await user.type(screen.getByLabelText('What happened?'), 'Gate locked, no answer');
+    await user.click(screen.getByRole('button', { name: "Mark as couldn't deliver" }));
+    expect(await screen.findByText("Couldn't deliver")).toBeInTheDocument();
+    // No pickup happened in this test, so tracker.start() was never called -
+    // stop() firing here is Delivery.tsx's own fail-path wiring, not
+    // incidental to some earlier start.
+    expect(capacitorTrackingPlugin.start).not.toHaveBeenCalled();
+    await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
   });
 
   it('collecting cash is confirmed in a sheet that restates the amount, and sends the fetched total', async () => {
