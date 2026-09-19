@@ -1,0 +1,104 @@
+import type { TrackingPermissionState, TrackingPlugin, TrackingPoint } from './tracking-plugin';
+
+export interface TrackingState {
+  permission: TrackingPermissionState;
+  active: boolean;
+  lastSentAt: Date | null;
+  lastError: 'permission_denied' | 'position_unavailable' | 'network' | null;
+}
+
+/** Time+distance throttle (plan §4): send at most this often... */
+const MAX_INTERVAL_MS = 9_000;
+/** ...unless the rider hasn't moved this far, in which case skip until the interval elapses. */
+const MIN_DISTANCE_M = 25;
+
+function haversineMeters(a: TrackingPoint, b: TrackingPoint): number {
+  const R = 6371000;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const lat1 = (a.latitude * Math.PI) / 180;
+  const lat2 = (b.latitude * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Owns the rider-side permission state machine and the throttled send loop
+ * for one active delivery (plan §D.1/§4). Knows nothing about Capacitor -
+ * it depends only on the small `TrackingPlugin` interface, so the plugin
+ * underneath (real or fake) is swappable without touching this class.
+ */
+export class DeliveryTracker {
+  private state: TrackingState = { permission: 'not_requested', active: false, lastSentAt: null, lastError: null };
+  private listeners = new Set<(s: TrackingState) => void>();
+  private deliveryId: string | null = null;
+  private lastSentPoint: TrackingPoint | null = null;
+
+  constructor(
+    private plugin: TrackingPlugin,
+    private send: (deliveryId: string, point: TrackingPoint) => Promise<void>
+  ) {}
+
+  getState(): TrackingState {
+    return this.state;
+  }
+
+  subscribe(listener: (s: TrackingState) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private setState(patch: Partial<TrackingState>) {
+    this.state = { ...this.state, ...patch };
+    for (const l of this.listeners) l(this.state);
+  }
+
+  async start(deliveryId: string): Promise<void> {
+    this.deliveryId = deliveryId;
+    this.setState({ permission: 'requesting' });
+    const permission = await this.plugin.requestPermission();
+    this.setState({ permission });
+    if (permission !== 'granted') return;
+
+    await this.plugin.start(
+      (point) => void this.onPoint(point),
+      (code) => this.onError(code)
+    );
+    this.setState({ active: true, lastError: null });
+  }
+
+  async stop(): Promise<void> {
+    await this.plugin.stop();
+    this.deliveryId = null;
+    this.lastSentPoint = null;
+    this.setState({ active: false });
+  }
+
+  private onError(code: 'permission_denied' | 'position_unavailable'): void {
+    // Mid-session revocation: the OS can withdraw location permission while
+    // a watcher is already running. Reflect that in the permission state
+    // too, not just lastError, without tearing down the tracker - the rider
+    // is still "in" the delivery and may re-grant permission.
+    if (code === 'permission_denied') {
+      this.setState({ lastError: code, permission: 'denied' });
+      return;
+    }
+    this.setState({ lastError: code });
+  }
+
+  private async onPoint(point: TrackingPoint): Promise<void> {
+    if (!this.deliveryId) return;
+    const last = this.lastSentPoint;
+    const elapsedMs = last ? point.capturedAt.getTime() - last.capturedAt.getTime() : Infinity;
+    const movedEnough = !last || haversineMeters(last, point) >= MIN_DISTANCE_M;
+    if (last && elapsedMs < MAX_INTERVAL_MS && !movedEnough) return; // throttled, not sent
+
+    try {
+      await this.send(this.deliveryId, point);
+      this.lastSentPoint = point;
+      this.setState({ lastSentAt: new Date(), lastError: null });
+    } catch {
+      this.setState({ lastError: 'network' });
+    }
+  }
+}
