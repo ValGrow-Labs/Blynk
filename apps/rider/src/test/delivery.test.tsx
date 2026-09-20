@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { DeliveryDetail } from '../api/types';
+import { __resetTrackerSessionForTests, getTracker } from '../lib/tracker-session';
 import { capacitorTrackingPlugin } from '../lib/tracking-plugin';
 import { RIDER, TIMED_OUT, detail, fail, ok, renderAs } from './helpers';
 
@@ -25,6 +26,8 @@ vi.mock('../lib/tracking-plugin', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The tracker is an app-level singleton; every test starts with a fresh one.
+  __resetTrackerSessionForTests();
 });
 
 afterEach(() => {
@@ -186,11 +189,57 @@ describe('Delivery', () => {
     await user.type(screen.getByLabelText('What happened?'), 'Gate locked, no answer');
     await user.click(screen.getByRole('button', { name: "Mark as couldn't deliver" }));
     expect(await screen.findByText("Couldn't deliver")).toBeInTheDocument();
-    // No pickup happened in this test, so tracker.start() was never called -
-    // stop() firing here is Delivery.tsx's own fail-path wiring, not
-    // incidental to some earlier start.
-    expect(capacitorTrackingPlugin.start).not.toHaveBeenCalled();
+    // This delivery was already on the road when the screen opened, so
+    // tracking resumed on load (no pickup tap); reporting the failure is what
+    // stops it.
+    expect(capacitorTrackingPlugin.start).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('resumes tracking when the screen opens on a delivery that is already on the road (app restart), with no pickup tap', async () => {
+    renderAs(RIDER, ROUTE, { 'GET /riders/deliveries/:id': () => ok({ delivery: detail(onRoad) }) });
+    expect(await screen.findByText(/sharing your location/i)).toBeInTheDocument();
+    expect(capacitorTrackingPlugin.start).toHaveBeenCalledTimes(1);
+    expect(capacitorTrackingPlugin.stop).not.toHaveBeenCalled();
+  });
+
+  it('does not start tracking for a delivery that is not on the road yet, or already at the door', async () => {
+    renderAs(RIDER, ROUTE, { 'GET /riders/deliveries/:id': () => ok({ delivery: detail(atDoor) }) });
+    await screen.findByRole('button', { name: 'Collect Rs. 610' });
+    expect(capacitorTrackingPlugin.start).not.toHaveBeenCalled();
+  });
+
+  it('stops tracking when a revalidation shows the order was cancelled behind the rider’s back', async () => {
+    const user = userEvent.setup();
+    const { state, handler } = serving(detail(onRoad));
+    renderAs(RIDER, ROUTE, { 'GET /riders/deliveries/:id': handler });
+    expect(await screen.findByText(/sharing your location/i)).toBeInTheDocument();
+    expect(capacitorTrackingPlugin.stop).not.toHaveBeenCalled();
+
+    state.current = detail({ ...onRoad, order_status: 'CANCELLED' }); // admin cancels
+    await user.click(screen.getByRole('button', { name: 'Refresh delivery' }));
+    expect(await screen.findByText("Cancelled — don't pick up")).toBeInTheDocument();
+    await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('leaving the screen mid-delivery neither stops tracking nor leaves a listener behind', async () => {
+    const tracker = getTracker();
+    const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
+    const subscribe = tracker.subscribe.bind(tracker);
+    vi.spyOn(tracker, 'subscribe').mockImplementation((listener) => {
+      const off = vi.fn(subscribe(listener));
+      unsubscribes.push(off);
+      return off;
+    });
+    const { unmount } = renderAs(RIDER, ROUTE, { 'GET /riders/deliveries/:id': () => ok({ delivery: detail(onRoad) }) });
+    await screen.findByText(/sharing your location/i);
+    expect(unsubscribes.length).toBeGreaterThan(0);
+    expect(unsubscribes.every((off) => off.mock.calls.length === 0)).toBe(true);
+
+    unmount();
+    expect(unsubscribes.every((off) => off.mock.calls.length === 1)).toBe(true);
+    expect(capacitorTrackingPlugin.stop).not.toHaveBeenCalled();
+    expect(tracker.getState().active).toBe(true);
   });
 
   it('collecting cash is confirmed in a sheet that restates the amount, and sends the fetched total', async () => {

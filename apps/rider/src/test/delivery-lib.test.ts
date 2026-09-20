@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AssignmentStatus, OrderStatus } from '../api/types';
-import { canReportFailure, nextAction, splitQueue, stage } from '../lib/delivery';
+import { canReportFailure, isTrackable, nextAction, splitQueue, stage } from '../lib/delivery';
 import { summary } from './helpers';
 
 /**
@@ -59,6 +59,45 @@ describe('stage and failure reporting', () => {
       canReportFailure(summary({ assignment_status: 'ARRIVED_AT_CUSTOMER', order_status: 'OUT_FOR_DELIVERY' }))
     ).toBe(true);
     expect(canReportFailure(summary({ assignment_status: 'PICKED_UP', order_status: 'CANCELLED' }))).toBe(false);
+  });
+});
+
+describe('isTrackable', () => {
+  const assignments: AssignmentStatus[] = [
+    'ASSIGNED',
+    'ACCEPTED',
+    'PICKED_UP',
+    'ARRIVED_AT_CUSTOMER',
+    'DELIVERED',
+    'FAILED',
+    'REJECTED',
+  ];
+  const orders: OrderStatus[] = [
+    'PLACED',
+    'PACKED',
+    'OUT_FOR_DELIVERY',
+    'DELIVERED',
+    'CANCELLED',
+    'FAILED',
+    'CUSTOMER_UNAVAILABLE',
+    'ITEM_UNAVAILABLE',
+  ];
+
+  it('is true only for PICKED_UP with the order OUT_FOR_DELIVERY, across every combination', () => {
+    for (const assignment_status of assignments) {
+      for (const order_status of orders) {
+        const expected = assignment_status === 'PICKED_UP' && order_status === 'OUT_FOR_DELIVERY';
+        expect(isTrackable(summary({ assignment_status, order_status })), `${assignment_status}/${order_status}`).toBe(
+          expected
+        );
+      }
+    }
+  });
+
+  it('is narrower than canReportFailure: arrival closes the tracking window', () => {
+    const atDoor = summary({ assignment_status: 'ARRIVED_AT_CUSTOMER', order_status: 'OUT_FOR_DELIVERY' });
+    expect(canReportFailure(atDoor)).toBe(true);
+    expect(isTrackable(atDoor)).toBe(false);
   });
 });
 

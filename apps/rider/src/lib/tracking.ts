@@ -43,6 +43,11 @@ export class DeliveryTracker {
     return this.state;
   }
 
+  /** The delivery this tracker is bound to, or null when idle. Set from start() until stop(), even if permission was refused. */
+  getDeliveryId(): string | null {
+    return this.deliveryId;
+  }
+
   subscribe(listener: (s: TrackingState) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -55,6 +60,7 @@ export class DeliveryTracker {
 
   async start(deliveryId: string): Promise<void> {
     this.deliveryId = deliveryId;
+    this.lastSentPoint = null;
     this.setState({ permission: 'requesting' });
     const permission = await this.plugin.requestPermission();
     this.setState({ permission });
@@ -68,9 +74,11 @@ export class DeliveryTracker {
   }
 
   async stop(): Promise<void> {
-    await this.plugin.stop();
+    // Unbind first: a point or a send still in flight for this delivery must
+    // never be attributed to (or reported against) whatever is tracked next.
     this.deliveryId = null;
     this.lastSentPoint = null;
+    await this.plugin.stop();
     this.setState({ active: false });
   }
 
@@ -87,17 +95,20 @@ export class DeliveryTracker {
   }
 
   private async onPoint(point: TrackingPoint): Promise<void> {
-    if (!this.deliveryId) return;
+    const deliveryId = this.deliveryId;
+    if (!deliveryId) return;
     const last = this.lastSentPoint;
     const elapsedMs = last ? point.capturedAt.getTime() - last.capturedAt.getTime() : Infinity;
     const movedEnough = !last || haversineMeters(last, point) >= MIN_DISTANCE_M;
     if (last && elapsedMs < MAX_INTERVAL_MS && !movedEnough) return; // throttled, not sent
 
     try {
-      await this.send(this.deliveryId, point);
+      await this.send(deliveryId, point);
+      if (this.deliveryId !== deliveryId) return; // stopped or switched while in flight
       this.lastSentPoint = point;
       this.setState({ lastSentAt: new Date(), lastError: null });
     } catch {
+      if (this.deliveryId !== deliveryId) return;
       this.setState({ lastError: 'network' });
     }
   }

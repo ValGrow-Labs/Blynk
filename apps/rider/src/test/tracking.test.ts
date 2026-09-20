@@ -84,6 +84,32 @@ describe('DeliveryTracker', () => {
     expect(tracker.getState().active).toBe(false);
   });
 
+  it('getDeliveryId() reports which delivery is being tracked, and null once stopped', async () => {
+    expect(tracker.getDeliveryId()).toBeNull();
+    await tracker.start('delivery-1');
+    expect(tracker.getDeliveryId()).toBe('delivery-1');
+    await tracker.stop();
+    expect(tracker.getDeliveryId()).toBeNull();
+  });
+
+  it('a send that finishes after stop() is discarded: no lastSentAt, no stale throttle point for the next delivery', async () => {
+    let resolveSend: () => void = () => {};
+    send.mockImplementationOnce(() => new Promise<void>((r) => (resolveSend = r)));
+    await tracker.start('delivery-1');
+    const t0 = new Date();
+    plugin.emit({ latitude: 6.4, longitude: 80.0, accuracy: 10, capturedAt: t0 });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    await tracker.stop();
+    resolveSend();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(tracker.getState().lastSentAt).toBeNull();
+
+    // New delivery, same place, moments later: the first point must not be throttled by the old one.
+    await tracker.start('delivery-2');
+    plugin.emit({ latitude: 6.4, longitude: 80.0, accuracy: 10, capturedAt: new Date(t0.getTime() + 500) });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith('delivery-2', expect.anything()));
+  });
+
   it('notifies subscribers on every state change', async () => {
     const states: unknown[] = [];
     tracker.subscribe((s) => states.push(s.active));

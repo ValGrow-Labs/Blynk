@@ -69,6 +69,15 @@ export function canReportFailure(d: DeliverySummary): boolean {
   );
 }
 
+/**
+ * The window in which the device may share its location: the backend's own
+ * check (assignment PICKED_UP, order OUT_FOR_DELIVERY). Deliberately narrower
+ * than canReportFailure: tracking ends on arrival, the failure button does not.
+ */
+export function isTrackable(d: DeliverySummary): boolean {
+  return d.assignment_status === 'PICKED_UP' && d.order_status === 'OUT_FOR_DELIVERY';
+}
+
 export interface Queue {
   /** The one delivery to act on now, if any. */
   now: DeliverySummary | null;
