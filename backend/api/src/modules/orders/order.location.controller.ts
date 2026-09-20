@@ -40,6 +40,30 @@ function toEvent(row: {
  * writes, and it never changes order_status or assignment_status.
  */
 export async function streamOrderLocation(req: Request, res: Response, next: NextFunction) {
+  let closed = false;
+  let unsubscribe: (() => void) | null = null;
+  let heartbeat: NodeJS.Timeout | null = null;
+
+  const cleanup = () => {
+    closed = true;
+    if (heartbeat) clearInterval(heartbeat);
+    heartbeat = null;
+    unsubscribe?.();
+    unsubscribe = null;
+  };
+
+  const end = (reason: 'not_trackable' | 'delivery_closed') => {
+    if (closed) return;
+    cleanup();
+    writeClosedEvent(res, reason);
+    res.end();
+    metrics.streamsClosed(reason);
+  };
+
+  // Registered before the first await: a client that leaves while a query is
+  // in flight must not be subscribed (and left subscribed) afterwards.
+  req.on('close', cleanup);
+
   try {
     const { id: orderId } = orderItemParamsSchema.parse(req.params);
 
@@ -51,6 +75,12 @@ export async function streamOrderLocation(req: Request, res: Response, next: Nex
       throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
     }
 
+    // Every query that can fail with the response still untouched runs before
+    // the SSE headers go out, so a database error is an ordinary JSON 500 from
+    // the error middleware - never a second set of headers on a live stream.
+    const row = await orderRepository.findTrackableLocationForCustomer(orderId, req.user!.id);
+    if (closed) return; // the client left during the query: nothing to write to
+
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -58,21 +88,6 @@ export async function streamOrderLocation(req: Request, res: Response, next: Nex
       'X-Accel-Buffering': 'no',
     });
 
-    let closed = false;
-    let unsubscribe: (() => void) | null = null;
-    let heartbeat: NodeJS.Timeout | null = null;
-
-    const end = (reason: 'not_trackable' | 'delivery_closed') => {
-      if (closed) return;
-      closed = true;
-      if (heartbeat) clearInterval(heartbeat);
-      unsubscribe?.();
-      writeClosedEvent(res, reason);
-      res.end();
-      metrics.streamsClosed(reason);
-    };
-
-    const row = await orderRepository.findTrackableLocationForCustomer(orderId, req.user!.id);
     if (!row) {
       end('not_trackable');
       return;
@@ -103,13 +118,15 @@ export async function streamOrderLocation(req: Request, res: Response, next: Nex
         logger.warn({ err, orderId }, 'Location stream heartbeat re-check failed; will retry next tick');
       }
     }, HEARTBEAT_MS);
-
-    req.on('close', () => {
-      closed = true;
-      if (heartbeat) clearInterval(heartbeat);
-      unsubscribe?.();
-    });
   } catch (err) {
+    cleanup();
+    if (res.headersSent) {
+      // Failed after the stream began (e.g. the socket died mid-write): there
+      // is no JSON error to send on an event stream - just end it, once.
+      logger.warn({ err }, 'Location stream failed after headers were sent; ending the response');
+      if (!res.writableEnded) res.end();
+      return;
+    }
     next(err);
   }
 }

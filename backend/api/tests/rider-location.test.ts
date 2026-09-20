@@ -114,6 +114,28 @@ describe('Rider location updates', () => {
     }
   });
 
+  it('bounds accuracy: an absurd or non-finite value is a 400, never a Postgres overflow 500; the maximum is accepted (m1)', async () => {
+    const { deliveryId } = await assignedOrder();
+    await request(app).patch(`/api/v1/riders/deliveries/${deliveryId}/status`).set('Authorization', `Bearer ${tokens.riderA}`).send({ status: 'PICKED_UP' });
+    for (const bad of [point({ accuracy: 1e7 }), point({ accuracy: 100_000.5 }), point({ accuracy: 1e21 })]) {
+      const res = await send(deliveryId, tokens.riderA, bad);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+    // JSON.parse('1e999') is Infinity; supertest cannot serialise it, so send the raw text.
+    const body = JSON.stringify(point()).replace(/"accuracy":[^,]+/, '"accuracy":1e999');
+    const inf = await request(app).post(`/api/v1/riders/deliveries/${deliveryId}/location`)
+      .set('Authorization', `Bearer ${tokens.riderA}`).set('Content-Type', 'application/json').send(body);
+    expect(inf.status).toBe(400);
+    expect(inf.body.error.code).toBe('VALIDATION_ERROR');
+
+    const max = await send(deliveryId, tokens.riderA, point({ accuracy: 100_000 }));
+    expect(max.status).toBe(202);
+    expect(max.body.data.accepted).toBe(true);
+    const row = await pool.query('SELECT location_accuracy_m FROM deliveries WHERE id = $1', [deliveryId]);
+    expect(Number(row.rows[0].location_accuracy_m)).toBe(100000);
+  });
+
   it('rejects a captured_at far in the future, accepts one only slightly stale', async () => {
     const { deliveryId } = await assignedOrder();
     await request(app).patch(`/api/v1/riders/deliveries/${deliveryId}/status`).set('Authorization', `Bearer ${tokens.riderA}`).send({ status: 'PICKED_UP' });

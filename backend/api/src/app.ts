@@ -4,6 +4,7 @@ import cors from 'cors';
 import { pinoHttp } from 'pino-http';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { shouldIgnoreRequestLog } from './utils/request-log.js';
 import { requestIdMiddleware } from './middleware/request-id.middleware.js';
 import { errorMiddleware, notFoundMiddleware } from './middleware/error.middleware.js';
 import { httpMetricsMiddleware } from './middleware/http-metrics.middleware.js';
@@ -60,6 +61,8 @@ export function createApp(): Express {
       pinoHttp({
         logger,
         genReqId: (req) => req.id,
+        // Map tile Range requests are hundreds per map session; see utils/request-log.ts.
+        autoLogging: { ignore: (req) => shouldIgnoreRequestLog(req) },
         customLogLevel: (_req, res, err) => {
           if (res.statusCode >= 500 || err) return 'error';
           if (res.statusCode >= 400) return 'warn';

@@ -3,6 +3,7 @@ import { db } from '../../database/connection.js';
 import { Database, OrderStatus, ItemFulfillmentStatus } from '../../database/types.js';
 import { ACTIVE_DELIVERY_STATUSES, INITIAL_ORDER_STATUS } from './lifecycle/catalogue.js';
 import { recordOrderPlaced } from './lifecycle/status-writer.js';
+import { DELIVERY_PUBLIC_SELECT } from './delivery.columns.js';
 
 export type DBConnection = Transaction<Database> | typeof db;
 
@@ -271,7 +272,8 @@ export class OrderRepository {
         .selectFrom('deliveries')
         .innerJoin('riders', 'riders.id', 'deliveries.rider_id')
         .innerJoin('users', 'users.id', 'riders.user_id')
-        .selectAll('deliveries')
+        // Allow-list, not selectAll: the rider's live position is the customer stream's alone (delivery.columns.ts).
+        .select(DELIVERY_PUBLIC_SELECT)
         .select('users.full_name as rider_name')
         .where('deliveries.order_id', '=', orderId)
         .where('deliveries.assignment_status', 'not in', ['FAILED', 'REJECTED'])

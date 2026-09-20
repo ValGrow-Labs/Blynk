@@ -6,6 +6,7 @@ import { pool } from '../src/database/connection.js';
 import { generateAccessToken } from '../src/modules/auth/token.service.js';
 import { orderRepository } from '../src/modules/orders/order.repository.js';
 import { streamOrderLocation } from '../src/modules/orders/order.location.controller.js';
+import { metrics } from '../src/utils/metrics.js';
 
 function fakeRes() {
   return { write: vi.fn(), end: vi.fn() } as unknown as import('express').Response;
@@ -282,5 +283,106 @@ describe('Customer location stream heartbeat race (unit)', () => {
     expect(res.write).toHaveBeenCalledTimes(1);
     expect((res.write as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain('event: location');
     expect(res.end).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Final-review finding m2: the SSE headers used to be written before the first
+ * trackable query, so a database failure there reached errorMiddleware with
+ * the stream already open (ERR_HTTP_HEADERS_SENT from res.json, a misleading
+ * 500 log line, a client left on a half-open stream). The query now runs
+ * first: a failure is an ordinary JSON 500 and nothing was opened or left
+ * subscribed.
+ */
+describe('Customer location stream - database failure on connect (unit)', () => {
+  const orderId = 'c0000001-0000-0000-0000-0000000000f1';
+  const customerId = 'c0000002-0000-0000-0000-0000000000f2';
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function fakeReqRes() {
+    const req = {
+      params: { id: orderId },
+      user: { id: customerId, phone: '+94770000000', role: 'CUSTOMER' as const },
+      on: vi.fn(),
+    } as unknown as import('express').Request;
+    const res = { writeHead: vi.fn(), write: vi.fn(), end: vi.fn(), headersSent: false } as unknown as import('express').Response;
+    return { req, res };
+  }
+
+  it('hands the failure to the error middleware once, writes nothing to the response, and leaks no subscriber or metric', async () => {
+    const boom = new Error('connection terminated');
+    vi.spyOn(orderRepository, 'findOrderById').mockResolvedValue({ id: orderId, customer_id: customerId } as any);
+    vi.spyOn(orderRepository, 'findTrackableLocationForCustomer').mockRejectedValue(boom);
+    const before = metrics.snapshot().locationStreams;
+    const { req, res } = fakeReqRes();
+    const next = vi.fn();
+
+    await expect(streamOrderLocation(req, res, next)).resolves.toBeUndefined();
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(boom);
+    expect(res.writeHead).not.toHaveBeenCalled();
+    expect(res.write).not.toHaveBeenCalled();
+    expect(res.end).not.toHaveBeenCalled(); // the error middleware ends it, exactly once
+    expect(subscriberCount(orderId)).toBe(0);
+    expect(metrics.snapshot().locationStreams).toEqual(before);
+  });
+
+  it('through the real error middleware: a clean JSON 500, no ERR_HTTP_HEADERS_SENT', async () => {
+    vi.spyOn(orderRepository, 'findOrderById').mockResolvedValue({ id: orderId, customer_id: customerId } as any);
+    vi.spyOn(orderRepository, 'findTrackableLocationForCustomer').mockRejectedValue(new Error('connection terminated'));
+    const { default: express } = await import('express');
+    const { errorMiddleware } = await import('../src/middleware/error.middleware.js');
+    const { logger } = await import('../src/utils/logger.js');
+    const errorLog = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const uncaught: unknown[] = [];
+    const onUncaught = (e: unknown) => uncaught.push(e);
+    process.on('uncaughtException', onUncaught);
+
+    const app = express();
+    app.get('/orders/:id/location/stream', (req, res, next) => {
+      (req as any).user = { id: customerId, phone: '+94770000000', role: 'CUSTOMER' };
+      return streamOrderLocation(req, res, next);
+    });
+    app.use(errorMiddleware);
+    const request = (await import('supertest')).default;
+    const res = await request(app).get(`/orders/${orderId}/location/stream`);
+    await new Promise((r) => setTimeout(r, 50));
+    process.off('uncaughtException', onUncaught);
+
+    expect(res.status).toBe(500);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    expect(uncaught).toEqual([]);
+    // exactly the one, honest 500 log - not a second error about headers already sent
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('ERR_HTTP_HEADERS_SENT');
+    expect(subscriberCount(orderId)).toBe(0);
+  });
+
+  it('a client that disconnects while the connect query is in flight is never subscribed', async () => {
+    let release!: (v: undefined) => void;
+    vi.spyOn(orderRepository, 'findOrderById').mockResolvedValue({ id: orderId, customer_id: customerId } as any);
+    vi.spyOn(orderRepository, 'findTrackableLocationForCustomer').mockImplementation(
+      () => new Promise((r) => { release = r as (v: undefined) => void; }) as any
+    );
+    let closeHandler: (() => void) | undefined;
+    const { req, res } = fakeReqRes();
+    (req.on as ReturnType<typeof vi.fn>).mockImplementation((event: string, cb: () => void) => {
+      if (event === 'close') closeHandler = cb;
+    });
+    const next = vi.fn();
+
+    const done = streamOrderLocation(req, res, next);
+    await new Promise((r) => setImmediate(r));
+    closeHandler!(); // the client leaves mid-query
+    release(undefined);
+    await done;
+
+    expect(res.writeHead).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(subscriberCount(orderId)).toBe(0);
   });
 });

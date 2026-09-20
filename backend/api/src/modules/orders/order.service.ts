@@ -7,8 +7,9 @@ import { AppError } from '../../middleware/error.middleware.js';
 import { OrderStatus } from '../../database/types.js';
 import { logger } from '../../utils/logger.js';
 import { runTransition } from './lifecycle/engine.js';
-import type { Actor } from './lifecycle/types.js';
+import type { Actor, DeliveryRow } from './lifecycle/types.js';
 import { adminStatusAction, CATALOGUE } from './lifecycle/catalogue.js';
+import { toPublicDelivery } from './delivery.columns.js';
 
 function generateOrderNumber(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -336,7 +337,9 @@ export class OrderService {
 
   /** Lifecycle #4 ASSIGN_RIDER. */
   async assignRiderAdmin(orderId: string, riderId: string, actor: Actor) {
-    return await runTransition('ASSIGN_RIDER', { actor, orderId, input: { rider_id: riderId } });
+    const delivery = await runTransition<DeliveryRow>('ASSIGN_RIDER', { actor, orderId, input: { rider_id: riderId } });
+    // The lifecycle hands back the whole inserted row; staff get the public columns only.
+    return toPublicDelivery(delivery);
   }
 }
 
