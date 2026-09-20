@@ -19,6 +19,7 @@ dependencies:
   flutter_secure_storage: ^8.0.0
   dio: ^5.3.0
   maplibre_gl: ^0.25.0
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:
