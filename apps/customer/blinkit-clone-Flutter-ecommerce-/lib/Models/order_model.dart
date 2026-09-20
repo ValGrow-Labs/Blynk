@@ -37,6 +37,14 @@ OrderStatus orderStatusFromString(String? raw) {
 
 DateTime? _date(Object? v) => v == null ? null : DateTime.tryParse(v.toString());
 
+/// Null, empty or unparseable (or non-finite) input is null - never 0, so a
+/// missing coordinate can't be mistaken for the point (0, 0).
+double? _optionalDouble(Object? v) {
+  if (v == null) return null;
+  final d = double.tryParse(v.toString().trim());
+  return d != null && d.isFinite ? d : null;
+}
+
 /// One row of `history[]`: a status transition as the backend recorded it.
 /// Includes re-stage transitions (e.g. FAILED -> PACKED) verbatim - nothing
 /// here is inferred or reordered by the client.
@@ -130,6 +138,8 @@ class OrderModel {
   final String deliveryAddressLine1;
   final String? deliveryAddressLine2;
   final String deliveryCity;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
   final String? deliveryInstructions;
   final String? cancellationReason;
   final String? customerNotes;
@@ -156,6 +166,8 @@ class OrderModel {
     required this.deliveryAddressLine1,
     this.deliveryAddressLine2,
     required this.deliveryCity,
+    this.deliveryLatitude,
+    this.deliveryLongitude,
     this.deliveryInstructions,
     this.cancellationReason,
     this.customerNotes,
@@ -203,6 +215,8 @@ class OrderModel {
       deliveryAddressLine2:
           (json['delivery_address_line2'] ?? json['deliveryAddressLine2'])?.toString(),
       deliveryCity: (json['delivery_city'] ?? json['deliveryCity'] ?? '').toString(),
+      deliveryLatitude: _optionalDouble(json['delivery_latitude'] ?? json['deliveryLatitude']),
+      deliveryLongitude: _optionalDouble(json['delivery_longitude'] ?? json['deliveryLongitude']),
       deliveryInstructions:
           (json['delivery_instructions'] ?? json['deliveryInstructions'])?.toString(),
       cancellationReason:

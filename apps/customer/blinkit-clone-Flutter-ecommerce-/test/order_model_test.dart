@@ -99,4 +99,79 @@ void main() {
       expect(OrderModel.tryParse({...orderJson(), 'order_status': 'TELEPORTED'})!.status, OrderStatus.unknown);
     });
   });
+
+  group('OrderModel delivery destination coordinate', () {
+    test('parses the delivery destination coordinate (already returned by the backend, plan §8)', () {
+      final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': '6.4382', 'delivery_longitude': '80.0274'});
+      expect(o.deliveryLatitude, 6.4382);
+      expect(o.deliveryLongitude, 80.0274);
+    });
+
+    test('a missing destination coordinate parses as null, not zero', () {
+      final o = OrderModel.fromJson(orderJson());
+      expect(o.deliveryLatitude, isNull);
+      expect(o.deliveryLongitude, isNull);
+    });
+
+    test('parses numeric (non-string) coordinates', () {
+      final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': 6.4382, 'delivery_longitude': 80});
+      expect(o.deliveryLatitude, 6.4382);
+      expect(o.deliveryLongitude, 80.0);
+    });
+
+    test('an explicit null, empty string or garbage parses as null, never 0', () {
+      for (final bad in <Object?>[null, '', '   ', 'abc', '6.4.3', <String>[], <String, dynamic>{}]) {
+        final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': bad, 'delivery_longitude': bad});
+        expect(o.deliveryLatitude, isNull, reason: 'lat from $bad');
+        expect(o.deliveryLongitude, isNull, reason: 'lng from $bad');
+      }
+    });
+
+    test('NaN and Infinity are not coordinates', () {
+      for (final bad in <Object?>['NaN', 'Infinity', '-Infinity', double.nan, double.infinity]) {
+        final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': bad, 'delivery_longitude': bad});
+        expect(o.deliveryLatitude, isNull, reason: 'lat from $bad');
+        expect(o.deliveryLongitude, isNull, reason: 'lng from $bad');
+      }
+    });
+
+    test('a coordinate of exactly 0 parses as 0.0, not null', () {
+      for (final zero in <Object>[0, 0.0, '0', '0.0', '0.000000']) {
+        final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': zero, 'delivery_longitude': zero});
+        expect(o.deliveryLatitude, 0.0, reason: 'lat from $zero');
+        expect(o.deliveryLongitude, 0.0, reason: 'lng from $zero');
+      }
+    });
+
+    test('negative coordinates parse', () {
+      final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': '-33.8688', 'delivery_longitude': '-151.2093'});
+      expect(o.deliveryLatitude, -33.8688);
+      expect(o.deliveryLongitude, -151.2093);
+    });
+
+    test('camelCase keys are handled', () {
+      final o = OrderModel.fromJson({...orderJson(), 'deliveryLatitude': '6.4382', 'deliveryLongitude': 80.0274});
+      expect(o.deliveryLatitude, 6.4382);
+      expect(o.deliveryLongitude, 80.0274);
+    });
+
+    test('snake_case wins over camelCase; an explicit-null snake_case falls back to camelCase', () {
+      final both = OrderModel.fromJson({
+        ...orderJson(), 'delivery_latitude': '1.5', 'deliveryLatitude': '2.5',
+        'delivery_longitude': '3.5', 'deliveryLongitude': '4.5',
+      });
+      expect(both.deliveryLatitude, 1.5);
+      expect(both.deliveryLongitude, 3.5);
+      final fallback = OrderModel.fromJson({
+        ...orderJson(), 'delivery_latitude': null, 'deliveryLatitude': '2.5',
+      });
+      expect(fallback.deliveryLatitude, 2.5);
+    });
+
+    test('the coordinate is independent per axis', () {
+      final o = OrderModel.fromJson({...orderJson(), 'delivery_latitude': '6.4382'});
+      expect(o.deliveryLatitude, 6.4382);
+      expect(o.deliveryLongitude, isNull);
+    });
+  });
 }
