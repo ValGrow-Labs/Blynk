@@ -23,6 +23,16 @@ export function TrackingStatus({ state }: { state: TrackingState }) {
       </p>
     );
   }
+  // The location service / plugin couldn't be reached at all (e.g. the native
+  // bridge failed closed), so tracking never started. Less specific than a
+  // denial, so it sits below it, but it still outranks everything else.
+  if (state.permission === 'unavailable' && !state.active) {
+    return (
+      <p className="tracking-status tracking-status--error">
+        Location isn't available on this device right now — check that location services are on and reopen the app.
+      </p>
+    );
+  }
   if (state.lastError === 'position_unavailable') {
     return <p className="tracking-status tracking-status--error">Can't get your location — check GPS is on.</p>;
   }

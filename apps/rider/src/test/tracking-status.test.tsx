@@ -63,6 +63,32 @@ describe('TrackingStatus', () => {
       expect(screen.queryByText(/stopped sharing/i)).not.toBeInTheDocument();
     });
 
+    it("says location isn't available when the location service can't be reached", () => {
+      const { container } = render(
+        <TrackingStatus state={{ permission: 'unavailable', active: false, lastSentAt: null, lastError: null }} />
+      );
+      expect(screen.getByText(/location isn't available on this device/i)).toBeInTheDocument();
+      expect(container.querySelector('.tracking-status--error')).not.toBeNull();
+      expect(container.textContent).not.toMatch(noCoordinate);
+    });
+
+    it('denied is more specific than unavailable, and unavailable outranks GPS-unavailable and stopped', () => {
+      const { unmount } = render(
+        <TrackingStatus state={{ permission: 'denied', active: false, lastSentAt: null, lastError: 'permission_denied' }} />
+      );
+      expect(screen.getByText(permissionCopy)).toBeInTheDocument();
+      unmount();
+
+      render(
+        <TrackingStatus
+          state={{ permission: 'unavailable', active: false, lastSentAt: new Date(), lastError: 'position_unavailable' }}
+        />
+      );
+      expect(screen.getByText(/location isn't available on this device/i)).toBeInTheDocument();
+      expect(screen.queryByText(/can't get your location/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/stopped sharing/i)).not.toBeInTheDocument();
+    });
+
     it('permission denial takes precedence over GPS-unavailable', () => {
       render(
         <TrackingStatus state={{ permission: 'denied', active: true, lastSentAt: null, lastError: 'position_unavailable' }} />
