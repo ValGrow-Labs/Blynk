@@ -79,6 +79,8 @@ Expected: `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `FOREGROUND_SERVICE`
 
 **Battery testing note.** Doze and most OEM killers do not engage while the phone is charging / on USB. For scenarios 3-5, 8, 12: after install, **unplug USB** (use wireless debugging, `adb pair` / `adb connect <ip>:<port>`, or simply do not use adb during the walk and rely on DB/SSE observation from the laptop).
 
+Backup: the rider APK sets `android:allowBackup="false"` and `android:dataExtractionRules` (excluding cloud backup and device transfer), so the 30-day refresh token in WebView localStorage cannot ride an Android backup or a phone-to-phone transfer. The token still lives in localStorage; moving it to secure native storage is a separate follow-up decision.
+
 ### 1.4 Pointing the phone at the dev backend (not `localhost`)
 The Capacitor Android WebView serves the app from origin `https://localhost` (Capacitor 7 default `androidScheme: https`). The committed `capacitor.config.ts` enables `CapacitorHttp`, which patches global `fetch` so API calls use native Android HTTP instead of the WebView (see risk R-A and scenario S20). That decides which network rules apply, so read this section with `CapacitorHttp` in mind:
 
@@ -112,6 +114,8 @@ export CUSTOMER_TOKEN=...   ADMIN_TOKEN=...   STAFF_TOKEN=...   RIDER_TOKEN=...
 export ORDER_ID=...   DELIVERY_ID=...   # filled in during scenario 1
 ```
 Backend must be running and migrated through `006_rider_location_tracking.sql`.
+
+These tokens are credentials: any E2E artifact directory (`E2E_ARTIFACT_DIR`) and any ops session file holds refresh tokens and MUST live outside the repository (never under a path git tracks, never committed or attached to a ticket).
 
 ### 1.6 Reusable observation commands
 **DB row (the truth source; no history table exists, so poll it):**
