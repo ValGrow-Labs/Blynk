@@ -621,7 +621,7 @@ STATUS: CUSTOMER ORDER EXPERIENCE COMPLETE AND VERIFIED
 ## Live Location & Delivery Tracking (IMPLEMENTED — AUTOMATED-TESTED; PHYSICAL ANDROID VERIFICATION PENDING; NOT PRODUCTION-READY)
 
 > **Report:** [blynk-live-location-tracking-report.md](blynk-live-location-tracking-report.md) · **Device runbook:** [rider-background-tracking-device-verification.md](../06-deployment/rider-background-tracking-device-verification.md) (BLOCKED/PENDING, no box ticked) · **Plan:** `docs/superpowers/plans/2026-09-19-blynk-live-location-tracking.md` (D1–D6 approved; D4 amended mid-plan from Google Maps to MapLibre + self-hosted PMTiles)
-> **Test Suite:** backend 767 passing in 32 files (60 new) with `npm run test:hygiene` clean ("every row of every table identical") · rider 108 (59 new) · Flutter 524 (233 new) · every `tsc`, build (backend, rider) and `flutter analyze` clean
+> **Test Suite:** backend 779 passing in 34 files (72 new) with `npm run test:hygiene` clean ("every row of every table identical") · rider 108 (59 new) · Flutter 524 (233 new) · every `tsc`, build (backend, rider) and `flutter analyze` clean
 > **Live pipeline E2E (no device):** 10 scenarios passed, 1 skipped (a second rider does not exist in the seed), against a real backend and PostgreSQL through the real customer `LocationProvider`; database restored to baseline. Synthetic coordinates were test inputs, **not** GPS verification.
 > **Not verified:** any physical Android run (runbook S1–S21), any map rendering, and the Customer Android build (blocked: [customer-android-build-status.md](../06-deployment/customer-android-build-status.md))
 
@@ -643,6 +643,7 @@ STATUS: CUSTOMER ORDER EXPERIENCE COMPLETE AND VERIFIED
 - The tracker follows one delivery at a time; the customer order screen learns `PICKED_UP` only on resume, pull-to-refresh or after a cancel attempt (no polling was added — decision pending); a reconnect keeps the last point for up to about 2 minutes because events carry no delivery id.
 - Plugin is effectively unmaintained (last release 2025-08-28); `POST_NOTIFICATIONS` is never requested (foreground-service notification may be hidden on Android 13+); `ACCESS_BACKGROUND_LOCATION` is declared but not needed; the patched native `fetch` ignores `AbortSignal`.
 - Map style/tile failures are silent at runtime; tile archive is a point-in-time snapshot (rebuild every 3–6 months suggested); reverse-proxy/CDN Range behaviour and a real `docker build` are unverified; iOS is not scoped or verified; no admin live map, ETA, route or geocoding (by design).
-- One unexplained transient failure of 1 of 767 backend tests in a single run (not reproduced in two full re-runs); see the report.
+- One unexplained transient failure of 1 of 767 backend tests in a single run (not reproduced in two full re-runs, nor in the final 779-test runs); see the report.
+- Final review fixes applied: rider location no longer appears in any admin/staff/rider delivery payload (allow-listed columns, guarded by tests); the rider APK opts out of Android backup (token still in localStorage); accuracy capped; an SSE database error ends cleanly; tile requests no longer flood the access log. Open decisions in the report §16.2: retention of the last GPS point (I3), per-user SSE cap (I4), hub-default address pin (H2).
 
 STATUS: LIVE LOCATION & DELIVERY TRACKING IMPLEMENTED AND AUTOMATED-TESTED — PHYSICAL ANDROID VERIFICATION PENDING; NOT PRODUCTION-READY
