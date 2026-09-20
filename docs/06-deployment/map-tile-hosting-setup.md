@@ -1,6 +1,6 @@
 # Map Tile Hosting Setup (Self-Hosted PMTiles + MapLibre)
 
-**Status:** Archive built and committed (2026-09-20). Serving from `backend/api` and the Flutter `MapProvider` are implemented in later tasks.
+**Status:** Archive built and committed (2026-09-20). Backend serving route and Docker inclusion implemented in Task M0b (section 8.1, verified by `backend/api/tests/map-tiles.test.ts`). The Flutter `MapProvider` is implemented in a later task.
 **Supersedes:** the withdrawn Google Maps setup idea. No Google Maps, no Google Cloud project, no Google API key anywhere.
 **Gate for:** Customer app live-delivery map (plan: `docs/superpowers/plans/2026-09-19-blynk-live-location-tracking.md`, section "Map Provider" and section 8).
 
@@ -212,12 +212,44 @@ Requirements for the backend serving task:
 | CORS | Only needed for a browser client on another origin; native Flutter is unaffected. If needed: allow `GET, HEAD`, `Range`, `If-Match`; expose `ETag` (and `Content-Range`, `Accept-Ranges`) | Protomaps cloud-storage doc |
 | Auth | None: public map data, same trust level as other static assets |  |
 
-**Recommended `Cache-Control`** (a recommendation; the backend task implements):
+**Recommended `Cache-Control`** (implemented in Task M0b as the first option below):
 
 - With the stable file name planned (`blynk-service-area.pmtiles`, overwritten on each rebuild): `Cache-Control: public, max-age=3600` (or up to a day) plus `ETag`/`Last-Modified`. Reasoning: MDN says to always specify `Cache-Control` to avoid heuristic caching and to use validators; a short freshness window lets a rebuilt archive propagate quickly, and validators let caches revalidate. Do not use `immutable` with a fixed name.
 - Alternative: a versioned name (e.g. `blynk-service-area-20260919.pmtiles`) with `public, max-age=31536000, immutable`, which is MDN's documented cache-busting pattern; the app's URL configuration then changes on each rebuild.
 - Replace the file **atomically** (write a temp file, then rename) so a client mid-session never reads a half-written archive.
 - Native MapLibre does not cache PMTiles sources (section 5), so these headers mostly matter for browsers, CDNs and proxies.
+
+### 8.1 Implemented in Task M0b (verified by `backend/api/tests/map-tiles.test.ts`)
+
+| Item | Value |
+|---|---|
+| Public URL | `GET|HEAD {origin}/map-tiles/blynk-service-area.pmtiles`, at the app root like `/uploads`, **not** under `API_PREFIX` (it is a static file, not a versioned JSON endpoint). Use `{origin}/map-tiles/blynk-service-area.pmtiles` as the value substituted for `__TILES_URL__` (section 5). |
+| Auth | None (public map data, same trust level as `/uploads`) |
+| Config | `MAP_TILES_DIR` (default `map-tiles`, resolved against the working directory like `MEDIA_ROOT`; the Docker image sets `/app/map-tiles`) |
+| Code | `backend/api/src/modules/map-tiles/index.ts`, mounted in `src/app.ts` |
+| Reachable files | Only names ending in `.pmtiles`; anything else in the directory (for example `README.md`) is 404. Dotfiles 404, no directory index or listing, no directory redirect, path traversal 403/404. |
+| Methods | GET and HEAD. Other methods: `405` with `Allow: GET, HEAD`. |
+| Cache-Control | `public, max-age=3600` (1 hour; no `immutable`, because the file name is reused on every rebuild). Rebuilt archives reach clients within an hour, and ETag/Last-Modified make revalidation a cheap `304`. |
+| Validators | Weak `ETag` and `Last-Modified`; `If-None-Match` and `If-Modified-Since` give `304`. |
+| Compression | None. No `compression` middleware exists in the app; tests assert no `Content-Encoding` even with `Accept-Encoding: gzip, deflate, br`. |
+| CORP | `Cross-Origin-Resource-Policy: cross-origin` on this route only (as for `/uploads`). |
+
+Observed responses (tests run against the real 2,037,022-byte archive):
+
+```
+HEAD                    -> 200, Content-Length: 2037022, Accept-Ranges: bytes,
+                           Cache-Control: public, max-age=3600, ETag: W/"...", Last-Modified: ...
+Range: bytes=0-126      -> 206, Content-Range: bytes 0-126/2037022, Content-Length: 127
+                           (body starts with "PMTiles", version byte 3)
+Range: bytes=-100       -> 206, Content-Range: bytes 2036922-2037021/2037022, Content-Length: 100
+Range: bytes=99999999-  -> 416, Content-Range: bytes */2037022 (small JSON error body)
+If-None-Match: <ETag>   -> 304, no body
+POST/PUT/DELETE/PATCH   -> 405, Allow: GET, HEAD
+```
+
+Guarantee against whole-file responses: a `Range` request returns only the slice (`Content-Length` equals the range length; the test compares the bytes with the same slice read from disk). The archive's SHA-256 is also checked against `backend/api/map-tiles/README.md` by the same test file, so a silently swapped archive fails CI.
+
+Not covered by these tests (still **UNVERIFIED**): any reverse proxy, CDN or platform host in front of Express (see section 9), and browser (cross-origin) clients: the global CORS config does not list `Range`/`If-Match` as allowed request headers or `ETag`/`Content-Range` as exposed headers, which only matters if a web client on another origin is ever added.
 
 ---
 
@@ -238,8 +270,8 @@ Range: bytes=999999999-    -> 416, Content-Range: bytes */2037022
 Notes for the serving/Docker task:
 
 - `backend/api/src/app.ts` uses `helmet` (its default `Cross-Origin-Resource-Policy: same-origin` blocks cross-origin browser use; the existing media route already overrides this, see `app.ts` near line 146 — mirror that if a web client is ever needed) and `cors`. There is no `compression` middleware in `app.ts` or `package.json` as checked today; do not add one for this path.
-- Keep the file **outside `src/`** (it is at `backend/api/map-tiles/`) and copy it into the production image explicitly: `backend/api/Dockerfile` currently copies only `package.json`, `tsconfig.json` and `src/`, and `.dockerignore` does not exclude `*.pmtiles`.
-- Reverse proxy (nginx, a CDN or a platform proxy) in front of Express: it must pass the `Range` header through and return `206`, must not compress this path (nginx's `gzip` is `off` by default and its default `gzip_types` is `text/html`, per https://nginx.org/en/docs/http/ngx_http_gzip_module.html, so `application/octet-stream` is not compressed unless someone widens `gzip_types`), and must not buffer or rewrite the body in a way that drops `Content-Range`. **UNVERIFIED:** behaviour of the specific production host/CDN, because the production platform is not decided in this task; re-run the four curl checks above against the real public URL after deploy.
+- Keep the file **outside `src/`** (it is at `backend/api/map-tiles/`) and copy it into the production image explicitly. **Done in Task M0b:** the runtime stage of `backend/api/Dockerfile` has `COPY --chown=node:node map-tiles/ ./map-tiles/` and `ENV MAP_TILES_DIR=/app/map-tiles`; `.dockerignore` does not exclude it. `tests/deployment.test.ts` asserts this statically. No image was built for this task, so the copy is **not exercised by a real `docker build`**.
+- Reverse proxy (nginx, a CDN or a platform proxy) in front of Express: it must pass the `Range` header through and return `206`, must not compress this path (nginx's `gzip` is `off` by default and its default `gzip_types` is `text/html`, per https://nginx.org/en/docs/http/ngx_http_gzip_module.html, so `application/octet-stream` is not compressed unless someone widens `gzip_types`), and must not buffer or rewrite the body in a way that drops `Content-Range`. **Reverse proxy rules (documentation only, not tested):** do not buffer this path in a way that drops `Content-Range`, do not enable compression for `/map-tiles/`, and do not strip or rewrite the `Range`, `If-Range`, `If-None-Match` or `If-Modified-Since` request headers or the `ETag`, `Last-Modified`, `Accept-Ranges` and `Content-Range` response headers. If a CDN caches the path, it must be range-aware (cache the whole object and slice, or cache per range) and must honour the 1-hour `Cache-Control`. **UNVERIFIED:** behaviour of the specific production host/CDN, because the production platform is not decided in this task; re-run the four curl checks above against the real public URL after deploy.
 - Alternative for later scale: serve the file from object storage or a CDN (Protomaps lists S3-compatible storage, Caddy and nginx as suitable hosts). Not needed at this size.
 
 ---

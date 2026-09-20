@@ -4,7 +4,7 @@ Self-hosted OSM-derived vector tiles for the customer live-delivery map. Full ba
 
 - No API key is needed for anything here. No secrets belong in this folder.
 - Attribution "© OpenStreetMap contributors" must be shown on every map (ODbL).
-- This folder is deliberately outside `src/`. A later task serves it over HTTP with Range support and copies it into the Docker image.
+- This folder is deliberately outside `src/`. The API serves it publicly at `GET /map-tiles/<name>.pmtiles` with HTTP Range support (`src/modules/map-tiles/`, config `MAP_TILES_DIR`), and the Dockerfile copies it into the runtime image. Only `.pmtiles` files are served; this README is not. `tests/map-tiles.test.ts` checks the archive's SHA-256 against the table below, so update the SHA-256 there whenever the archive is rebuilt.
 
 ## Current archive
 
