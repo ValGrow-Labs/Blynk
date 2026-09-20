@@ -615,3 +615,34 @@ STATUS: INVENTORY & STOCK INTEGRITY COMPLETE AND VERIFIED
 - Minor, deferred (not fixed this phase): a small colour-token fork between the list chip and the detail header for the same status tone (both independently WCAG-valid); `paymentLine` has an unreachable-today branch gap for a `REFUNDED` payment status; two Key-naming conventions diverge slightly between the list and detail screens' retry/refresh-failed notices.
 
 STATUS: CUSTOMER ORDER EXPERIENCE COMPLETE AND VERIFIED
+
+---
+
+## Live Location & Delivery Tracking (IMPLEMENTED — AUTOMATED-TESTED; PHYSICAL ANDROID VERIFICATION PENDING; NOT PRODUCTION-READY)
+
+> **Report:** [blynk-live-location-tracking-report.md](blynk-live-location-tracking-report.md) · **Device runbook:** [rider-background-tracking-device-verification.md](../06-deployment/rider-background-tracking-device-verification.md) (BLOCKED/PENDING, no box ticked) · **Plan:** `docs/superpowers/plans/2026-09-19-blynk-live-location-tracking.md` (D1–D6 approved; D4 amended mid-plan from Google Maps to MapLibre + self-hosted PMTiles)
+> **Test Suite:** backend 767 passing in 32 files (60 new) with `npm run test:hygiene` clean ("every row of every table identical") · rider 108 (59 new) · Flutter 524 (233 new) · every `tsc`, build (backend, rider) and `flutter analyze` clean
+> **Live pipeline E2E (no device):** 10 scenarios passed, 1 skipped (a second rider does not exist in the seed), against a real backend and PostgreSQL through the real customer `LocationProvider`; database restored to baseline. Synthetic coordinates were test inputs, **not** GPS verification.
+> **Not verified:** any physical Android run (runbook S1–S21), any map rendering, and the Customer Android build (blocked: [customer-android-build-status.md](../06-deployment/customer-android-build-status.md))
+
+- [x] IMPLEMENTED + AUTOMATED-TESTED: migration 006 adds five nullable latest-location columns to `deliveries` (latest point only, no history; `NUMERIC(9,6)` coordinates, accuracy `NUMERIC(7,1)`, device and server timestamps, three CHECK constraints).
+- [x] IMPLEMENTED + AUTOMATED-TESTED: `POST /riders/deliveries/:id/location` — ownership from `req.user` and the delivery row, window `PICKED_UP` + `OUT_FOR_DELIVERY` read fresh every time, 404 for another rider's delivery, 409 outside the window, 60 s future-skew rejection, an atomic conditional `UPDATE` so an older point can never overwrite a newer one, and a 5 s per-delivery floor. It never calls the lifecycle engine (grep-verified).
+- [x] IMPLEMENTED + AUTOMATED-TESTED: `GET /orders/:id/location/stream` (customer-only SSE) with an initial snapshot, `location`/`closed` events, a 15 s heartbeat that re-checks ownership and the window, and `not_trackable` / `delivery_closed` / `server_shutdown` close reasons. The in-process broadcaster is correct for a single API container only.
+- [x] IMPLEMENTED + AUTOMATED-TESTED: failed → re-stage → new delivery identity is enforced at the write, the stream, the rider tracker and the customer provider, and shown live by the pipeline test (the old point is never served again).
+- [x] IMPLEMENTED + AUTOMATED-TESTED: Rider app on Capacitor 7.6.9 (pinned: CLI 8 needs Node 22) with `@capacitor-community/background-geolocation` 1.2.26 behind a `TrackingPlugin` seam; an app-level tracker session that starts, resumes after restart and stops on every way the window ends (rider steps, admin cancel, 409/404, queue sync); `CapacitorHttp` enabled so location POSTs avoid WebView background throttling; `TrackingStatus` shows sharing, stopped, permission-off, unavailable, no-GPS and send-failed states, never a coordinate.
+- [x] IMPLEMENTED + AUTOMATED-TESTED: Customer app `LocationProvider` (reason-aware close, backoff with jitter, monotonic guard, LIVE ≤ 18 s / STALE ≤ 2 min / OFFLINE) and `OrderTrackingMap` on the order detail screen, gated to `OUT_FOR_DELIVERY` + `PICKED_UP`, foreground-only, with an "OpenStreetMap contributors" attribution. No route, no ETA.
+- [x] IMPLEMENTED + AUTOMATED-TESTED: MapLibre (`maplibre_gl` 0.25.0) behind a provider-neutral contract (one importing file, mechanically guarded) rendering a self-hosted 2 MB PMTiles archive served at `/map-tiles/blynk-service-area.pmtiles` with Range/206/416/304 support. No Google Maps, no API key, no recurring tile bill. Label-free style by design.
+- [x] IMPLEMENTED + AUTOMATED-TESTED: "Use my current location" address picker (explain-before-prompt, `geolocator` behind an adapter using Google Play services Location, not Google Maps and no key; fixed-pin map confirmation; manual entry always available).
+- [ ] **PENDING (BLOCKED — no physical device or emulator):** Task RG physical background-tracking gate, runbook S1–S21 (lock screen, 5+ minute and 60-minute walks, `CapacitorHttp` past 5 minutes, token expiry while backgrounded, airplane mode, GPS off, permission revoked, kill/restart, fail/re-stage, release spot-check) and open items O-1/O-2.
+- [ ] **BLOCKED:** Customer Android build — `flutter_native_splash` 2.4.4 hard-codes `compileSdkVersion 31` and fails `:flutter_native_splash:checkDebugAarMetadata`. No fix applied; `maplibre_gl`/`geolocator` native modules unproven to compile; the map has never been seen on a device.
+
+### Known limitations
+- **Not production-ready.** Physical-device verification is pending and the Customer Android build is blocked (above). Release signing for the Customer app still uses the debug key (pre-existing TODO); the Rider release build is unsigned.
+- Five uncommitted Customer `android/*.gradle*` files (a Flutter Gradle template migration) are the user's own work and are not part of this phase's commits.
+- Single-container, in-process SSE fan-out: a shared bus (Redis pub/sub or Postgres `LISTEN/NOTIFY`) is needed before more than one API replica. Not built.
+- The tracker follows one delivery at a time; the customer order screen learns `PICKED_UP` only on resume, pull-to-refresh or after a cancel attempt (no polling was added — decision pending); a reconnect keeps the last point for up to about 2 minutes because events carry no delivery id.
+- Plugin is effectively unmaintained (last release 2025-08-28); `POST_NOTIFICATIONS` is never requested (foreground-service notification may be hidden on Android 13+); `ACCESS_BACKGROUND_LOCATION` is declared but not needed; the patched native `fetch` ignores `AbortSignal`.
+- Map style/tile failures are silent at runtime; tile archive is a point-in-time snapshot (rebuild every 3–6 months suggested); reverse-proxy/CDN Range behaviour and a real `docker build` are unverified; iOS is not scoped or verified; no admin live map, ETA, route or geocoding (by design).
+- One unexplained transient failure of 1 of 767 backend tests in a single run (not reproduced in two full re-runs); see the report.
+
+STATUS: LIVE LOCATION & DELIVERY TRACKING IMPLEMENTED AND AUTOMATED-TESTED — PHYSICAL ANDROID VERIFICATION PENDING; NOT PRODUCTION-READY

@@ -6,6 +6,8 @@
 
 **Amendment (2026-09-19, same day, map provider only):** the Customer app's map provider changed from `google_maps_flutter` to **MapLibre + a self-hosted OpenStreetMap-derived tile source** (see the "Map Provider" section immediately below, and §8, §D.4, §N Task M0/M4/M5/M6 as revised). No other part of this plan changed — rider GPS tracking, the backend location API/SSE, the order lifecycle, delivery assignment, and tracking authorization are unaffected and were not re-opened.
 
+**Implementation status (2026-09-20): implemented and automated-tested; physical-device verification pending — see docs/05-implementation/blynk-live-location-tracking-report.md.**
+
 **Goal:** real rider GPS location, captured only during an active delivery, shown to the customer who owns that order on a live map — with no fake movement, no fake ETA, no invented infrastructure, and no scope beyond what the investigation shows is actually needed.
 
 **Method:** Graphify was refreshed against the current repository (502 changed files since the last graph; code AST-extracted in full, docs/plans/reports semantically re-extracted, low-value image assets deliberately skipped — see §0), then five parallel deep-reads of the actual source (not documentation) covered the Rider app, the Customer Flutter app, the backend orders/riders/deliveries modules, the full DB schema, and the order lifecycle end to end. External research covered background-geolocation reliability, Capacitor, and map-provider pricing. Every claim below cites the file and line it came from.
