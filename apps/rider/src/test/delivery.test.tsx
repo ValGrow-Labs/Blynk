@@ -150,6 +150,24 @@ describe('Delivery', () => {
     await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
   });
 
+  it('tells the rider when location permission is denied at pickup, and the pickup itself still goes through', async () => {
+    vi.mocked(capacitorTrackingPlugin.requestPermission).mockResolvedValueOnce('denied');
+    const user = userEvent.setup();
+    const { state, handler } = serving(detail());
+    renderAs(RIDER, ROUTE, {
+      'GET /riders/deliveries/:id': handler,
+      'PATCH /riders/deliveries/:id/status': () => {
+        state.current = detail(onRoad);
+        return ok({ delivery: state.current });
+      },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Picked up' }));
+    expect(await screen.findByText(/location permission is off/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I've arrived" })).toBeInTheDocument();
+    expect(capacitorTrackingPlugin.start).not.toHaveBeenCalled();
+    expect(screen.queryByText(/sharing your location/i)).not.toBeInTheDocument();
+  });
+
   it('stops tracking when a failure is reported - the other terminal edge', async () => {
     const user = userEvent.setup();
     const { state, handler } = serving(detail(onRoad));

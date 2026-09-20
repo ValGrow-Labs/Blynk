@@ -433,6 +433,22 @@ a {
   color: var(--paper);
 }
 
+/* Passive location-sharing readout (TrackingStatus). Errors read like the
+   other "stop" notes: inverted, so a rider on the road can't miss them. */
+.tracking-status {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tracking-status--error {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .slip--detail {
   gap: 16px;
 }

@@ -22,4 +22,78 @@ describe('TrackingStatus', () => {
     render(<TrackingStatus state={{ permission: 'granted', active: false, lastSentAt: new Date(), lastError: null }} />);
     expect(screen.getByText(/stopped sharing/i)).toBeInTheDocument();
   });
+
+  describe('blocking and failure states (plan §13)', () => {
+    const permissionCopy = /location permission is off/i;
+    const sendFailedCopy = /couldn't send your last location/i;
+    const noCoordinate = /\d+\.\d{3,}/;
+
+    it('says permission is needed when it was denied at pickup (never became active)', () => {
+      const { container } = render(
+        <TrackingStatus state={{ permission: 'denied', active: false, lastSentAt: null, lastError: null }} />
+      );
+      expect(screen.getByText(permissionCopy)).toBeInTheDocument();
+      expect(container.querySelector('.tracking-status--error')).not.toBeNull();
+      expect(container.textContent).not.toMatch(noCoordinate);
+    });
+
+    it('says permission is needed when it was revoked mid-session', () => {
+      const { container } = render(
+        <TrackingStatus state={{ permission: 'denied', active: false, lastSentAt: null, lastError: 'permission_denied' }} />
+      );
+      expect(screen.getByText(permissionCopy)).toBeInTheDocument();
+      expect(container.querySelector('.tracking-status--error')).not.toBeNull();
+      expect(container.textContent).not.toMatch(noCoordinate);
+    });
+
+    it('revocation wins over a still-active watcher and a stale "stopped" line', () => {
+      render(
+        <TrackingStatus
+          state={{ permission: 'denied', active: true, lastSentAt: new Date(), lastError: 'permission_denied' }}
+        />
+      );
+      expect(screen.getByText(permissionCopy)).toBeInTheDocument();
+      expect(screen.queryByText(/sharing your location/i)).not.toBeInTheDocument();
+
+      render(
+        <TrackingStatus
+          state={{ permission: 'denied', active: false, lastSentAt: new Date(), lastError: 'permission_denied' }}
+        />
+      );
+      expect(screen.queryByText(/stopped sharing/i)).not.toBeInTheDocument();
+    });
+
+    it('permission denial takes precedence over GPS-unavailable', () => {
+      render(
+        <TrackingStatus state={{ permission: 'denied', active: true, lastSentAt: null, lastError: 'position_unavailable' }} />
+      );
+      expect(screen.getByText(permissionCopy)).toBeInTheDocument();
+      expect(screen.queryByText(/can't get your location/i)).not.toBeInTheDocument();
+    });
+
+    it('flags a failed send while active, and still shows when the last good send was', () => {
+      const { container } = render(
+        <TrackingStatus
+          state={{ permission: 'granted', active: true, lastSentAt: new Date(Date.now() - 47_000), lastError: 'network' }}
+        />
+      );
+      expect(screen.getByText(sendFailedCopy)).toBeInTheDocument();
+      expect(screen.getByText(/last sent 47s ago/i)).toBeInTheDocument();
+      expect(container.querySelector('.tracking-status--error')).not.toBeNull();
+      expect(screen.queryByText(/^sharing your location/i)).not.toBeInTheDocument();
+      expect(container.textContent).not.toMatch(noCoordinate);
+    });
+
+    it('flags a failed send even before any send has succeeded', () => {
+      render(<TrackingStatus state={{ permission: 'granted', active: true, lastSentAt: null, lastError: 'network' }} />);
+      expect(screen.getByText(sendFailedCopy)).toBeInTheDocument();
+      expect(screen.queryByText(/last sent/i)).not.toBeInTheDocument();
+    });
+
+    it('a failed send after tracking stopped is not shown as a live problem', () => {
+      render(<TrackingStatus state={{ permission: 'granted', active: false, lastSentAt: new Date(), lastError: 'network' }} />);
+      expect(screen.queryByText(sendFailedCopy)).not.toBeInTheDocument();
+      expect(screen.getByText(/stopped sharing/i)).toBeInTheDocument();
+    });
+  });
 });
