@@ -14,10 +14,10 @@ Full sources are in `.superpowers/sdd/2026-09-19-blynk-live-location-tracking/ta
 
 | # | Risk | Why it matters here | What to do |
 |---|------|---------------------|------------|
-| R-A | **WebView HTTP throttling (HIGH).** The plugin README says: "after 5 minutes in the background Android will throttle HTTP requests initiated from the WebView. The solution is to use a native HTTP plugin such as CapacitorHttp" (plugin issue #14). The rider app sends via WebView `fetch()` (`apps/rider/src/api/client.ts`) and `capacitor.config.ts` does not enable `plugins.CapacitorHttp`. | This is precisely the "stops after ~5 minutes locked" failure the gate exists to catch. A fail at scenario 5 minute ~5 is most likely this, not the plugin's GPS. | Run scenario 3/4 first with the current build. If updates stall around minute 5, record it, then re-run once with `plugins: { CapacitorHttp: { enabled: true } }` added to a local copy of `capacitor.config.ts` (rebuild + `npx cap sync android`) to confirm the cause. That config change is a product decision, not part of this runbook. |
+| R-A | **WebView HTTP throttling (HIGH) - mitigated in config, unverified on device.** The plugin README says: "after 5 minutes in the background Android will throttle HTTP requests initiated from the WebView. The solution is to use a native HTTP plugin such as CapacitorHttp" (plugin issue #14). `apps/rider/capacitor.config.ts` now sets `plugins: { CapacitorHttp: { enabled: true } }`, which patches global `fetch` to native HTTP on Android so `apps/rider/src/api/client.ts` is no longer subject to WebView throttling. | If updates still stall around minute 5, the patch is not active in the installed build or something else is throttling. | Confirm `apps/rider/android/app/src/main/assets/capacitor.config.json` contains `"CapacitorHttp": {"enabled": true}` after `npx cap sync android`, then run scenario S20. Known side effects: with native HTTP the WebView's CORS/mixed-content checks do not apply to API calls (see 1.4), and the patched `fetch` ignores `AbortSignal` so the client's 15 s request timeout does not fire on Android. |
 | R-B | **`android.useLegacyBridge`** must be `true` (already set in `apps/rider/capacitor.config.ts`) or updates halt after ~5 min in the background (plugin issue #89, closed). | Confirm it made it into the installed build (section 1.3). | After `npx cap sync android`, confirm `apps/rider/android/app/src/main/assets/capacitor.config.json` contains `"useLegacyBridge": true` (the assets copy is what ships in the APK). |
 | R-C | **Android 14+ foreground service.** A `location` FGS needs `FOREGROUND_SERVICE_LOCATION`, `foregroundServiceType="location"` and an already-granted location runtime permission, otherwise `SecurityException` on `startForeground()` (Android docs: fgs-types-required). Plugin issue #153 (open, Mar 2026) reports exactly this on Android 14-16 when the watcher starts during the first permission prompt. | The app awaits `requestPermission()` before `start()`, which should avoid it. Must be observed on the first ever launch of a fresh install, not just later runs. | Scenario 2 must be done on a fresh install (`adb uninstall lk.blynk.rider` first). Look for `Failed to foreground service` in logcat. |
-| R-D | **POST_NOTIFICATIONS (Android 13+).** The plugin does not request it (issue #141) and the app does not either. Per Android docs the service still runs without it but the notification is not shown in the drawer (only in the Task Manager). | The "Sharing your location" notification may be invisible. Behavioural gap to report even if tracking works. | Record whether the notification is visible on a fresh install with no manual grant, then grant it in Settings and compare. |
+| R-D | **POST_NOTIFICATIONS (Android 13+).** The plugin does not request it (issue #141) and the app does not either. Per Android docs the service still runs without it but the notification is not shown in the drawer (only in the Task Manager). | The "Sharing your location" notification may be invisible. Behavioural gap to report even if tracking works. | Record whether the notification is visible on a fresh install with no manual grant, then grant it in Settings and compare. Plugin README (Android section): on Android 13+ the app needs the `POST_NOTIFICATIONS` runtime permission to show the persistent notification, and the app "may need to request this permission" itself (e.g. via `@capacitor/local-notifications`). The rider app does not request it yet; do not treat a hidden notification as a plugin bug. |
 | R-E | **OEM battery killers** (Huawei, Xiaomi, OnePlus, Samsung; dontkillmyapp.com). The plugin has no battery-optimization exemption prompt (issue #127). Issue #126 reports updates stopping after ~1 hour in background (open, unresolved). | Real-world Sri Lankan devices are frequently Xiaomi/Samsung/Huawei class. | Record make/model/Android version. Run the 5-minute gate on a stock/Pixel-like device AND on the OEM device the riders will actually use. Optionally repeat with the app set to "Unrestricted" battery. Extend one run to 60+ minutes. |
 | R-F | **Notification icon** (issue #135, open). A non-transparent/incorrect icon makes the notification misbehave (dismissible, default text). The app uses the default `mipmap/ic_launcher`. | May cause the FGS notification to be dismissible or show default text. | Observe the notification in scenario 2; record title/text and whether it can be swiped away. |
 | R-G | **Capacitor 8** is unsupported by the plugin (issue #156, open: crash when app goes to background). | The project is pinned to Capacitor 7.6.9. Do not upgrade. | Nothing to run; keep the pin. |
@@ -89,6 +89,11 @@ The Capacitor Android WebView serves the app from origin `https://localhost` (Ca
    Confirm with: `curl -i -X OPTIONS "$API/auth/status" -H "Origin: https://localhost" -H "Access-Control-Request-Method: GET"` -> `Access-Control-Allow-Origin: https://localhost`.
 
 LAN alternative (only if no tunnel): build with `VITE_API_BASE_URL=http://<LAN-IP>:3000/api/v1` and locally (uncommitted) set `server: { androidScheme: 'http', cleartext: true }` in `capacitor.config.ts`, allow `http://localhost` in `CORS_ORIGINS`, open the API port in the Windows firewall. Note the API listens on `PORT` (default 3000), whereas the rider client's fallback default is `:4000`; always set `VITE_API_BASE_URL` explicitly.
+
+**Android cleartext / base URL notes (2026-09-20).**
+- `apps/rider/.env.example` defaults the API base URL to `http://localhost:4000` (the client fallback is `http://localhost:4000/api/v1`). On a physical phone `localhost` is the phone itself, so the build MUST bake in a reachable absolute `VITE_API_BASE_URL` at build time (see 1.3).
+- With CapacitorHttp enabled, API calls go through native `HttpURLConnection`, not the WebView. Plain `http://` to a LAN IP is then blocked by Android 9+ (targetSdk 28+) unless cleartext is explicitly allowed, and the WebView-only workaround of `server.cleartext` may not be the only gate. Recommendation: use an `https` tunnel (cloudflared/ngrok, above) for the device test. Do NOT enable cleartext traffic (`usesCleartextTraffic`, a network security config, or `server.cleartext`) in the committed production config. If a LAN `http` run is unavoidable, allow cleartext only in an uncommitted debug-only override.
+- Because the native path bypasses the WebView origin, the `CORS_ORIGINS` step above is not needed for API calls once CapacitorHttp is active (harmless to keep).
 
 Sanity check from the phone's browser: `https://<tunnel-host>/api/v1/auth/status` returns JSON.
 
@@ -279,6 +284,22 @@ Observed: ______________  PASS | FAIL   date: ______  tester: ______
 Observed: ______________  PASS | FAIL   date: ______  tester: ______
 ```
 
+### S20. Location POSTs keep arriving beyond 5 minutes in the background with the screen locked (CapacitorHttp)
+- **Purpose:** proves the native-HTTP mitigation for the WebView throttling risk R-A (plugin issue #14). This is the specific check for `plugins.CapacitorHttp.enabled` in `capacitor.config.ts`.
+- **Setup:** debug build installed from a `cap sync` that includes CapacitorHttp (confirm `apps/rider/android/app/src/main/assets/capacitor.config.json` contains `"CapacitorHttp": {"enabled": true}` before building); fresh delivery in PICKED_UP with tracking active (S2); phone **unplugged**; gap logger from 1.6 running on the laptop.
+- **Actions:** lock the screen and keep the phone moving (or at least in a pocket with GPS fixes changing) for **at least 10 minutes**, i.e. well past the 5-minute WebView throttling point. Note the wall-clock time the screen was locked.
+- **Observe (SQL):**
+  ```bash
+  psql "$DB" -c "SELECT location_received_at, now()-location_received_at AS age FROM deliveries WHERE id='$DELIVERY_ID';"
+  awk -F' \\| ' '{print $2}' /tmp/rg-poll.log | uniq -c | sort -k1 -n -r | head   # a long run of one value = a gap
+  ```
+  Compare the timestamps after lock+5 min with those before: `location_received_at` must keep advancing, with no gap longer than about 30 s beyond minute 5.
+- **Observe (adb, if still connected or after reconnecting):** `"$ADB" logcat -d | grep -i -E "CapacitorHttp|Capacitor/Console"` shows native `CapacitorHttp fetch` timing lines from the patched fetch (proof the native path is in use rather than the WebView), and no repeated `Could not reach the Blynk API` failures.
+- **Expected:** POSTs keep arriving at the normal cadence past minute 5 and until unlock. If they stall near minute 5 while `dumpsys activity services` still shows `BackgroundGeolocationService` running, CapacitorHttp is not effective; record it and escalate.
+```
+Observed: ______________  PASS | FAIL   date: ______  tester: ______
+```
+
 ### S9. Network disconnected (airplane mode) mid-delivery
 - **Actions:** with tracking active: enable airplane mode (Quick Settings toggle; or `adb shell cmd connectivity airplane-mode enable` on Android 11+ where permitted), keep moving 2+ minutes, then disable it and note the time.
 - **Observe:** rider UI `TrackingStatus` during the outage; DB `location_received_at` (must not advance while offline); after reconnect, the SSE frames and DB rows.
@@ -399,7 +420,7 @@ Observed: ______________  PASS | FAIL   date: ______  tester: ______
 
 ## 8. Verdict (fill after the run)
 ```
-All of S1-S15 PASS on debug build?  ______   Additional S16-S19?  ______   Release spot-check?  ______
+All of S1-S15 PASS on debug build?  ______   Additional S16-S19?  ______   S20 (CapacitorHttp >5 min)?  ______   Release spot-check?  ______
 Open items O-1 ____  O-2 ____   Risk R-A observed? ____  R-D notification visible? ____
 Device(s) used: ______________________   Verdict: PROCEED to Task M0 | STOP AND ESCALATE
 Signed: ______________  Date: ______________
