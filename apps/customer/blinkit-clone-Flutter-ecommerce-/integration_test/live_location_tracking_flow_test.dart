@@ -17,6 +17,10 @@
 // problem can never be mistaken for a feature problem, and this test never
 // builds a widget or a map (the Windows desktop target has no maplibre_gl).
 //
+// What is asserted is the provider's own state (`current`, `freshness`,
+// `closed`, `unavailable`) and the backend's HTTP answers. No UI, map or marker
+// is built or observed here, and nothing below says anything about one.
+//
 // Run with the backend up (and, for the restart scenario, under
 // backend_ctl.cjs so this test can ask for a stop/start):
 //   flutter test integration_test/live_location_tracking_flow_test.dart \
@@ -108,6 +112,20 @@ String _errorCode(Response<dynamic> r) {
 
 void _expectStatus(Response<dynamic> r, int status, String what) {
   expect(r.statusCode, status, reason: '$what -> ${r.statusCode} ${r.data}');
+}
+
+/// A rider POST refused because the delivery is not in the trackable window.
+void _expectNotTrackable(Response<dynamic> r, String what) {
+  expect(r.statusCode, 409, reason: '$what -> ${r.statusCode} ${r.data}');
+  expect(_errorCode(r), 'DELIVERY_NOT_TRACKABLE', reason: '$what -> ${r.data}');
+}
+
+String _rawErrorCode(({int status, String body}) raw) {
+  try {
+    final d = jsonDecode(raw.body);
+    if (d is Map && d['error'] is Map) return '${(d['error'] as Map)['code']}';
+  } catch (_) {}
+  return '';
 }
 
 void _expectRaw(({int status, String body}) raw, int status, String what) {
@@ -286,7 +304,7 @@ class _Tracker {
 
   bool everShowed(double lat, double lng) => history.any((s) => s.lat == lat && s.lng == lng);
 
-  /// The marker must never move backwards in time.
+  /// The provider's `current` must never move backwards in time.
   void expectMonotonic() {
     DateTime? last;
     for (final s in history) {
@@ -306,22 +324,37 @@ class _Tracker {
 }
 
 class _Opens {
+  /// How many times the provider opened the stream (connect attempts).
   int n = 0;
+
+  /// Raw text chunks received over all connections (heartbeat comments count).
+  int chunks = 0;
+
+  /// The names of every SSE `event:` frame received, in order.
+  final List<String> events = [];
 }
 
 /// A provider whose opener is exactly the production one
 /// (`openLocationStream(ApiService.dio, ...)`, which is what the default
-/// constructor uses) plus a counter, so "no reconnect storm" can be asserted.
+/// constructor uses) plus counters for connects, raw chunks and SSE events, so
+/// "no reconnect storm" and "nothing further was received" are asserted on the
+/// wire, not inferred from the provider's de-duplicated state history.
 _Tracker _counting(String name, {Dio? dio}) {
   final opens = _Opens();
   final provider = LocationProvider(opener: (orderId) {
     opens.n++;
-    return openLocationStream(dio ?? ApiService.dio, orderId);
+    return openLocationStream(dio ?? ApiService.dio, orderId).map((chunk) {
+      opens.chunks++;
+      for (final m in RegExp(r'^event: (\w+)', multiLine: true).allMatches(chunk)) {
+        opens.events.add(m.group(1)!);
+      }
+      return chunk;
+    });
   });
   return _Tracker(name, provider, opens: opens);
 }
 
-/// The stock provider, constructed the way the app constructs it.
+/// The provider constructed with its default opener, the way the app constructs it.
 _Tracker _stock(String name) => _Tracker(name, LocationProvider());
 
 // ------------------------------------------------------------------- the test
@@ -602,7 +635,7 @@ void main() {
     await beginScenario();
     final early = _Pt(6.4352, 80.0245);
     final post = await postPoint(order1.deliveryId, early);
-    _expectStatus(post, 409, 'rider POST before pickup');
+    _expectNotTrackable(post, 'rider POST before pickup');
     expect(_errorCode(post), 'DELIVERY_NOT_TRACKABLE');
 
     final raw = await rawStream(order1.orderId, token: await TokenStorage.getAccessToken());
@@ -630,13 +663,13 @@ void main() {
   late _Tracker primary;
   late _Pt pointA, pointB;
 
-  test('3. pickup -> real round trip: A then B reach the provider exactly, marker moves', () async {
+  test('3. pickup -> real round trip: A then B reach the provider exactly, provider current moves A -> B', () async {
     await beginScenario();
     await riderStep(order1.deliveryId, 'PICKED_UP');
     final seen = await customerCall('GET', '/orders/${order1.orderId}');
     expect(_map(_map(seen.data)['data']['order'])['order_status'], 'OUT_FOR_DELIVERY');
 
-    primary = track(_stock('main')); // the stock provider, default opener
+    primary = track(_counting('main')); // production opener + wire counters
     primary.provider.watch(order1.orderId);
     await Future<void>.delayed(const Duration(milliseconds: 1500)); // let the stream open
     expect(primary.current, isNull, reason: 'no point has been sent yet: nothing may be invented');
@@ -657,7 +690,7 @@ void main() {
     final sentB = Stopwatch()..start();
     await postAccepted(order1.deliveryId, pointB); // waits out the 5 s floor first
     expect(await _until(() => _isPoint(primary.current, pointB), timeout: const Duration(seconds: 8)), isTrue,
-        reason: 'the marker must move to B; provider has ${primary.current?.latitude},${primary.current?.longitude}');
+        reason: 'provider current must move to B; provider has ${primary.current?.latitude},${primary.current?.longitude}');
     final latencyB = sentB.elapsedMilliseconds;
     expect(primary.provider.freshness, LocationFreshness.live);
     expect(primary.pointsShown.map((s) => [s.lat, s.lng]).toList(), [
@@ -669,7 +702,7 @@ void main() {
     // The DB-side latest, as the stream reports it to a brand-new watcher.
     final stored = await snapshotViaNewWatch(order1.orderId);
     expect(_isPoint(stored, pointB), isTrue, reason: 'stored latest must be B, snapshot was ${stored?.latitude}');
-    _obs('S3', 'PASS A=$pointA arrived exactly (live); after the 5 s floor B=$pointB arrived exactly; '
+    _obs('S3', 'PASS A=$pointA arrived exactly (freshness == live); after the 5 s floor B=$pointB arrived exactly; '
         'history [A,B]; a fresh watcher\'s initial snapshot == B (stored latest). '
         'POST->provider incl. floor wait: A ${latencyA}ms, B ${latencyB}ms');
   }, timeout: scenarioTimeout);
@@ -711,7 +744,7 @@ void main() {
     expect(primary.history.length, shown, reason: 'not even a re-notification with a different state');
 
     // The rate-limited point was NOT stored: the next legitimate write wins and
-    // the marker lands on it, never on `tooSoon`.
+    // `current` lands on it, never on `tooSoon`.
     pointC2 = _Pt(6.4372, 80.0264, acc: 6.5);
     await postAccepted(order1.deliveryId, pointC2);
     expect(await _until(() => _isPoint(primary.current, pointC2)), isTrue);
@@ -757,8 +790,10 @@ void main() {
     }
     final badId = await postRaw('not-a-uuid', ok.body);
     _expectStatus(badId, 400, 'non-UUID delivery id');
+    expect(_errorCode(badId), 'VALIDATION_ERROR', reason: 'non-UUID delivery id -> ${badId.data}');
     final badOrder = await rawStream('not-a-uuid', token: await TokenStorage.getAccessToken());
     _expectRaw(badOrder, 400, 'non-UUID order id on the stream');
+    expect(_rawErrorCode(badOrder), 'VALIDATION_ERROR', reason: 'non-UUID order id -> ${badOrder.body}');
 
     await Future<void>.delayed(const Duration(seconds: 2));
     expect(_isPoint(primary.current, pointC2), isTrue, reason: 'rejected input must not touch the provider');
@@ -842,18 +877,27 @@ void main() {
     expect(await _until(() => primary.provider.closed, timeout: _heartbeatWait), isTrue,
         reason: 'the customer provider must receive `closed` within the 15 s heartbeat + slack');
     final closeLatency = arrivedAt.elapsedMilliseconds;
+    expect(closeLatency, lessThanOrEqualTo(20000),
+        reason: 'a heartbeat-driven close must land within ~one 15 s interval, took ${closeLatency}ms');
     expect(primary.current, isNull);
     expect(primary.provider.freshness, isNull);
     expect(primary.provider.unavailable, isFalse);
     expect(primary.history.length, greaterThan(closedBefore));
 
     final post = await postPoint(order1.deliveryId, _Pt(6.4400, 80.0290));
-    _expectStatus(post, 409, 'rider POST after arrival');
+    _expectNotTrackable(post, 'rider POST after arrival');
     expect(_errorCode(post), 'DELIVERY_NOT_TRACKABLE');
 
+    expect(primary.opens!.events.last, 'closed', reason: 'events on the wire: ${primary.opens!.events}');
     final states = primary.history.length;
+    final chunksAtClose = primary.opens!.chunks;
+    final eventsAtClose = primary.opens!.events.length;
+    final opensAtClose = primary.opens!.n;
     await Future<void>.delayed(const Duration(seconds: 6));
     expect(primary.history.length, states, reason: 'the provider must receive nothing further after closed');
+    expect(primary.opens!.chunks, chunksAtClose, reason: 'no raw chunk may arrive after closed');
+    expect(primary.opens!.events.length, eventsAtClose, reason: 'no SSE event may arrive after closed');
+    expect(primary.opens!.n, opensAtClose, reason: 'no reconnect after a server close');
     expect(primary.provider.closed, isTrue);
     expect(primary.current, isNull);
 
@@ -862,8 +906,12 @@ void main() {
     expect(await _until(() => again.provider.closed, timeout: const Duration(seconds: 12)), isTrue,
         reason: 'a NEW watch after arrival ends closed again: no stale location served');
     expect(again.current, isNull);
+    // Past one reconnect backoff step (1 s +-20%) and the next (2 s): a storm would show here.
+    await Future<void>.delayed(const Duration(seconds: 4));
     expect(again.history.where((s) => s.lat != null), isEmpty, reason: 'the stored last point must not be served');
-    expect(again.opens!.n, 1);
+    expect(again.opens!.n, 1, reason: 'a server close is terminal: no reconnect after 4 s');
+    expect(again.opens!.events, ['closed'], reason: 'the new watch must see exactly one `closed` and no `location`');
+    expect(again.provider.closed, isTrue);
     again.dispose();
     trackers.remove(again);
 
@@ -875,9 +923,9 @@ void main() {
     _expectRaw(rawDelivered, 200, 'raw stream on a delivered order');
     expect(closedReason(rawDelivered.body), 'not_trackable', reason: rawDelivered.body);
     final postDelivered = await postPoint(order1.deliveryId, _Pt(6.4400, 80.0290));
-    _expectStatus(postDelivered, 409, 'rider POST after delivery');
+    _expectNotTrackable(postDelivered, 'rider POST after delivery');
     _obs('S7', 'PASS ARRIVED_AT_CUSTOMER -> provider closed after ${closeLatency}ms (heartbeat bound 15 s), '
-        'current=null; POST after arrival 409; nothing further received in 6 s; a new watch ended closed with no '
+        'current=null; POST after arrival 409; nothing further received in 6 s (0 chunks, 0 events, 0 reconnects on the wire); a new watch ended closed with no '
         'point; DELIVERED order: raw stream "closed: not_trackable", POST 409');
   }, timeout: scenarioTimeout);
 
@@ -888,23 +936,25 @@ void main() {
     final oldDelivery = order2.deliveryId;
     await riderStep(oldDelivery, 'PICKED_UP');
 
-    final t = track(_stock('S8'));
+    final t = track(_counting('S8'));
     t.provider.watch(order2.orderId);
     await Future<void>.delayed(const Duration(milliseconds: 1500));
     final pointX = _Pt(6.4390, 80.0290, acc: 11.0); // the OLD delivery's point
     await postAccepted(oldDelivery, pointX);
-    expect(await _until(() => _isPoint(t.current, pointX)), isTrue, reason: 'the customer sees X live');
+    expect(await _until(() => _isPoint(t.current, pointX)), isTrue, reason: 'the provider receives X over the stream');
 
     // The rider reports FAILED: the provider ends closed, current cleared.
     final failedAt = Stopwatch()..start();
     await riderStep(oldDelivery, 'FAILED', failureReason: 'Bike broke down; returning the bag');
     expect(await _until(() => t.provider.closed, timeout: _heartbeatWait), isTrue);
     final closeLatency = failedAt.elapsedMilliseconds;
+    expect(closeLatency, lessThanOrEqualTo(20000),
+        reason: 'a heartbeat-driven close must land within ~one 15 s interval, took ${closeLatency}ms');
     expect(t.current, isNull);
     final closedIndex = t.history.indexWhere((s) => s.closed);
     expect(closedIndex, greaterThan(-1));
     final oldPost = await postPoint(oldDelivery, _Pt(6.4391, 80.0291));
-    _expectStatus(oldPost, 409, 'old delivery POST after FAILED');
+    _expectNotTrackable(oldPost, 'old delivery POST after FAILED');
 
     // Admin re-stage: FAILED -> PACKED (RESTAGE, note required), then a NEW delivery.
     final restage = await backend.as(_adminPhone, 'PATCH', '/admin/orders/${order2.orderId}/status',
@@ -914,23 +964,40 @@ void main() {
     expect(newDelivery, isNot(oldDelivery), reason: 'a re-stage must create a NEW delivery row');
     order2.deliveryId = newDelivery;
     final packedPost = await postPoint(oldDelivery, _Pt(6.4391, 80.0291));
-    _expectStatus(packedPost, 409, 'old delivery POST after re-stage + reassign');
+    _expectNotTrackable(packedPost, 'old delivery POST after re-stage + reassign');
     await riderStep(newDelivery, 'PICKED_UP');
     final seen = await customerCall('GET', '/orders/${order2.orderId}');
     expect(_map(_map(seen.data)['data']['order'])['order_status'], 'OUT_FOR_DELIVERY');
 
     // The customer watches again. The old delivery's point X must NOT be served.
+    final opensBeforeRewatch = t.opens!.n;
+    final eventsBeforeRewatch = t.opens!.events.length;
+    final chunksBeforeRewatch = t.opens!.chunks;
     t.provider.watch(order2.orderId);
     expect(t.provider.closed, isFalse, reason: 'a new watch resets the closed state');
     expect(t.current, isNull);
-    await _holds(
-      () => t.current == null && !t.provider.closed && !t.provider.unavailable,
-      const Duration(seconds: 4),
-      'until the NEW delivery\'s own first POST there must be no location at all (X not served)',
-    );
+    // Connection-confirmed negative: hold current == null until the server's
+    // 15 s heartbeat chunk arrives on THIS connection (the server writes it only
+    // if the order is still trackable). So the stream was open, trackable, and
+    // served no location and no `closed` for the new delivery.
+    final holdStart = Stopwatch()..start();
+    while (t.opens!.chunks == chunksBeforeRewatch && holdStart.elapsed < const Duration(seconds: 25)) {
+      expect(t.current, isNull,
+          reason: 'until the NEW delivery\'s own first POST there must be no location (X not served)');
+      expect(t.provider.closed || t.provider.unavailable, isFalse);
+      expect(t.opens!.n, opensBeforeRewatch + 1, reason: 'exactly one new connection, no reconnects');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(t.opens!.chunks, greaterThan(chunksBeforeRewatch),
+        reason: 'no heartbeat within 25 s: the new connection is not confirmed open');
+    expect(t.opens!.n, opensBeforeRewatch + 1);
+    expect(t.opens!.events.skip(eventsBeforeRewatch), isEmpty,
+        reason: 'the open connection must carry no `location` and no `closed` event: ${t.opens!.events}');
+    expect(t.current, isNull);
+    final nullHold = holdStart.elapsedMilliseconds;
     // ...and the old id is still refused while the new one is live.
     final stillOld = await postPoint(oldDelivery, _Pt(6.4391, 80.0291));
-    _expectStatus(stillOld, 409, 'old delivery id after the new one is picked up');
+    _expectNotTrackable(stillOld, 'old delivery id after the new one is picked up');
     await Future<void>.delayed(const Duration(seconds: 1));
     expect(t.current, isNull, reason: 'the old-id POST must not have reached the provider');
 
@@ -942,7 +1009,7 @@ void main() {
 
     final pointY = _Pt(6.4410, 80.0310, acc: 6.0); // the NEW delivery's point
     await postAccepted(newDelivery, pointY);
-    expect(await _until(() => _isPoint(t.current, pointY)), isTrue, reason: 'the customer sees Y, and only Y');
+    expect(await _until(() => _isPoint(t.current, pointY)), isTrue, reason: 'the provider shows Y, and only Y');
 
     // X's coordinates never appear after the FAILED close, in any state.
     final afterClose = t.history.skip(closedIndex);
@@ -956,10 +1023,10 @@ void main() {
     // Tidy: finish the delivery so nothing is left on the road.
     await riderStep(newDelivery, 'ARRIVED_AT_CUSTOMER');
     await collectCod(order2);
-    _obs('S8', 'PASS X=$pointX seen live; FAILED -> provider closed after ${closeLatency}ms, current=null; old '
+    _obs('S8', 'PASS X=$pointX received by the provider; FAILED -> provider closed after ${closeLatency}ms, current=null; old '
         'delivery POST 409 (also after re-stage+reassign and after the new pickup); re-stage 200; new delivery id '
-        '$newDelivery != old $oldDelivery; re-watch: closed reset, current==null for 4 s+ (X not served); a 10-min-old '
-        'point on the new delivery -> 202 accepted (stored) but not broadcast; Y=$pointY then shown exactly; X never '
+        '$newDelivery != old $oldDelivery; re-watch: closed reset, ONE new connection confirmed open by its heartbeat chunk after ${nullHold}ms with current==null and zero location/closed events (X not served); a 10-min-old '
+        'point on the new delivery -> 202 accepted (stored) but not broadcast; Y=$pointY then held by the provider exactly; X never '
         'shown after the close; fresh watcher snapshot == Y');
   }, timeout: scenarioTimeout);
 
@@ -977,7 +1044,7 @@ void main() {
     _expectRaw(raw3, 200, 'raw stream, cancelled order');
     expect(closedReason(raw3.body), 'not_trackable', reason: raw3.body);
     final post3 = await postPoint(order3.deliveryId, _Pt(6.4352, 80.0245));
-    _expectStatus(post3, 409, 'rider POST on a cancelled order\'s (still ASSIGNED) delivery');
+    _expectNotTrackable(post3, 'rider POST on a cancelled order\'s (still ASSIGNED) delivery');
     _obs('S9a', 'PASS cancelled while ASSIGNED: stream "closed: not_trackable", rider POST 409 '
         '(details: ${_map(_map(post3.data)['error'])['details']})');
 
@@ -992,7 +1059,8 @@ void main() {
     expect(await _until(() => _isPoint(t.current, pointZ)), isTrue);
 
     final refused = await customerCall('POST', '/orders/${order4.orderId}/cancel', data: {});
-    expect(refused.statusCode, inInclusiveRange(400, 499), reason: 'cancel on the road must be refused: ${refused.data}');
+    _expectStatus(refused, 400, 'customer cancel while OUT_FOR_DELIVERY must be refused');
+    expect(_errorCode(refused), 'ORDER_ALREADY_OUT_FOR_DELIVERY', reason: 'refusal body: ${refused.data}');
     await Future<void>.delayed(const Duration(seconds: 2));
     expect(_isPoint(t.current, pointZ), isTrue, reason: 'a refused cancel must not disturb the stream');
     expect(t.provider.closed, isFalse);
@@ -1004,9 +1072,11 @@ void main() {
     expect(await _until(() => t.provider.closed, timeout: _heartbeatWait), isTrue,
         reason: 'an open stream closes (delivery_closed) within one heartbeat of the order leaving OUT_FOR_DELIVERY');
     final latency = markedAt.elapsedMilliseconds;
+    expect(latency, lessThanOrEqualTo(20000),
+        reason: 'a heartbeat-driven close must land within ~one 15 s interval, took ${latency}ms');
     expect(t.current, isNull);
     final post4 = await postPoint(order4.deliveryId, _Pt(6.4360, 80.0252));
-    _expectStatus(post4, 409, 'rider POST after CUSTOMER_UNAVAILABLE');
+    _expectNotTrackable(post4, 'rider POST after CUSTOMER_UNAVAILABLE');
     final raw4 = await rawStream(order4.orderId, token: await TokenStorage.getAccessToken());
     expect(closedReason(raw4.body), 'not_trackable', reason: raw4.body);
     _obs('S9b', 'PASS on the road: customer cancel refused (${refused.statusCode} ${_errorCode(refused)}), stream '
