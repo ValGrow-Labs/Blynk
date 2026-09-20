@@ -1,0 +1,326 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+
+import 'package:ecom/Infrastructure/HttpMethods/requesting_methods.dart';
+import 'package:ecom/Models/rider_location_model.dart';
+
+/// Yields raw SSE text chunks for one order's location stream. Injectable so
+/// tests never open a real network connection (same idea as OrderProvider's
+/// injectable OrderRequest).
+typedef LocationStreamOpener = Stream<String> Function(String orderId);
+
+/// Delay before reconnect attempt number [attempt] (0-based).
+typedef ReconnectDelay = Duration Function(int attempt);
+
+/// Exponential backoff: 1 s, 2 s, 4 s ... capped at 30 s.
+Duration defaultReconnectDelay(int attempt) {
+  final seconds = attempt >= 5 ? 30 : (1 << attempt);
+  return Duration(seconds: seconds > 30 ? 30 : seconds);
+}
+
+/// The server answered the connect request with an HTTP error status instead
+/// of opening the stream. Lets the provider tell a deliberate refusal
+/// (401/403/404/... - retrying can only hammer the server) from a network
+/// failure or a 5xx (retry with backoff).
+class LocationStreamRefused implements Exception {
+  const LocationStreamRefused(this.statusCode);
+  final int statusCode;
+
+  /// A client error the server meant: not authenticated (401, after the
+  /// ApiService interceptor already tried a token refresh), forbidden (403),
+  /// not your order / no such order (404), conflict (409), bad id (400)...
+  /// 408 (timeout) and 429 (rate limited) are transient and retried.
+  bool get permanent => statusCode >= 400 && statusCode < 500 && statusCode != 408 && statusCode != 429;
+
+  @override
+  String toString() => 'LocationStreamRefused($statusCode)';
+}
+
+/// The server sends `: heartbeat` every 15 s. ApiService's default
+/// receiveTimeout is also 15 s, which would race the heartbeat and kill a
+/// healthy stream, so this request overrides it with a value comfortably
+/// above the heartbeat interval.
+const Duration _sseReceiveTimeout = Duration(seconds: 45);
+
+/// Opens `GET /orders/:id/location/stream` on [dio] (production: the shared
+/// ApiService.dio, so the base URL, the auth header and the 401 -> refresh ->
+/// retry interceptor all apply, and every reconnect re-reads the current
+/// access token) and yields UTF-8 decoded text chunks.
+///
+/// Cancelling the returned subscription cancels the request's CancelToken,
+/// which closes the HTTP connection instead of leaking it until the next
+/// heartbeat.
+@visibleForTesting
+Stream<String> openLocationStream(Dio dio, String orderId) async* {
+  final cancelToken = CancelToken();
+  try {
+    final Response<ResponseBody> response;
+    try {
+      response = await dio.get<ResponseBody>(
+        '/orders/${Uri.encodeComponent(orderId)}/location/stream',
+        cancelToken: cancelToken,
+        options: Options(
+          responseType: ResponseType.stream,
+          receiveTimeout: _sseReceiveTimeout,
+          headers: const {'Accept': 'text/event-stream'},
+        ),
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (e.type == DioExceptionType.badResponse && status != null) {
+        throw LocationStreamRefused(status);
+      }
+      rethrow;
+    }
+    // A stateful UTF-8 decoder: multi-byte characters split across network
+    // chunks are reassembled, never corrupted.
+    yield* utf8.decoder.bind(response.data!.stream);
+  } finally {
+    cancelToken.cancel();
+  }
+}
+
+Stream<String> _dioStreamOpener(String orderId) => openLocationStream(ApiService.dio, orderId);
+
+/// Frames without a terminator are dropped beyond this size so a misbehaving
+/// peer can never grow the buffer without bound.
+const int _maxBufferChars = 64 * 1024;
+
+/// The customer's live view of their own order's rider location.
+///
+/// Mirrors OrderProvider's ChangeNotifier + injectable-dependency convention
+/// and its generation-counter discipline: every [watch]/[stopWatching] bumps
+/// [_generation], and any late chunk, error, done or timer belonging to an
+/// earlier watch is discarded. No state is ever carried across watches.
+class LocationProvider extends ChangeNotifier {
+  LocationProvider({
+    LocationStreamOpener? opener,
+    DateTime Function()? now,
+    Duration freshnessInterval = const Duration(seconds: 5),
+    ReconnectDelay reconnectDelay = defaultReconnectDelay,
+  })  : _opener = opener ?? _dioStreamOpener,
+        _now = now ?? (() => DateTime.now().toUtc()),
+        _freshnessInterval = freshnessInterval,
+        _reconnectDelay = reconnectDelay;
+
+  final LocationStreamOpener _opener;
+  final DateTime Function() _now;
+  final Duration _freshnessInterval;
+  final ReconnectDelay _reconnectDelay;
+
+  RiderLocationPoint? _current;
+  bool _closed = false;
+  bool _unavailable = false;
+  bool _disposed = false;
+
+  StreamSubscription<String>? _sub;
+  Timer? _ageTimer;
+  Timer? _reconnectTimer;
+  int _generation = 0;
+  int _attempt = 0;
+  String _buffer = '';
+  String? _orderId;
+
+  RiderLocationPoint? get current => _current;
+
+  /// Null until a point arrives (and again after a close). Aged against the
+  /// injected clock, so the periodic tick below is enough to move
+  /// LIVE -> STALE -> OFFLINE with no new events.
+  LocationFreshness? get freshness {
+    final point = _current;
+    return point == null ? null : classifyFreshness(point.capturedAt, now: _now());
+  }
+
+  /// True once the server sent `event: closed` - the authoritative end.
+  /// Never set by a dropped connection.
+  bool get closed => _closed;
+
+  /// True when the server refused the stream at connect (or on a reconnect)
+  /// with a permanent client error, so the provider gave up. Distinct from
+  /// [closed]: the UI can say "unavailable" without claiming a server close.
+  bool get unavailable => _unavailable;
+
+  /// Starts watching [orderId]'s rider location, superseding any earlier
+  /// watch and clearing all state from it.
+  void watch(String orderId) {
+    if (_disposed) return;
+    _generation++;
+    _stopAll();
+    _current = null;
+    _closed = false;
+    _unavailable = false;
+    _buffer = '';
+    _attempt = 0;
+    _orderId = orderId;
+    _startAgeTimer();
+    _notify();
+    _connect(_generation);
+  }
+
+  /// Closes the stream and resets all state.
+  void stopWatching() {
+    if (_disposed) return;
+    _generation++;
+    _stopAll();
+    _current = null;
+    _closed = false;
+    _unavailable = false;
+    _buffer = '';
+    _orderId = null;
+    _notify();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _generation++;
+    _stopAll();
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void _stopAll() {
+    final sub = _sub;
+    _sub = null;
+    if (sub != null) {
+      sub.cancel().catchError((Object _) {});
+    }
+    _ageTimer?.cancel();
+    _ageTimer = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+  }
+
+  /// Pure re-render tick: re-evaluates freshness from data already received.
+  /// Not a network call.
+  void _startAgeTimer() {
+    _ageTimer = Timer.periodic(_freshnessInterval, (_) {
+      if (_disposed) return;
+      if (_current != null) _notify();
+    });
+  }
+
+  void _connect(int gen) {
+    final orderId = _orderId;
+    if (orderId == null) return;
+    _buffer = '';
+    final Stream<String> stream;
+    try {
+      stream = _opener(orderId);
+    } catch (e) {
+      _onEnded(gen, e);
+      return;
+    }
+    _sub = stream.listen(
+      (chunk) => _onChunk(gen, chunk),
+      onError: (Object e) => _onEnded(gen, e),
+      onDone: () => _onEnded(gen, null),
+      cancelOnError: true,
+    );
+  }
+
+  /// The connection ended without a server `closed` event (network loss,
+  /// timeout, 5xx, server restart, or a refusal at connect).
+  void _onEnded(int gen, Object? error) {
+    if (_disposed || gen != _generation || _closed || _unavailable) return;
+    _sub = null;
+
+    if (error is LocationStreamRefused && error.permanent) {
+      // The server deliberately said no (not authenticated / not your order /
+      // not trackable): stop rather than hammer it. The last point is
+      // dropped too - it belongs to a stream we may no longer see.
+      _unavailable = true;
+      _current = null;
+      _stopAll();
+      _notify();
+      return;
+    }
+
+    // Keep the last point: it ages to STALE/OFFLINE via the age timer. A
+    // dropped connection is never presented as `closed`.
+    _reconnectTimer?.cancel();
+    final delay = _reconnectDelay(_attempt++);
+    _reconnectTimer = Timer(delay, () {
+      _reconnectTimer = null;
+      if (_disposed || gen != _generation) return;
+      _connect(gen);
+    });
+  }
+
+  void _onChunk(int gen, String chunk) {
+    if (_disposed || gen != _generation || _closed || _unavailable) return;
+
+    // Normalising the whole pending buffer (not just the new chunk) also
+    // handles a "\r\n" split between two chunks.
+    var buf = (_buffer + chunk).replaceAll('\r\n', '\n');
+    int idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      final frame = buf.substring(0, idx);
+      buf = buf.substring(idx + 2);
+      _applyFrame(frame);
+      // A listener may have re-entered watch()/stopWatching(), or the frame
+      // was `closed`: this stream's remaining data no longer applies.
+      if (gen != _generation || _closed) return;
+    }
+    _buffer = buf.length > _maxBufferChars ? '' : buf;
+  }
+
+  void _applyFrame(String frame) {
+    String? event;
+    final dataLines = <String>[];
+    var sawComment = false;
+
+    for (final line in frame.split('\n')) {
+      if (line.isEmpty) continue;
+      if (line.startsWith(':')) {
+        sawComment = true; // heartbeat / comment
+        continue;
+      }
+      final colon = line.indexOf(':');
+      final field = colon < 0 ? line : line.substring(0, colon);
+      var value = colon < 0 ? '' : line.substring(colon + 1);
+      if (value.startsWith(' ')) value = value.substring(1);
+      if (field == 'event') {
+        event = value.trim();
+      } else if (field == 'data') {
+        dataLines.add(value);
+      }
+    }
+
+    if (event == 'location') {
+      _attempt = 0; // a healthy frame resets the backoff
+      final point = _parsePoint(dataLines.join('\n'));
+      if (point == null) return;
+      final cur = _current;
+      // Defense in depth: duplicates and out-of-order events never move the
+      // marker backwards (or re-notify).
+      if (cur != null && !point.capturedAt.isAfter(cur.capturedAt)) return;
+      _current = point;
+      _notify();
+    } else if (event == 'closed') {
+      _closed = true;
+      _current = null;
+      _stopAll();
+      _notify();
+    } else if (event == null && sawComment) {
+      _attempt = 0;
+    }
+  }
+
+  RiderLocationPoint? _parsePoint(String data) {
+    if (data.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is! Map) return null;
+      return RiderLocationPoint.tryParse(decoded);
+    } catch (_) {
+      return null; // malformed frames are ignored, never thrown
+    }
+  }
+}
