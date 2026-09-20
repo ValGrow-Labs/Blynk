@@ -110,6 +110,43 @@ describe('DeliveryTracker', () => {
     await vi.waitFor(() => expect(send).toHaveBeenCalledWith('delivery-2', expect.anything()));
   });
 
+  it('a native stop that fails is retryable: stop() again calls plugin.stop() again, and active stays true meanwhile', async () => {
+    const stopSpy = vi.spyOn(plugin, 'stop').mockRejectedValueOnce(new Error('native stop failed'));
+    await tracker.start('delivery-1');
+    await expect(tracker.stop()).rejects.toThrow('native stop failed');
+    expect(tracker.hasPendingStop()).toBe(true);
+    expect(tracker.getState().active).toBe(true);
+    expect(tracker.getDeliveryId()).toBeNull();
+
+    await tracker.stop();
+    expect(stopSpy).toHaveBeenCalledTimes(2);
+    expect(tracker.hasPendingStop()).toBe(false);
+    expect(tracker.getState().active).toBe(false);
+  });
+
+  it('start() first retries a stop that had failed, so a new delivery never runs beside an orphaned watcher', async () => {
+    const stopSpy = vi.spyOn(plugin, 'stop').mockRejectedValueOnce(new Error('native stop failed'));
+    await tracker.start('delivery-1');
+    await expect(tracker.stop()).rejects.toThrow();
+    await tracker.start('delivery-2');
+    expect(stopSpy).toHaveBeenCalledTimes(2);
+    expect(tracker.getDeliveryId()).toBe('delivery-2');
+    expect(tracker.getState().active).toBe(true);
+  });
+
+  it('starting a new delivery clears the previous delivery\'s lastSentAt and lastError', async () => {
+    await tracker.start('delivery-1');
+    plugin.emit({ latitude: 6.4, longitude: 80.0, accuracy: 10, capturedAt: new Date() });
+    await vi.waitFor(() => expect(tracker.getState().lastSentAt).not.toBeNull());
+    plugin.emitError('position_unavailable');
+    await tracker.stop();
+    const seen: Array<[Date | null, string | null]> = [];
+    tracker.subscribe((s) => seen.push([s.lastSentAt, s.lastError]));
+    await tracker.start('delivery-2');
+    expect(seen.every(([sent, err]) => sent === null && err === null)).toBe(true);
+    expect(tracker.getState().lastSentAt).toBeNull();
+  });
+
   it('notifies subscribers on every state change', async () => {
     const states: unknown[] = [];
     tracker.subscribe((s) => states.push(s.active));

@@ -1,8 +1,26 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
-import { NETWORK_DOWN, RIDER, ok, renderAs, summary } from './helpers';
+import { __resetTrackerSessionForTests, getTracker, syncTracking } from '../lib/tracker-session';
+import { capacitorTrackingPlugin } from '../lib/tracking-plugin';
+import { NETWORK_DOWN, RIDER, fail, ok, renderAs, summary } from './helpers';
+
+// The real plugin needs a native bridge that jsdom lacks; fake it as granted so the Queue's
+// tracking sync can be observed. Same approach as delivery.test.tsx.
+vi.mock('../lib/tracking-plugin', () => ({
+  capacitorTrackingPlugin: {
+    checkPermission: vi.fn(async () => 'granted'),
+    requestPermission: vi.fn(async () => 'granted'),
+    start: vi.fn(async () => undefined),
+    stop: vi.fn(async () => undefined),
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  __resetTrackerSessionForTests();
+});
 
 afterEach(() => {
   tokenStore.clear();
@@ -125,5 +143,36 @@ describe('Deliveries (home)', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByLabelText('Mobile number')).toBeInTheDocument();
     expect(tokenStore.access).toBeNull();
+  });
+});
+
+describe('Deliveries (home) and location tracking', () => {
+  const onRoad = summary({ delivery_id: 'd-road', assignment_status: 'PICKED_UP', order_status: 'OUT_FOR_DELIVERY' });
+  const waiting = summary({ delivery_id: 'd-wait', assignment_status: 'ASSIGNED', order_status: 'PACKED' });
+
+  it('resumes tracking on a cold start that lands here, with no Delivery screen open', async () => {
+    renderAs(RIDER, '/', { 'GET /riders/deliveries': list(waiting, onRoad) });
+    await screen.findByRole('region', { name: 'Now' });
+    await waitFor(() => expect(capacitorTrackingPlugin.start).toHaveBeenCalledTimes(1));
+    expect(getTracker().getDeliveryId()).toBe('d-road');
+  });
+
+  it('stops an active tracker when the list loads with nothing on the road', async () => {
+    await syncTracking(onRoad);
+    expect(getTracker().getDeliveryId()).toBe('d-road');
+    renderAs(RIDER, '/', { 'GET /riders/deliveries': list(waiting) });
+    await screen.findByRole('region', { name: 'Now' });
+    await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
+    expect(getTracker().getDeliveryId()).toBeNull();
+  });
+
+  it('a list that fails to load neither starts nor stops anything', async () => {
+    await syncTracking(onRoad);
+    vi.mocked(capacitorTrackingPlugin.start).mockClear();
+    renderAs(RIDER, '/', { 'GET /riders/deliveries': () => fail(500, 'INTERNAL') });
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(capacitorTrackingPlugin.start).not.toHaveBeenCalled();
+    expect(capacitorTrackingPlugin.stop).not.toHaveBeenCalled();
+    expect(getTracker().getDeliveryId()).toBe('d-road');
   });
 });

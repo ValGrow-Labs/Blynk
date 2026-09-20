@@ -33,6 +33,8 @@ export class DeliveryTracker {
   private listeners = new Set<(s: TrackingState) => void>();
   private deliveryId: string | null = null;
   private lastSentPoint: TrackingPoint | null = null;
+  /** True from the moment stop() begins until plugin.stop() has succeeded: the native watcher may still be running. */
+  private stopPending = false;
 
   constructor(
     private plugin: TrackingPlugin,
@@ -48,6 +50,11 @@ export class DeliveryTracker {
     return this.deliveryId;
   }
 
+  /** A native stop failed (or is still in flight): stop() must be attempted again. */
+  hasPendingStop(): boolean {
+    return this.stopPending;
+  }
+
   subscribe(listener: (s: TrackingState) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -59,9 +66,12 @@ export class DeliveryTracker {
   }
 
   async start(deliveryId: string): Promise<void> {
+    // Never run a new watcher beside one whose stop failed.
+    if (this.stopPending) await this.stopNative();
     this.deliveryId = deliveryId;
     this.lastSentPoint = null;
-    this.setState({ permission: 'requesting' });
+    // A new delivery must not briefly show the previous one's freshness or error.
+    this.setState({ permission: 'requesting', lastSentAt: null, lastError: null });
     const permission = await this.plugin.requestPermission();
     this.setState({ permission });
     if (permission !== 'granted') return;
@@ -78,7 +88,18 @@ export class DeliveryTracker {
     // never be attributed to (or reported against) whatever is tracked next.
     this.deliveryId = null;
     this.lastSentPoint = null;
+    await this.stopNative();
+  }
+
+  /**
+   * `active` only turns false once the plugin confirms it stopped. If the
+   * native stop throws, the flag stays up so the next stop()/start() retries
+   * instead of forgetting a watcher that may still be running.
+   */
+  private async stopNative(): Promise<void> {
+    this.stopPending = true;
     await this.plugin.stop();
+    this.stopPending = false;
     this.setState({ active: false });
   }
 

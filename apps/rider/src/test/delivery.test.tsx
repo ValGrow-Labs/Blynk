@@ -222,6 +222,51 @@ describe('Delivery', () => {
     await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
   });
 
+  it('stops tracking when the delivery turns out to be no longer this rider\'s (404 on revalidation)', async () => {
+    const user = userEvent.setup();
+    let gone = false;
+    renderAs(RIDER, ROUTE, {
+      'GET /riders/deliveries/:id': () => (gone ? fail(404, 'DELIVERY_NOT_FOUND') : ok({ delivery: detail(onRoad) })),
+    });
+    expect(await screen.findByText(/sharing your location/i)).toBeInTheDocument();
+    gone = true;
+    await user.click(screen.getByRole('button', { name: 'Refresh delivery' }));
+    await waitFor(() => expect(capacitorTrackingPlugin.stop).toHaveBeenCalledTimes(1));
+    expect(getTracker().getDeliveryId()).toBeNull();
+  });
+
+  it('shows "Stopped sharing your location." once the rider has arrived and the tracker has stopped', async () => {
+    const user = userEvent.setup();
+    let emit: (p: { latitude: number; longitude: number; accuracy: number; capturedAt: Date }) => void = () => {};
+    vi.mocked(capacitorTrackingPlugin.start).mockImplementationOnce(async (onPoint) => {
+      emit = onPoint;
+    });
+    const { state, handler } = serving(detail(onRoad));
+    renderAs(RIDER, ROUTE, {
+      'GET /riders/deliveries/:id': handler,
+      'POST /riders/deliveries/:id/location': () => ok({ accepted: true }),
+      'PATCH /riders/deliveries/:id/status': () => {
+        state.current = detail(atDoor);
+        return ok({ delivery: state.current });
+      },
+    });
+    expect(await screen.findByText(/sharing your location/i)).toBeInTheDocument();
+    emit({ latitude: 6.4, longitude: 80.0, accuracy: 10, capturedAt: new Date() });
+    expect(await screen.findByText(/updated \d+s ago/i)).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: "I've arrived" }));
+    expect(await screen.findByText('Stopped sharing your location.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Sharing your location/)).not.toBeInTheDocument();
+  });
+
+  it('a failing plugin start does not become an unhandled rejection', async () => {
+    vi.mocked(capacitorTrackingPlugin.start).mockRejectedValueOnce(new Error('native start failed'));
+    renderAs(RIDER, ROUTE, { 'GET /riders/deliveries/:id': () => ok({ delivery: detail(onRoad) }) });
+    await waitFor(() => expect(capacitorTrackingPlugin.start).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await screen.findByRole('group', { name: 'Delivery actions' })).toBeInTheDocument();
+  });
+
   it('leaving the screen mid-delivery neither stops tracking nor leaves a listener behind', async () => {
     const tracker = getTracker();
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];

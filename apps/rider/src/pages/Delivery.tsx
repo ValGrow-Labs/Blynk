@@ -11,7 +11,7 @@ import { TrackingStatus } from '../components/TrackingStatus';
 import { canReportFailure, isTrackable, nextAction, stage, statusLabel, statusTone } from '../lib/delivery';
 import { MESSAGES, errorCode, errorMessage } from '../lib/errors';
 import { formatMoney, formatPhone, formatTime, shortOrderNumber } from '../lib/format';
-import { getTracker, syncTracking } from '../lib/tracker-session';
+import { getTracker, stopTrackingFor, syncTracking } from '../lib/tracker-session';
 import type { TrackingState } from '../lib/tracking';
 import { useLoad } from '../lib/useLoad';
 import { useRevalidate } from '../lib/useRevalidate';
@@ -51,7 +51,8 @@ export function Delivery() {
     return tracker.subscribe(setTrackingState);
   }, []);
   useEffect(() => {
-    if (data) void syncTracking(data);
+    // A plugin start/stop that throws must never become an unhandled rejection.
+    if (data) syncTracking(data).catch(() => undefined);
   }, [data]);
 
   const leaveWith = useCallback(
@@ -61,8 +62,13 @@ export function Delivery() {
 
   // Reassigned, or never this rider's: back to the list with the reason.
   useEffect(() => {
-    if (errorCode(error) === 'DELIVERY_NOT_FOUND') leaveWith(MESSAGES.DELIVERY_NOT_FOUND);
-  }, [error, leaveWith]);
+    if (errorCode(error) === 'DELIVERY_NOT_FOUND') {
+      // Never this rider's (any more): its location window can't reopen, so
+      // stop sharing if that is what the device is doing.
+      stopTrackingFor(id).catch(() => undefined);
+      leaveWith(MESSAGES.DELIVERY_NOT_FOUND);
+    }
+  }, [error, id, leaveWith]);
 
   /** Runs one step. A single request at a time, whatever the rider taps. */
   async function run(step: () => Promise<DeliveryDetail | void>) {
@@ -78,6 +84,7 @@ export function Delivery() {
     } catch (err) {
       const code = errorCode(err);
       if (code === 'DELIVERY_NOT_FOUND') {
+        stopTrackingFor(id).catch(() => undefined);
         leaveWith(MESSAGES.DELIVERY_NOT_FOUND);
         return;
       }
@@ -183,8 +190,9 @@ function Slip({ delivery: d, trackingState }: { delivery: DeliveryDetail; tracki
         ) : null}
       </div>
       {closed || done ? null : <StatusRail stage={stage(d)} />}
-      {/* Only inside the trackable window (plan §2.3): PICKED_UP, order OUT_FOR_DELIVERY. */}
-      {isTrackable(d) ? <TrackingStatus state={trackingState} /> : null}
+      {/* Through ARRIVED_AT_CUSTOMER (plan §2.3, §13): tracking itself ends on arrival,
+          but the readout stays to confirm "Stopped sharing your location". */}
+      {isTrackable(d) || canReportFailure(d) ? <TrackingStatus state={trackingState} /> : null}
 
       {done ? (
         <section className="settled" aria-label="Delivered">

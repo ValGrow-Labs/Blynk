@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { deliveriesApi } from '../api/resources';
 import type { DeliverySummary } from '../api/types';
@@ -7,6 +7,7 @@ import { Header } from '../components/Header';
 import { splitQueue, statusLabel, statusTone } from '../lib/delivery';
 import { errorMessage } from '../lib/errors';
 import { formatMoney, shortOrderNumber } from '../lib/format';
+import { syncTrackingFromList } from '../lib/tracker-session';
 import { useLoad } from '../lib/useLoad';
 import { useRevalidate } from '../lib/useRevalidate';
 
@@ -21,6 +22,14 @@ export function Queue() {
   const { data, error, loading, loadedAt, reload } = useLoad(() => deliveriesApi.list(), []);
   const refresh = useCallback(() => void reload(), [reload]);
   useRevalidate(refresh);
+
+  // The window belongs to the delivery, not to a screen: a cold start or a
+  // restart that lands here must resume tracking, and a list showing nothing
+  // on the road must stop it. `data` only changes on a successful load, so a
+  // failed one starts and stops nothing.
+  useEffect(() => {
+    if (data) syncTrackingFromList(data).catch(() => undefined);
+  }, [data]);
 
   const queue = data ? splitQueue(data) : null;
   // Set by the delivery screen when it had to send the rider back here.

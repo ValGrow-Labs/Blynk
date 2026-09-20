@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
-import { __resetTrackerSessionForTests, getTracker, syncTracking } from '../lib/tracker-session';
+import {
+  __resetTrackerSessionForTests,
+  getTracker,
+  stopTracking,
+  stopTrackingFor,
+  syncTracking,
+  syncTrackingFromList,
+} from '../lib/tracker-session';
 import type { TrackingPoint } from '../lib/tracking-plugin';
 import { summary } from './helpers';
 
@@ -69,9 +76,8 @@ describe('syncTracking', () => {
     expect(h.sendLocation.mock.calls.map((c) => c[0])).toEqual(['d-new']);
   });
 
-  it('stops for null and for every non-trackable state, including arrival', async () => {
+  it('stops when the tracked delivery itself becomes non-trackable, including arrival', async () => {
     const closed = [
-      null,
       summary({ assignment_status: 'PICKED_UP', order_status: 'CANCELLED' }),
       summary({ assignment_status: 'ARRIVED_AT_CUSTOMER', order_status: 'OUT_FOR_DELIVERY' }),
       summary({ assignment_status: 'DELIVERED', order_status: 'DELIVERED' }),
@@ -88,8 +94,47 @@ describe('syncTracking', () => {
     }
   });
 
+  it('a different delivery that is not trackable leaves the tracked one alone', async () => {
+    await syncTracking(onRoad('d-a'));
+    h.fake.stop.mockClear();
+    for (const other of [
+      summary({ delivery_id: 'd-b', assignment_status: 'ASSIGNED', order_status: 'PACKED' }),
+      summary({ delivery_id: 'd-b', assignment_status: 'DELIVERED', order_status: 'DELIVERED' }),
+      summary({ delivery_id: 'd-b', assignment_status: 'PICKED_UP', order_status: 'CANCELLED' }),
+    ]) {
+      await syncTracking(other);
+    }
+    expect(h.fake.stop).not.toHaveBeenCalled();
+    expect(getTracker().getDeliveryId()).toBe('d-a');
+    expect(getTracker().getState().active).toBe(true);
+  });
+
+  it('stopTracking() stops whatever is tracked, and stopTrackingFor() only the delivery it names', async () => {
+    await syncTracking(onRoad('d-a'));
+    await stopTrackingFor('d-other');
+    expect(h.fake.stop).not.toHaveBeenCalled();
+    await stopTrackingFor('d-a');
+    expect(h.fake.stop).toHaveBeenCalledTimes(1);
+    expect(getTracker().getDeliveryId()).toBeNull();
+
+    await syncTracking(onRoad('d-b'));
+    await stopTracking();
+    expect(h.fake.stop).toHaveBeenCalledTimes(2);
+    expect(getTracker().getDeliveryId()).toBeNull();
+  });
+
+  it('retries a native stop that failed: the next sync calls plugin.stop again instead of forgetting the watcher', async () => {
+    await syncTracking(onRoad('d-a'));
+    h.fake.stop.mockRejectedValueOnce(new Error('native stop failed'));
+    await expect(stopTracking()).rejects.toThrow('native stop failed');
+    expect(getTracker().getState().active).toBe(true); // the watcher may still be running
+    await syncTracking(summary({ delivery_id: 'd-elsewhere', assignment_status: 'ASSIGNED', order_status: 'PACKED' }));
+    expect(h.fake.stop).toHaveBeenCalledTimes(2);
+    expect(getTracker().getState().active).toBe(false);
+  });
+
   it('does not touch the plugin when there is nothing to stop', async () => {
-    await syncTracking(null);
+    await stopTracking();
     await syncTracking(summary({ assignment_status: 'ASSIGNED', order_status: 'PACKED' }));
     expect(h.fake.stop).not.toHaveBeenCalled();
     expect(h.fake.start).not.toHaveBeenCalled();
@@ -121,6 +166,45 @@ describe('server-authoritative stop', () => {
     expect(getTracker().getState().lastSentAt).toBeNull();
   });
 
+  it('a 404 DELIVERY_NOT_FOUND (no longer this rider\'s) stops the tracker too, but other 404s do not', async () => {
+    h.sendLocation.mockRejectedValueOnce(new ApiError('Gone.', 404, 'DELIVERY_NOT_FOUND'));
+    await syncTracking(onRoad());
+    h.fake.onPoint(point());
+    await vi.waitFor(() => expect(h.fake.stop).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(getTracker().getState().active).toBe(false));
+    expect(getTracker().getState().lastError).toBeNull();
+
+    __resetTrackerSessionForTests();
+    vi.clearAllMocks();
+    h.sendLocation.mockRejectedValueOnce(new ApiError('Nope.', 404, 'SOMETHING_ELSE'));
+    await syncTracking(onRoad());
+    h.fake.onPoint(point());
+    await vi.waitFor(() => expect(getTracker().getState().lastError).toBe('network'));
+    expect(h.fake.stop).not.toHaveBeenCalled();
+  });
+
+  it('a refusal that arrives while a switch to another delivery is mid-start does not interleave a stop', async () => {
+    let rejectOld: (e: unknown) => void = () => {};
+    h.sendLocation.mockImplementationOnce(() => new Promise((_, reject) => (rejectOld = reject)));
+    await syncTracking(onRoad('d-old'));
+    h.fake.onPoint(point());
+    await vi.waitFor(() => expect(h.sendLocation).toHaveBeenCalledTimes(1));
+
+    let releasePermission: () => void = () => {};
+    h.fake.requestPermission.mockImplementationOnce(() => new Promise((r) => (releasePermission = () => r('granted'))));
+    const switching = syncTracking(onRoad('d-new'));
+    await vi.waitFor(() => expect(h.fake.requestPermission).toHaveBeenCalledTimes(2));
+    h.fake.stop.mockClear();
+    rejectOld(new ApiError('Not trackable.', 409, 'DELIVERY_NOT_TRACKABLE'));
+    await new Promise((r) => setTimeout(r, 20));
+    releasePermission();
+    await switching;
+
+    expect(h.fake.stop).not.toHaveBeenCalled();
+    expect(getTracker().getDeliveryId()).toBe('d-new');
+    expect(getTracker().getState().active).toBe(true);
+  });
+
   it('a 409 for an old delivery does not stop the tracking of the one that replaced it', async () => {
     let rejectOld: (e: unknown) => void = () => {};
     h.sendLocation.mockImplementationOnce(() => new Promise((_, reject) => (rejectOld = reject)));
@@ -150,5 +234,41 @@ describe('server-authoritative stop', () => {
       expect(getTracker().getState().active).toBe(true);
       expect(getTracker().getDeliveryId()).toBe('d-1');
     }
+  });
+});
+
+describe('syncTrackingFromList (the Queue, when no Delivery screen is open)', () => {
+  const idle = (delivery_id: string) => summary({ delivery_id, assignment_status: 'ASSIGNED', order_status: 'PACKED' });
+
+  it('starts tracking the on-road delivery in the list', async () => {
+    await syncTrackingFromList([idle('d-1'), onRoad('d-2')]);
+    expect(getTracker().getDeliveryId()).toBe('d-2');
+    expect(h.fake.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('with several trackable, keeps the one already tracked, else takes the first', async () => {
+    await syncTrackingFromList([onRoad('d-1'), onRoad('d-2')]);
+    expect(getTracker().getDeliveryId()).toBe('d-1');
+    await syncTrackingFromList([onRoad('d-2'), onRoad('d-1')]);
+    expect(getTracker().getDeliveryId()).toBe('d-1');
+    expect(h.fake.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops an active tracker when the loaded list has nothing trackable, or is empty', async () => {
+    await syncTracking(onRoad('d-1'));
+    await syncTrackingFromList([idle('d-1'), idle('d-2')]);
+    expect(getTracker().getDeliveryId()).toBeNull();
+    expect(h.fake.stop).toHaveBeenCalledTimes(1);
+
+    await syncTracking(onRoad('d-1'));
+    await syncTrackingFromList([]);
+    expect(getTracker().getDeliveryId()).toBeNull();
+    expect(h.fake.stop).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing when idle and nothing is trackable', async () => {
+    await syncTrackingFromList([idle('d-1')]);
+    expect(h.fake.start).not.toHaveBeenCalled();
+    expect(h.fake.stop).not.toHaveBeenCalled();
   });
 });
