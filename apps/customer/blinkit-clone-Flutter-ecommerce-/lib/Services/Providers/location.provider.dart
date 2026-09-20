@@ -180,6 +180,10 @@ class LocationProvider extends ChangeNotifier {
     return point == null ? null : classifyFreshness(point.capturedAt, now: _now());
   }
 
+  /// The provider's clock. Exposed so a caption ("last seen 45 seconds ago")
+  /// is aged against the same instant [freshness] was classified with.
+  DateTime get now => _now();
+
   /// True once the server sent `event: closed` - the authoritative end.
   /// Never set by a dropped connection.
   bool get closed => _closed;
