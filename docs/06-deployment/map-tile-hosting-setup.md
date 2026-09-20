@@ -174,7 +174,7 @@ The Flutter side (plan Task M4/M-later) must, before handing the style to MapLib
 2. Replace the literal token `__TILES_URL__` (exactly one occurrence, in `sources.protomaps.url`) with the **absolute** URL of the archive from environment configuration, e.g. `https://api.example.com/map-tiles/blynk-service-area.pmtiles`, yielding `pmtiles://https://api.example.com/map-tiles/blynk-service-area.pmtiles`.
 3. Pass the resulting JSON string to the map as inline style JSON (not a file path with an unsubstituted token).
 
-Constraint from MapLibre Native docs (https://maplibre.org/maplibre-native/android/examples/data/PMTiles/, fetched 2026-09-20): "the URL inside `pmtiles://` [must be] fully specified (e.g. `pmtiles://https://example.com/tiles.pmtiles`, not `pmtiles://tiles.pmtiles`)"; `pmtiles://asset://` (files packaged in the app) is **not supported**; supported minimum "MapLibre Android 11.7.0"; and "PMTiles sources do not support offline pack downloads or caching" on native. The archive therefore cannot be shipped inside the app: it must be served over HTTP(S) (or `file://` after a manual download). iOS support was listed in search results (MapLibre iOS changelog, PMTiles `pmtiles://` scheme) but **the iOS page itself was not fetched: UNVERIFIED**. Also **UNVERIFIED:** the minimum `maplibre_gl` Flutter package version that bundles MapLibre Native >= 11.7.0; check its changelog in Task M4 before pinning. The plan's statement that Flutter MapLibre handles `pmtiles://` natively rests on that.
+Constraint from MapLibre Native docs (https://maplibre.org/maplibre-native/android/examples/data/PMTiles/, fetched 2026-09-20): "the URL inside `pmtiles://` [must be] fully specified (e.g. `pmtiles://https://example.com/tiles.pmtiles`, not `pmtiles://tiles.pmtiles`)"; `pmtiles://asset://` (files packaged in the app) is **not supported**; supported minimum "MapLibre Android 11.7.0"; and "PMTiles sources do not support offline pack downloads or caching" on native. The archive therefore cannot be shipped inside the app: it must be served over HTTP(S) (or `file://` after a manual download). iOS support was listed in search results (MapLibre iOS changelog, PMTiles `pmtiles://` scheme) but **the iOS page itself was not fetched: UNVERIFIED**. Also **UNVERIFIED** (resolved in Task M4: native PMTiles support since maplibre_gl 0.22.0; 0.25.0 in use): the minimum `maplibre_gl` Flutter package version that bundles MapLibre Native >= 11.7.0; check its changelog in Task M4 before pinning. The plan's statement that Flutter MapLibre handles `pmtiles://` natively rests on that.
 
 ### Validation
 
@@ -315,7 +315,7 @@ Blynk is a commercial delivery service, so neither free tier is usable.
 - The 2 MB binary lives in git; each rebuild adds another 2 MB to history (acceptable; consider Git LFS only if the area grows a lot).
 - Native MapLibre has no PMTiles cache/offline; every viewer session hits the server for ranges.
 - Cleartext: a plain `http://` archive URL is fine for local/dev only; production must be HTTPS (the app also has the Android cleartext notes in the device runbook).
-- Version support of the Flutter MapLibre package for `pmtiles://` is **UNVERIFIED** (section 5).
+- Version support of the Flutter MapLibre package for `pmtiles://` is **UNVERIFIED** (section 5) (resolved in Task M4: native PMTiles support since maplibre_gl 0.22.0; 0.25.0 in use).
 
 **If we outgrow it.**
 

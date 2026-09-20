@@ -44,4 +44,4 @@ Five files under `android/` are modified but uncommitted: `app/build.gradle`, `b
 
 ## Release signing warning
 
-The Customer app's release build type is signed with the **debug key**: `android/app/build.gradle` still has the generated `// TODO: Add your own signing config for the release build. Signing with the debug keys for now` and `signingConfig signingConfigs.debug`. This is a pre-existing item, not changed by this phase, and a release built this way must not be published. A production keystore and signing config are needed first.
+The Customer app's release build type is signed with the **debug key**: `android/app/build.gradle` still has the generated `// TODO: Add your own signing config for the release build. Signing with the debug keys for now` and `signingConfig signingConfigs.debug` (this is the committed text; the user's uncommitted working-tree file spells it `signingConfig = signingConfigs.debug`). This is a pre-existing item, not changed by this phase, and a release built this way must not be published. A production keystore and signing config are needed first.

@@ -442,6 +442,7 @@ Observed: ______________  PASS | FAIL   date: ______  tester: ______
 All of S1-S15 PASS on debug build?  ______   Additional S16-S19?  ______   Release spot-check?  ______
 S20 (CapacitorHttp >5 min locked)?  ______   S21 (token expiry while backgrounded)?  ______
 Open items O-1 ____  O-2 ____   Risk R-A observed? ____  R-D notification visible? ____
-Device(s) used: ______________________   Verdict: PROCEED to Task M0 | STOP AND ESCALATE
+Device(s) used: ______________________   Verdict (fill in; leave blank until run): PASS — gate satisfied | FAIL — escalate
 Signed: ______________  Date: ______________
 ```
+Note: Tasks M0 to V1 were executed earlier, under the user's instruction, while this gate is still pending; the verdict above concerns only whether the gate itself is now satisfied.
