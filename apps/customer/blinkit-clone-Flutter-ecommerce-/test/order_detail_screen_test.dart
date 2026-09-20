@@ -7,8 +7,10 @@ import 'package:provider/provider.dart';
 import 'package:ecom/Models/order_format.dart';
 import 'package:ecom/Screens/order_summary_screen.dart';
 import 'package:ecom/Services/Exceptions/api_exception.dart';
+import 'package:ecom/Services/Providers/location.provider.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_bill_card.dart';
+import 'package:ecom/UI/Widgets/Organisms/order_tracking_map.dart';
 import 'package:ecom/app_theme.dart';
 
 import 'fixtures/order_fixtures.dart';
@@ -60,6 +62,7 @@ Future<OrderProvider> _pumpDetail(
   _FakeOrdersApi api, {
   Size size = const Size(400, 2000),
   bool settle = true,
+  LocationProvider? location,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -67,14 +70,20 @@ Future<OrderProvider> _pumpDetail(
   addTearDown(tester.view.resetDevicePixelRatio);
 
   final provider = OrderProvider(request: api.call);
+  final app = MaterialApp(
+    theme: AppTheme.appTHeme,
+    home: const OrderSummaryScreen(orderId: _id),
+  );
   await tester.pumpWidget(
-    ChangeNotifierProvider<OrderProvider>.value(
-      value: provider,
-      child: MaterialApp(
-        theme: AppTheme.appTHeme,
-        home: const OrderSummaryScreen(orderId: _id),
-      ),
-    ),
+    location == null
+        ? ChangeNotifierProvider<OrderProvider>.value(value: provider, child: app)
+        : MultiProvider(
+            providers: [
+              ChangeNotifierProvider<OrderProvider>.value(value: provider),
+              ChangeNotifierProvider<LocationProvider>.value(value: location),
+            ],
+            child: app,
+          ),
   );
   if (settle) await tester.pumpAndSettle();
   return provider;
@@ -634,5 +643,56 @@ void main() {
     for (final word in ['rider', 'Rider', 'assigned', 'Assigned', 'picked up', 'Picked up']) {
       expect(find.textContaining(word), findsNothing, reason: word);
     }
+  });
+
+  // 16 (live tracking, Task M5): the map is a section of this screen, but only
+  // in the trackable window. The exhaustive matrix, the watch lifecycle and
+  // the close-triggered refetch live in test/order_tracking_gate_test.dart.
+  group('the live tracking map section', () {
+    Future<LocationProvider> pumpWithLocation(WidgetTester tester) async {
+      // A never-emitting stream: no network, no platform view (the fixtures
+      // carry no coordinates, so OrderTrackingMap builds no map either).
+      final location = LocationProvider(opener: (_) => StreamController<String>().stream);
+      addTearDown(location.dispose);
+      await _pumpDetail(tester, api, location: location);
+      return location;
+    }
+
+    testWidgets('shows the tracking map while OUT_FOR_DELIVERY with a PICKED_UP delivery', (tester) async {
+      api.routes[_getKey] = () async => _envelope(orderJson(
+            status: 'OUT_FOR_DELIVERY',
+            delivery: {'assignment_status': 'PICKED_UP'},
+          ));
+      await pumpWithLocation(tester);
+
+      expect(find.byType(OrderTrackingMap), findsOneWidget);
+      // Unmount so the provider's freshness timer is stopped by the screen.
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('does not show the tracking map for a PACKED order (not yet picked up)', (tester) async {
+      api.routes[_getKey] = () async => _envelope(orderJson(
+            status: 'PACKED',
+            delivery: {'assignment_status': 'ASSIGNED'},
+          ));
+      await pumpWithLocation(tester);
+
+      expect(find.byType(OrderTrackingMap), findsNothing);
+    });
+
+    testWidgets('does not show the tracking map once DELIVERED', (tester) async {
+      api.routes[_getKey] = () async => _envelope(restagedDeliveredJson());
+      await pumpWithLocation(tester);
+
+      expect(find.byType(OrderTrackingMap), findsNothing);
+    });
+
+    testWidgets('an order that is never trackable needs no LocationProvider in the tree', (tester) async {
+      api.routes[_getKey] = () async => _envelope(orderJson(status: 'PACKED'));
+      await _pumpDetail(tester, api);
+
+      expect(find.byType(OrderTrackingMap), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
