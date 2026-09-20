@@ -70,6 +70,11 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
   /// gone, or after a newer attempt started, is ignored.
   int _attempt = 0;
 
+  /// True once the map reported it cannot be shown ("Map unavailable"). The
+  /// screen then stops telling the customer to move the map. Cleared by every
+  /// new attempt.
+  bool _mapUnavailable = false;
+
   static LocationPickerMapView _defaultMapBuilder({
     required GeoPoint initialPosition,
     required ValueChanged<GeoPoint> onPositionChanged,
@@ -84,7 +89,10 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
 
   Future<void> _start() async {
     final attempt = ++_attempt;
-    setState(() => _phase = _Phase.requesting);
+    setState(() {
+      _phase = _Phase.requesting;
+      _mapUnavailable = false;
+    });
     try {
       if (!await _source.isLocationServiceEnabled()) return _go(attempt, _Phase.servicesOff);
       if (!_isCurrent(attempt)) return;
@@ -187,6 +195,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-denied'),
           icon: Icons.location_disabled_outlined,
+          iconColor: AppTextColors.problem,
           title: 'Location permission is off',
           paragraphs: const [
             "Without it we can't pin your address automatically. You can try again, "
@@ -200,6 +209,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-denied-forever'),
           icon: Icons.location_disabled_outlined,
+          iconColor: AppTextColors.problem,
           title: 'Location is blocked for Blynk',
           paragraphs: const [
             'Your phone will not ask again. You can allow location for Blynk in '
@@ -215,6 +225,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-services-off'),
           icon: Icons.location_off_outlined,
+          iconColor: AppTextColors.problem,
           title: 'Location services are off',
           paragraphs: const [
             'Turn on location services on your phone to pin your address '
@@ -230,6 +241,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-error'),
           icon: Icons.error_outline_rounded,
+          iconColor: AppTextColors.problem,
           title: "Couldn't get your location",
           paragraphs: const [
             "Your phone didn't return a position in time. A clearer view of the sky or "
@@ -240,18 +252,34 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
           onManual: _enterManually,
         );
       case _Phase.ready:
-        return _Ready(
-          key: const Key('picker-ready'),
-          initial: _initial!,
-          selected: _selected!,
-          mapBuilder: widget.mapBuilder ?? _defaultMapBuilder,
-          onPositionChanged: (point) => setState(() => _selected = point),
-          onConfirm: _confirm,
-          onCancel: _enterManually,
+        return NotificationListener<PickerMapUnavailableNotification>(
+          onNotification: (_) {
+            if (!_mapUnavailable) setState(() => _mapUnavailable = true);
+            return true;
+          },
+          child: _Ready(
+            key: const Key('picker-ready'),
+            initial: _initial!,
+            selected: _selected!,
+            mapUnavailable: _mapUnavailable,
+            mapBuilder: widget.mapBuilder ?? _defaultMapBuilder,
+            onPositionChanged: (point) => setState(() => _selected = point),
+            onConfirm: _confirm,
+            onCancel: _enterManually,
+          ),
         );
     }
   }
 }
+
+/// Minimum height of every action button on this screen (>= the 48 dp touch
+/// target). A floor only: labels that wrap at a large text scale grow past it.
+const double _kButtonMinHeight = 50;
+
+/// Shown instead of the "move the map" instruction when the map itself could not
+/// be prepared: the pin is not on screen and Confirm returns the device fix.
+const String _kMapUnavailableHint =
+    'The map is not available right now. Confirm location will use your device location.';
 
 /// Centred explanation with its actions. Scrolls rather than overflowing on a
 /// small screen or a large type scale.
@@ -259,6 +287,7 @@ class _Message extends StatelessWidget {
   const _Message({
     super.key,
     required this.icon,
+    this.iconColor = AppColors.primaryGreenColor,
     required this.title,
     required this.paragraphs,
     required this.primaryLabel,
@@ -269,6 +298,10 @@ class _Message extends StatelessWidget {
   });
 
   final IconData icon;
+
+  /// Green only for the friendly explain state; failure / blocked states pass
+  /// the design system's problem colour (green reads as "success" here).
+  final Color iconColor;
   final String title;
   final List<String> paragraphs;
   final String primaryLabel;
@@ -288,7 +321,7 @@ class _Message extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(icon, size: 44, color: AppColors.primaryGreenColor),
+              Icon(icon, size: 44, color: iconColor),
               const SizedBox(height: AppSpacing.lg),
               Semantics(
                 header: true,
@@ -309,15 +342,19 @@ class _Message extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: AppSpacing.lg),
-              SizedBox(
-                height: 50,
-                child: ElevatedButton(onPressed: onPrimary, child: Text(primaryLabel)),
+              // minHeight, not a fixed height: at a large system font the label
+              // wraps and the button grows instead of clipping it.
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(minimumSize: const Size(64, _kButtonMinHeight)),
+                onPressed: onPrimary,
+                child: Text(primaryLabel, textAlign: TextAlign.center),
               ),
               if (secondaryLabel != null) ...[
                 const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  height: 50,
-                  child: OutlinedButton(onPressed: onSecondary, child: Text(secondaryLabel!)),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(64, _kButtonMinHeight)),
+                  onPressed: onSecondary,
+                  child: Text(secondaryLabel!, textAlign: TextAlign.center),
                 ),
               ],
               const SizedBox(height: AppSpacing.sm),
@@ -355,6 +392,7 @@ class _Ready extends StatelessWidget {
     super.key,
     required this.initial,
     required this.selected,
+    required this.mapUnavailable,
     required this.mapBuilder,
     required this.onPositionChanged,
     required this.onConfirm,
@@ -363,6 +401,7 @@ class _Ready extends StatelessWidget {
 
   final GeoPoint initial;
   final GeoPoint selected;
+  final bool mapUnavailable;
   final LocationPickerMapBuilder mapBuilder;
   final ValueChanged<GeoPoint> onPositionChanged;
   final VoidCallback onConfirm;
@@ -399,40 +438,41 @@ class _Ready extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
+                // The instruction is what the customer acts on, so it leads;
+                // the raw coordinate pair is only a secondary read-out.
+                Text(
+                  mapUnavailable ? _kMapUnavailableHint : 'Move the map to put the pin on your exact delivery spot.',
+                  key: const Key('picker-instruction'),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                    color: AppTextColors.primary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
                 Semantics(
                   liveRegion: true,
                   child: Text(
                     _coordinateLabel(selected),
                     key: const Key('picker-coordinates'),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTextColors.primary),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTextColors.secondary),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                const Text(
-                  'Move the map to put the pin on your exact delivery spot.',
-                  style: TextStyle(fontSize: 12.5, color: AppTextColors.secondary),
-                ),
                 const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: OutlinedButton(onPressed: onCancel, child: const Text('Cancel')),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      flex: 2,
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: onConfirm,
-                          child: const FittedBox(child: Text('Confirm location')),
-                        ),
-                      ),
-                    ),
-                  ],
+                // Buttons are at least 50 dp tall and grow with a large font;
+                // the pair stacks when the text scale is large (AppButtonPair).
+                AppButtonPair(
+                  secondary: OutlinedButton(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(64, _kButtonMinHeight)),
+                    onPressed: onCancel,
+                    child: const Text('Cancel', textAlign: TextAlign.center),
+                  ),
+                  primary: ElevatedButton(
+                    style: ElevatedButton.styleFrom(minimumSize: const Size(64, _kButtonMinHeight)),
+                    onPressed: onConfirm,
+                    child: const Text('Confirm location', textAlign: TextAlign.center),
+                  ),
                 ),
               ],
             ),

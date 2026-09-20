@@ -295,7 +295,12 @@ class _MapUnavailable extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const Key('map-unavailable'),
-      color: AppSurfaces.tile,
+      // A white, hairline-bordered surface like the app's other cards: the old
+      // tile grey was 1.00:1 against the order page, so the box disappeared.
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppSurfaces.border),
+      ),
       alignment: Alignment.center,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: const Column(
@@ -376,6 +381,9 @@ class _PickerMapBodyState extends State<_PickerMapBody> {
       _style = style;
       _styleFailed = style == null;
     });
+    // Tell the screen the customer is not looking at a map, so it does not
+    // ask them to move one.
+    if (style == null) const PickerMapUnavailableNotification().dispatch(context);
   }
 
   @override

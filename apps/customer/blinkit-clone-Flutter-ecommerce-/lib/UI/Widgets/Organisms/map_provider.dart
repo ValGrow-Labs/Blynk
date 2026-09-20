@@ -95,6 +95,11 @@ typedef LocationPickerMapBuilder = LocationPickerMapView Function({
 /// shows an honest "Map unavailable" state (no pin) and never reports a
 /// position: the caller keeps the last one it knew. The concrete widget
 /// returned is MapLibreLocationPickerView.
+///
+/// When it falls back to "Map unavailable" the implementation also dispatches a
+/// [PickerMapUnavailableNotification] up the tree, so the screen can stop
+/// telling the customer to "move the map" (the position it holds is then the
+/// device fix, not something the customer chose).
 abstract class LocationPickerMapView extends StatelessWidget {
   const factory LocationPickerMapView({
     Key? key,
@@ -103,4 +108,11 @@ abstract class LocationPickerMapView extends StatelessWidget {
   }) = MapLibreLocationPickerView;
 
   const LocationPickerMapView.constructor({super.key});
+}
+
+/// Sent up the widget tree by a [LocationPickerMapView] that could not prepare
+/// a map and is showing the "Map unavailable" placeholder instead. Carries no
+/// data: it only lets the picker screen swap its instruction copy.
+class PickerMapUnavailableNotification extends Notification {
+  const PickerMapUnavailableNotification();
 }

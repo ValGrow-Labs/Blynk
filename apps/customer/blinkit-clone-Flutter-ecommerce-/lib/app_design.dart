@@ -64,6 +64,13 @@ class AppTextColors {
   /// uses this instead.
   static const Color onBackground = Color(0xff4B5563); // 6.72:1 on #EDF2F8
 
+  /// The positive-status green for SMALL TEXT on the page background (for
+  /// example the "Live" caption). `AppColors.primaryGreenColor` is 4.90:1 on
+  /// white but only 4.36:1 on `AppColors.greyWhiteColor`, below the 4.5:1 AA
+  /// bar for text this size; this darker green measures 5.29:1 on #EDF2F8 and
+  /// 5.95:1 on white. Keep `primaryGreenColor` for icons, dots and fills.
+  static const Color positiveOnBackground = Color(0xff0A741B);
+
   /// Something went wrong or is being destroyed: failure states and the
   /// destructive action. Deliberately a dark red rather than a pure red -
   /// it has to pass 4.5:1 as body text, not just shout.
@@ -108,4 +115,56 @@ ButtonStyle appPrimaryButtonStyle({EdgeInsetsGeometry? padding}) {
     ),
     shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonBorder),
   );
+}
+
+/// Text scale (1.0 = the design size) the current [MediaQuery] applies to a
+/// 15 px label, the size the app's buttons use.
+double appButtonTextScale(BuildContext context) => MediaQuery.textScalerOf(context).scale(15) / 15;
+
+/// Above this text scale a secondary + primary button pair stacks vertically.
+const double kStackButtonsAboveTextScale = 1.3;
+
+/// A secondary (left, narrower) and primary (right, wider) action side by side.
+/// Neither is a fixed height: the caller gives each a minimum height (a floor)
+/// and each grows with its label, so a large system font wraps the text instead of clipping it (a fixed
+/// height cut labels in half at 1.6x). The pair always has one shared height,
+/// and above [kStackButtonsAboveTextScale] it stacks (primary on top) so
+/// neither label is squeezed into half a narrow row.
+class AppButtonPair extends StatelessWidget {
+  const AppButtonPair({
+    super.key,
+    required this.secondary,
+    required this.primary,
+  });
+
+  /// The lower-emphasis action (Cancel).
+  final Widget secondary;
+
+  /// The primary action (Confirm / Save).
+  final Widget primary;
+
+  @override
+  Widget build(BuildContext context) {
+    if (appButtonTextScale(context) > kStackButtonsAboveTextScale) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          primary,
+          const SizedBox(height: AppSpacing.sm),
+          secondary,
+        ],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: secondary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(flex: 2, child: primary),
+        ],
+      ),
+    );
+  }
 }

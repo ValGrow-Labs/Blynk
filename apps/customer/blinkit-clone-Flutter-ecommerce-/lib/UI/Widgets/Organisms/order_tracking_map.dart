@@ -166,7 +166,9 @@ class _FreshnessCaption extends StatelessWidget {
     if (live) {
       dot = AppColors.primaryGreenColor;
       label = 'Live';
-      style = const TextStyle(color: AppColors.primaryGreenColor, fontSize: 13, fontWeight: FontWeight.w700);
+      // Darker green than the dot: the brand green is 4.36:1 on the page
+      // background, below AA for 13 px text; this is 5.29:1.
+      style = const TextStyle(color: AppTextColors.positiveOnBackground, fontSize: 13, fontWeight: FontWeight.w700);
     } else if (text != null) {
       dot = AppTextColors.muted;
       label = text!;

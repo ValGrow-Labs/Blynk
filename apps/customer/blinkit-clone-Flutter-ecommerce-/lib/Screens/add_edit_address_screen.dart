@@ -313,20 +313,29 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                           'Your delivery location helps us confirm service '
                           'availability.',
                     ),
+                    // Same insets on every side as the note above it, so the
+                    // button is not jammed under the section hairline. At
+                    // least 48 dp tall, and taller when a large font wraps
+                    // the label (a fixed height clipped it at 1.6x).
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                         AppSpacing.lg,
-                        0,
+                        AppSpacing.md,
                         AppSpacing.lg,
                         AppSpacing.md,
                       ),
                       child: SizedBox(
                         width: double.infinity,
-                        height: 46,
                         child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(64, 48),
+                          ),
                           onPressed: _useCurrentLocation,
                           icon: const Icon(Icons.gps_fixed_rounded, size: 18),
-                          label: const Text('Use my current location'),
+                          label: const Text(
+                            'Use my current location',
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ),
                     ),
@@ -830,40 +839,32 @@ class _ActionBar extends StatelessWidget {
                 AppSpacing.lg,
                 AppSpacing.md,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 50,
-                      child: OutlinedButton(
-                        onPressed: isSaving ? null : onCancel,
-                        child: const Text('Cancel'),
-                      ),
-                    ),
+              // Buttons are at least 50 dp tall and grow with a large font
+              // instead of clipping; the pair stacks at a large text scale.
+              child: AppButtonPair(
+                secondary: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(64, 50),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    flex: 2,
-                    child: SizedBox(
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: isSaving ? null : onSave,
-                        child: isSaving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppTextColors.onYellow,
-                                ),
-                              )
-                            : const FittedBox(
-                                child: Text('Save Address'),
-                              ),
-                      ),
-                    ),
+                  onPressed: isSaving ? null : onCancel,
+                  child: const Text('Cancel', textAlign: TextAlign.center),
+                ),
+                primary: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(64, 50),
                   ),
-                ],
+                  onPressed: isSaving ? null : onSave,
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppTextColors.onYellow,
+                          ),
+                        )
+                      : const Text('Save Address', textAlign: TextAlign.center),
+                ),
               ),
             ),
           ),
