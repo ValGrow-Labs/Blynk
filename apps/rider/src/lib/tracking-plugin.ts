@@ -1,3 +1,41 @@
+/*
+ * Compatibility notes (Task RG Step 0 desk research, 2026-09-20).
+ * Verified on a real device: NOT YET - see
+ * docs/06-deployment/rider-background-tracking-device-verification.md
+ *
+ * Pinned: @capacitor/core|android|cli 7.6.9 + @capacitor-community/background-geolocation
+ * 1.2.26 (README: "v1.2.25 - Add support for Capacitor v7"). The plugin has NO Capacitor 8
+ * support: issue #156 (open, Apr 2026) reports a crash on backgrounding under v8. Do not
+ * upgrade Capacitor past 7.x without re-checking. Last plugin release 2025-08-28.
+ * Android: minSdk 23 / compileSdk+targetSdk 35 (android/variables.gradle). Android 14 fix
+ * shipped in plugin v1.2.16; foreground-service reliability in v1.2.18/19/23.
+ * Manifest (merged, verified in build): the plugin AAR contributes its own
+ * <service foregroundServiceType="location">, FOREGROUND_SERVICE_LOCATION and
+ * POST_NOTIFICATIONS; the app manifest adds INTERNET, ACCESS_FINE/COARSE/BACKGROUND_LOCATION,
+ * FOREGROUND_SERVICE. Required config: capacitor.config.ts android.useLegacyBridge = true
+ * (otherwise updates halt after ~5 min in background, issue #89).
+ * Known caveats (github.com/capacitor-community/background-geolocation/issues/<n>):
+ *  - #153 (open): Android 14-16 throws SecurityException starting the location FGS if the
+ *    watcher starts while the location permission prompt is still pending. Mitigated here
+ *    by DeliveryTracker awaiting requestPermission() BEFORE start(); confirm on device.
+ *  - #126 (open): a report of updates stopping after ~1 hour in background; unresolved.
+ *  - #127 (open): no built-in battery-optimization exemption prompt. OEM killers
+ *    (dontkillmyapp.com: Huawei, Xiaomi, OnePlus, Samsung) may still stop the service.
+ *  - #135 (open): non-transparent/invalid notification icon makes the notification
+ *    misbehave; the default mipmap/ic_launcher is used here - check on device.
+ *  - #141 (open): the plugin never requests POST_NOTIFICATIONS. GAP: neither this file nor
+ *    the app requests it, so on Android 13+ the FGS runs but its notification is hidden from
+ *    the drawer (visible only in the Task Manager) unless the user grants it in Settings.
+ *  - HIGH RISK (README + issue #14): "after 5 minutes in the background Android will
+ *    throttle HTTP requests initiated from the WebView"; the fix is native HTTP
+ *    (CapacitorHttp). api/client.ts uses WebView fetch() and capacitor.config.ts does NOT
+ *    enable plugins.CapacitorHttp. Expect updates to stall after ~5 min when locked until
+ *    this is verified on a device or CapacitorHttp is enabled.
+ * iOS (out of scope): Info.plist NSLocationWhenInUseUsageDescription,
+ * NSLocationAlwaysAndWhenInUseUsageDescription, UIBackgroundModes = [location].
+ * checkPermissions()/requestPermissions() used below are inherited bridge methods, see the
+ * WithAutoPermissions note; not yet exercised on a device.
+ */
 import { registerPlugin } from '@capacitor/core';
 import type { BackgroundGeolocationPlugin, CallbackError, Location } from '@capacitor-community/background-geolocation';
 
