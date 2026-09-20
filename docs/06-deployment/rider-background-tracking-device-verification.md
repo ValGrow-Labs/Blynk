@@ -405,6 +405,17 @@ Observed: ______________  PASS | FAIL   date: ______  tester: ______
 
 ---
 
+### S21. Tracking survives access-token expiry while backgrounded (added by the controller during implementation)
+
+Rider access tokens expire after 15 minutes (`JWT_ACCESS_EXPIRY=15m`); the rider client refreshes on a 401 using the single-use rotated refresh token. With the screen locked, the location POSTs must cross that expiry and keep being accepted.
+
+- **Setup:** an active `PICKED_UP` delivery, phone locked and moving, started with a freshly signed-in rider (so the access token's age is known).
+- **Actions:** keep the phone locked and moving for at least **20 minutes** (i.e. past the 15-minute access-token expiry) without opening the app.
+- **Observe:** `SELECT location_received_at, location_captured_at FROM deliveries WHERE id = '<delivery id>';` re-run every minute — `location_received_at` must keep advancing across minute 15-16 with no gap larger than the normal send interval plus one refresh round-trip. Also `refresh_tokens` should show one new rotated row for that rider around minute 15.
+- **Expected:** no permanent stop at token expiry. A brief gap is acceptable only if updates resume by themselves within one send interval.
+- **Note (from the CapacitorHttp task):** the patched native `fetch` ignores `AbortSignal`/timeouts, so a hung refresh or send cannot be cancelled by the client's 15 s timeout — watch for a case where updates stop and never resume after a network blip; if seen, record it (suggested follow-up: race fetch against an abort promise).
+- **Observed / PASS|FAIL / date / tester:** _______________ (NOT RUN)
+
 ## 7. Release build spot-check (brief Step 5)
 `./gradlew.bat assembleRelease` produces an **unsigned** APK (`app/build/outputs/apk/release/app-release-unsigned.apk`; `minifyEnabled false` so ProGuard/R8 is not in play). It cannot be installed until signed. For a local spot-check only, sign it with your own throwaway key (never commit a keystore):
 ```bash
