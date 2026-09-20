@@ -47,6 +47,7 @@ flutter:
     - Assets/SubCategories/
     - Assets/Products/
     - Assets/Images/
+    - Assets/map/
     - .env
 
 
