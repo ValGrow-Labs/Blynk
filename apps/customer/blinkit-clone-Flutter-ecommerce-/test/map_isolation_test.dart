@@ -11,6 +11,22 @@ List<File> _dartFilesUnder(String dir) => Directory(dir)
     .where((f) => f.path.endsWith('.dart'))
     .toList();
 
+/// Files under [dir] (if it exists) whose normalised path satisfies [test],
+/// skipping any directory named in [skipDirs] (build output, Gradle caches).
+List<File> _filesUnder(String dir, bool Function(String path) test, {Set<String> skipDirs = const {}}) {
+  final root = Directory(dir);
+  if (!root.existsSync()) return [];
+  return root
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((f) {
+        final path = _norm(f.path);
+        final segments = path.substring(dir.length).split('/');
+        return !segments.any(skipDirs.contains) && test(path);
+      })
+      .toList();
+}
+
 String _norm(String p) => p.replaceAll('\\', '/');
 
 void main() {
@@ -45,6 +61,43 @@ void main() {
     for (final f in files) {
       final text = f.readAsStringSync();
       for (final needle in ['google_maps_flutter', 'com.google.android.geo']) {
+        if (text.contains(needle)) offenders.add('${_norm(f.path)} mentions $needle');
+      }
+    }
+    expect(offenders, isEmpty);
+  });
+
+  test('no Google Maps in the native projects, the manifest, the iOS runner or the lockfile', () {
+    // MapLibre needs no API key and no Google services. A Google Maps
+    // dependency sneaking back in would show up in one of these files (a
+    // maps API-key meta-data entry, a GMSServices call, a gradle dependency, a
+    // locked package) even if lib/ stayed clean.
+    final files = <File>[
+      File('android/app/src/main/AndroidManifest.xml'),
+      ..._filesUnder('android', (p) => p.endsWith('.gradle') || p.endsWith('.gradle.kts'), skipDirs: {'build', '.gradle'}),
+      ..._filesUnder('ios/Runner', (p) {
+        final name = p.split('/').last;
+        return name.endsWith('.plist') || name.startsWith('AppDelegate') || name.startsWith('GeneratedPluginRegistrant');
+      }),
+      File('pubspec.lock'),
+    ];
+
+    // Guard against the guard silently scanning nothing.
+    expect(files.where((f) => f.existsSync()).map((f) => _norm(f.path)), containsAll([
+      'android/app/src/main/AndroidManifest.xml',
+      'android/app/build.gradle',
+      'android/build.gradle',
+      'android/settings.gradle',
+      'ios/Runner/Info.plist',
+      'ios/Runner/AppDelegate.swift',
+      'pubspec.lock',
+    ]));
+
+    final offenders = <String>[];
+    for (final f in files) {
+      if (!f.existsSync()) continue;
+      final text = f.readAsStringSync();
+      for (final needle in ['google_maps_flutter', 'com.google.android.geo', 'GMSServices']) {
         if (text.contains(needle)) offenders.add('${_norm(f.path)} mentions $needle');
       }
     }

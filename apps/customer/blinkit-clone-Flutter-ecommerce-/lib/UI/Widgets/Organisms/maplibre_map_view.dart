@@ -145,6 +145,10 @@ class _TrackingMapBodyState extends State<_TrackingMapBody> {
   }
 
   void _onStyleLoaded() {
+    // A style (re)load rebuilds the native circle manager, so every circle
+    // added before it is gone: forget them so the diff re-adds the markers.
+    _circles.clear();
+    _applied.clear();
     _styleLoaded = true;
     _scheduleApply();
   }
