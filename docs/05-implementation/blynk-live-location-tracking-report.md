@@ -338,9 +338,9 @@ Backend counts are from the final-review fix wave (as of `952e3f5`); the rider a
 | Backend `npm test` | **779 tests, 34 files, all passing** (was 767 / 32 before the fix wave: +12 tests, +2 files) | 707 tests, 29 files (+72 tests, +5 files) |
 | Backend `npm run test:hygiene` | same 779 / 34 files, then "DB HYGIENE OK - every row of every table is identical to before the run" | — |
 | Backend `typecheck` and `build` | clean | — |
-| Rider `npm test` | **108 tests, 7 files** | 49 tests, 4 files (+59) |
+| Rider `npm test` | **126 tests, 10 files** (re-run at final verification, after the design-audit fix wave) | 49 tests, 4 files (+77) |
 | Rider `tsc --noEmit`, `npm run build` | clean | — |
-| Customer `flutter test` | **524 tests** | 291 (+233); progression 291 to 329 (M1/M2), 398 (M3), 451 (M4), 487 (M5), 524 (M6) |
+| Customer `flutter test` | **547 tests** (re-run at final verification) | 291 (+256); progression 291 to 329 (M1/M2), 398 (M3), 451 (M4), 487 (M5), 524 (M6), 547 (design-audit fix wave); `flutter analyze` clean |
 | Customer `flutter analyze` | **No issues found** | — |
 
 ### 12.1 Backend additions
@@ -365,7 +365,7 @@ In the backend, every pre-existing test file is untouched except `deployment.tes
 - **What it does NOT prove:** any GPS, background or lock-screen behaviour, permissions, airplane mode, OS location toggles or app-restart recovery on a device; any UI, marker or map rendering (no map or widget is built in this test); the graceful `server_shutdown` frame end to end (Windows cannot deliver SIGTERM to another process, so only an abrupt drop was exercised; the frame is covered by provider unit tests only); the second-rider check; the Android build. Synthetic coordinates were test inputs, not GPS.
 - The controller's E2E harness scripts live outside the repository, per the existing convention.
 
-A read-only design audit (task V1c) was dispatched in parallel with this documentation pass. Its findings, and any fix wave that follows, are not reflected in this report.
+A design/de-slop audit (task V1c) was run on the new UI with real-font screenshots at 360x800 and 412x915 and at 1.3x/1.6x text scale (2 HIGH, 12 MEDIUM, 11 LOW). A fix wave (customer `e7e0f79`, rider `506eff9`) addressed the two HIGH-priority clipping/contrast items and the MEDIUM legibility items (button clipping at large text scale, AA contrast for the "Live" caption, distinct map-unavailable card, misleading map-unavailable picker copy, error icon colours, address-button size, picker hierarchy, rider active/retrying styles, rider elapsed-time formatting, and a 5 s tick so the rider's "updated Ns ago" stays truthful — the only behavioural change). NOT fixed, by decision: the address form's pre-filled hub coordinates (H2, see the decisions list), the missing "waiting for first location" state (M4), the missing marker legend/card title (M5), and all LOW findings. Real map rendering was never seen; the screenshots used a clearly-marked placeholder for the map view. Final verification (controller, at the end of the phase): backend 779 tests/34 files + `test:hygiene` clean, typecheck and build clean; rider 126 tests, `tsc` and build clean; Flutter 547 tests, `flutter analyze` clean.
 
 ---
 

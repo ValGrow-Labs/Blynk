@@ -621,7 +621,7 @@ STATUS: CUSTOMER ORDER EXPERIENCE COMPLETE AND VERIFIED
 ## Live Location & Delivery Tracking (IMPLEMENTED — AUTOMATED-TESTED; PHYSICAL ANDROID VERIFICATION PENDING; NOT PRODUCTION-READY)
 
 > **Report:** [blynk-live-location-tracking-report.md](blynk-live-location-tracking-report.md) · **Device runbook:** [rider-background-tracking-device-verification.md](../06-deployment/rider-background-tracking-device-verification.md) (BLOCKED/PENDING, no box ticked) · **Plan:** `docs/superpowers/plans/2026-09-19-blynk-live-location-tracking.md` (D1–D6 approved; D4 amended mid-plan from Google Maps to MapLibre + self-hosted PMTiles)
-> **Test Suite:** backend 779 passing in 34 files (72 new) with `npm run test:hygiene` clean ("every row of every table identical") · rider 108 (59 new) · Flutter 524 (233 new) · every `tsc`, build (backend, rider) and `flutter analyze` clean
+> **Test Suite:** backend 779 passing in 34 files (72 new) with `npm run test:hygiene` clean ("every row of every table identical") · rider 126 (77 new) · Flutter 547 (256 new) · every `tsc`, build (backend, rider) and `flutter analyze` clean
 > **Live pipeline E2E (no device):** 10 scenarios passed, 1 skipped (a second rider does not exist in the seed), against a real backend and PostgreSQL through the real customer `LocationProvider`; database restored to baseline. Synthetic coordinates were test inputs, **not** GPS verification.
 > **Not verified:** any physical Android run (runbook S1–S21), any map rendering, and the Customer Android build (blocked: [customer-android-build-status.md](../06-deployment/customer-android-build-status.md))
 
