@@ -1,7 +1,28 @@
+import { useEffect, useState } from 'react';
+import { formatElapsed } from '../lib/format';
 import type { TrackingState } from '../lib/tracking';
+
+/** How often the elapsed text is refreshed while it is on screen. */
+const ELAPSED_TICK_MS = 5_000;
 
 function secondsSince(when: Date): number {
   return Math.max(0, Math.round((Date.now() - when.getTime()) / 1000));
+}
+
+/**
+ * "4s ago" / "2 min ago" for a past moment, kept truthful: it re-renders on a
+ * low-frequency tick of its own, so the text ages even when the tracker emits
+ * no state change (a silent tracker must not keep saying "updated 4s ago").
+ * The interval exists only while this is mounted - i.e. only while an elapsed
+ * time is actually displayed - and is cleared on unmount.
+ */
+function Elapsed({ since }: { since: Date }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), ELAPSED_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+  return <>{formatElapsed(secondsSince(since))}</>;
 }
 
 /**
@@ -10,8 +31,9 @@ function secondsSince(when: Date): number {
  * blocked, and roughly how fresh the last confirmed send was.
  *
  * Precedence: blocking errors (permission, GPS) first, then stopped, then
- * the live state, where a failed send is flagged rather than hidden behind
- * an otherwise healthy-looking line.
+ * the live state, where a failed send is flagged (as a retrying warning, not
+ * a blocking error) rather than hidden behind an otherwise healthy-looking
+ * line.
  */
 export function TrackingStatus({ state }: { state: TrackingState }) {
   // Denied at pickup, or revoked mid-session. Either way nothing is being
@@ -39,18 +61,31 @@ export function TrackingStatus({ state }: { state: TrackingState }) {
   if (!state.active) {
     return state.lastSentAt ? <p className="tracking-status">Stopped sharing your location.</p> : null;
   }
-  const secondsAgo = state.lastSentAt ? secondsSince(state.lastSentAt) : null;
+  const { lastSentAt } = state;
   if (state.lastError === 'network') {
+    // A self-healing hiccup, not a blocker: styled as a warning, never as the
+    // inverted "stop" treatment the blocking errors use.
     return (
-      <p className="tracking-status tracking-status--error">
+      <p className="tracking-status tracking-status--retrying">
         <span>Couldn't send your last location — retrying.</span>
-        {secondsAgo !== null ? <span> Last sent {secondsAgo}s ago.</span> : null}
+        {lastSentAt ? (
+          <span>
+            {' '}
+            Last sent <Elapsed since={lastSentAt} />.
+          </span>
+        ) : null}
       </p>
     );
   }
   return (
     <p className="tracking-status tracking-status--active">
-      Sharing your location{secondsAgo !== null ? ` — updated ${secondsAgo}s ago` : ''}
+      Sharing your location
+      {lastSentAt ? (
+        <>
+          {' — updated '}
+          <Elapsed since={lastSentAt} />
+        </>
+      ) : null}
     </p>
   );
 }

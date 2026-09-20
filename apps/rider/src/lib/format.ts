@@ -18,3 +18,16 @@ export function formatPhone(phone: string): string {
 
 /** Order numbers are long; riders say the tail. "BLK-20260918-0042" → "0042". */
 export const shortOrderNumber = (orderNumber: string) => orderNumber.split('-').pop() ?? orderNumber;
+
+/**
+ * How long ago something happened, in the same steps the customer app uses for
+ * "Last seen ...": seconds under a minute, whole minutes under an hour, whole
+ * hours after that. "4s ago", "2 min ago", "1 h ago". A negative age (clock
+ * skew) reads as "0s ago" rather than a negative number.
+ */
+export function formatElapsed(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  if (whole < 60) return `${whole}s ago`;
+  if (whole < 3600) return `${Math.floor(whole / 60)} min ago`;
+  return `${Math.floor(whole / 3600)} h ago`;
+}

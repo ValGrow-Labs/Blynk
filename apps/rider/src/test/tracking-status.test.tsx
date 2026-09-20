@@ -105,7 +105,9 @@ describe('TrackingStatus', () => {
       );
       expect(screen.getByText(sendFailedCopy)).toBeInTheDocument();
       expect(screen.getByText(/last sent 47s ago/i)).toBeInTheDocument();
-      expect(container.querySelector('.tracking-status--error')).not.toBeNull();
+      // A self-healing send failure is a retrying warning, not a blocking error.
+      expect(container.querySelector('.tracking-status--retrying')).not.toBeNull();
+      expect(container.querySelector('.tracking-status--error')).toBeNull();
       expect(screen.queryByText(/^sharing your location/i)).not.toBeInTheDocument();
       expect(container.textContent).not.toMatch(noCoordinate);
     });

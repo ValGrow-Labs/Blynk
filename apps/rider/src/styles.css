@@ -433,8 +433,14 @@ a {
   color: var(--paper);
 }
 
-/* Passive location-sharing readout (TrackingStatus). Errors read like the
-   other "stop" notes: inverted, so a rider on the road can't miss them. */
+/* Passive location-sharing readout (TrackingStatus). Four looks, so the state
+   reads at a glance:
+   - active:   healthy - green wash with a green rule (the plain strip below is
+               the neutral "stopped" look, so the two are no longer identical);
+   - retrying: a send failed but the tracker is retrying by itself - an outlined
+               warning with a yellow rule, NOT the inverted look;
+   - error:    blocked (permission / location service / GPS) - inverted like the
+               other "stop" notes, so a rider on the road can't miss it. */
 .tracking-status {
   padding: 8px 12px;
   border-radius: 6px;
@@ -442,6 +448,23 @@ a {
   color: var(--ink-2);
   font-size: 14px;
   font-weight: 600;
+}
+
+/* --ink-2 on --green-wash: 9.19:1; the --green rule is 4.69:1 against the page. */
+.tracking-status--active {
+  background: var(--green-wash);
+  color: var(--ink-2);
+  box-shadow: inset 4px 0 0 var(--green);
+  padding-left: 16px;
+}
+
+/* --ink on --paper: 17.4:1. */
+.tracking-status--retrying {
+  padding: 6px 12px 6px 18px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: inset 6px 0 0 var(--yellow);
 }
 
 .tracking-status--error {
