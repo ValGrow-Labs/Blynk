@@ -24,6 +24,7 @@ import { adminRouter } from './modules/admin/index.js';
 import { promotionsRouter } from './modules/promotions/index.js';
 import { auditRouter } from './modules/audit/index.js';
 import { configurationRouter } from './modules/configuration/index.js';
+import { mapTilesRouter } from './modules/map-tiles/index.js';
 
 export function createApp(): Express {
   const app = express();
@@ -151,6 +152,10 @@ export function createApp(): Express {
       },
     })
   );
+
+  // Self-hosted PMTiles map archive for the customer live-delivery map. Public
+  // (no auth), read-only, Range-capable; see modules/map-tiles/index.ts.
+  app.use('/map-tiles', mapTilesRouter);
 
   app.use(env.API_PREFIX, apiRouter);
 

@@ -31,6 +31,11 @@ const envSchema = z.object({
   MEDIA_ROOT: z.string().default('uploads'),
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
 
+  // Self-hosted PMTiles map archive (customer live-delivery map). Directory
+  // holding *.pmtiles files, resolved against the working directory exactly
+  // like MEDIA_ROOT. Served publicly at GET /map-tiles/<name>.pmtiles.
+  MAP_TILES_DIR: z.string().default('map-tiles'),
+
   // Logging
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 
