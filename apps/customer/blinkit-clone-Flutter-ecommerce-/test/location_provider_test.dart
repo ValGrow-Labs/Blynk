@@ -56,6 +56,8 @@ class _Rig {
   _Rig({
     Duration interval = const Duration(seconds: 5),
     ReconnectDelay? delay,
+    double Function()? jitter,
+    Duration minHealthy = const Duration(seconds: 30),
     this.async,
   }) {
     provider = LocationProvider(
@@ -68,6 +70,8 @@ class _Rig {
       now: () => clock,
       freshnessInterval: interval,
       reconnectDelay: delay ?? (a) => Duration(seconds: 1 << a),
+      jitter: jitter ?? () => 0,
+      minHealthyDuration: minHealthy,
     );
     provider.addListener(() => notifications++);
   }
@@ -90,9 +94,13 @@ class _Rig {
 }
 
 /// Runs [body] inside fakeAsync with a rig; disposes the provider at the end.
-void _fake(void Function(_Rig rig, FakeAsync async) body, {ReconnectDelay? delay}) {
+void _fake(
+  void Function(_Rig rig, FakeAsync async) body, {
+  ReconnectDelay? delay,
+  double Function()? jitter,
+}) {
   fakeAsync((async) {
-    final rig = _Rig(async: async, delay: delay);
+    final rig = _Rig(async: async, delay: delay, jitter: jitter);
     body(rig, async);
     rig.provider.dispose();
   });
@@ -236,9 +244,7 @@ void main() {
     test('the timer stops on stopWatching, closed and dispose; no notify after dispose', () {
       fakeAsync((async) {
         final c = StreamController<String>();
-        var ticks = 0;
         final p = LocationProvider(opener: (_) => c.stream, now: () => _t0);
-        p.addListener(() => ticks++);
         p.watch('o1');
         expect(async.periodicTimerCount, 1);
         p.stopWatching();
@@ -264,7 +270,6 @@ void main() {
         expect(async.periodicTimerCount, 0);
         async.elapse(const Duration(minutes: 1));
         expect(ticks3, before);
-        expect(ticks, greaterThanOrEqualTo(0));
         p.dispose();
         p2.dispose();
       });
@@ -355,6 +360,7 @@ void main() {
             throw StateError('boom');
           },
           reconnectDelay: (_) => const Duration(seconds: 1),
+          jitter: () => 0,
           now: () => _t0,
         );
         p.watch('o1');
@@ -427,12 +433,10 @@ void main() {
       });
     }
 
-    test('backoff attempts 0,1,2,... and resets after a successful frame', () {
+    test('backoff grows 1,2,4 s across consecutive failures', () {
       final attempts = <int>[];
-      final delays = <Duration>[];
       _fake((rig, async) {
         rig.provider.watch('o1');
-        // three consecutive failures
         rig.last.addError(Exception('x'));
         rig.flush();
         rig.tick(const Duration(seconds: 1));
@@ -448,39 +452,155 @@ void main() {
         expect(rig.openedIds.length, 3, reason: 'third delay is 4 s');
         rig.tick(const Duration(seconds: 1));
         expect(rig.openedIds.length, 4);
-
-        // a successful frame resets backoff to 1 s
-        rig.last.add(_loc(capturedAt: _t0));
-        rig.flush();
-        rig.last.addError(Exception('x'));
-        rig.flush();
-        rig.tick(const Duration(seconds: 1));
-        expect(rig.openedIds.length, 5);
       }, delay: (a) {
         attempts.add(a);
-        final d = Duration(seconds: 1 << a);
-        delays.add(d);
-        return d;
+        return Duration(seconds: 1 << a);
+      });
+      expect(attempts, [0, 1, 2]);
+    });
+
+    test('a server that sends a snapshot then drops repeatedly sees growing delays (a frame does not reset)', () {
+      final attempts = <int>[];
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        for (var i = 0; i < 4; i++) {
+          rig.last.add(_loc(capturedAt: _t0)); // same snapshot every connect
+          rig.flush();
+          rig.last.close(); // dropped straight away
+          rig.flush();
+          rig.tick(Duration(seconds: 1 << i));
+          expect(rig.openedIds.length, i + 2);
+        }
+      }, delay: (a) {
+        attempts.add(a);
+        return Duration(seconds: 1 << a);
+      });
+      expect(attempts, [0, 1, 2, 3]);
+    });
+
+    test('a connection healthy for the minimum duration resets the backoff', () {
+      final attempts = <int>[];
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        rig.last.addError(Exception('x')); // attempt 0
+        rig.flush();
+        rig.tick(const Duration(seconds: 1));
+        rig.last.addError(Exception('x')); // attempt 1
+        rig.flush();
+        rig.tick(const Duration(seconds: 2));
+        // a frame, then it stays up for only 29 s
+        rig.last.add(_loc(capturedAt: _t0));
+        rig.flush();
+        rig.tick(const Duration(seconds: 29));
+        rig.last.addError(Exception('x')); // 29 s < 30 s: still attempt 2
+        rig.flush();
+        rig.tick(const Duration(seconds: 4));
+        rig.last.add(_loc(capturedAt: _t0));
+        rig.flush();
+        rig.tick(const Duration(seconds: 30)); // reaches the threshold
+        rig.last.addError(Exception('x')); // reset => attempt 0
+        rig.flush();
+      }, delay: (a) {
+        attempts.add(a);
+        return Duration(seconds: 1 << a);
       });
       expect(attempts, [0, 1, 2, 0]);
     });
 
-    test('a heartbeat comment alone also resets the backoff', () {
+    test('duplicate snapshots, heartbeats and ignored (non-newer) points never reset the backoff', () {
       final attempts = <int>[];
       _fake((rig, async) {
         rig.provider.watch('o1');
-        rig.last.addError(Exception('x'));
+        rig.last.addError(Exception('x')); // attempt 0
         rig.flush();
         rig.tick(const Duration(seconds: 1));
-        rig.last.add(': heartbeat\n\n');
+        rig.last.add(_loc(capturedAt: _t0));
         rig.flush();
-        rig.last.addError(Exception('x'));
+        for (var i = 0; i < 2; i++) {
+          rig.tick(const Duration(seconds: 12));
+          rig.last.add(': heartbeat\n\n');
+          rig.last.add(_loc(capturedAt: _t0)); // duplicate, ignored
+          rig.last.add(_loc(capturedAt: _t0.subtract(const Duration(seconds: 5)))); // older, ignored
+          rig.flush();
+        }
+        rig.last.addError(Exception('x')); // 24 s up: below 30 s
         rig.flush();
       }, delay: (a) {
         attempts.add(a);
         return const Duration(seconds: 1);
       });
-      expect(attempts, [0, 0]);
+      expect(attempts, [0, 1]);
+    });
+
+    test('the healthy-duration threshold is a constructor parameter (its timer is cancelled when the connection drops)', () {
+      fakeAsync((async) {
+        final attempts = <int>[];
+        final rig = _Rig(async: async, minHealthy: const Duration(seconds: 3), delay: (a) {
+          attempts.add(a);
+          return const Duration(seconds: 1);
+        });
+        rig.provider.watch('o1');
+        rig.last.add(': hb\n\n');
+        rig.flush();
+        expect(async.nonPeriodicTimerCount, 1); // the healthy timer
+        rig.last.addError(Exception('x'));
+        rig.flush();
+        expect(async.nonPeriodicTimerCount, 1); // only the reconnect timer now
+        rig.tick(const Duration(seconds: 1));
+        rig.last.add(': hb\n\n');
+        rig.flush();
+        rig.tick(const Duration(seconds: 3));
+        rig.last.addError(Exception('x'));
+        rig.flush();
+        expect(attempts, [0, 0]);
+        rig.provider.dispose();
+      });
+    });
+
+    test('jitter: +/-20% is applied to the computed delay (stubbed exactly)', () {
+      for (final entry in {0.2: 1200, -0.2: 800, 0.0: 1000}.entries) {
+        _fake((rig, async) {
+          rig.provider.watch('o1');
+          rig.last.addError(Exception('x'));
+          rig.flush();
+          rig.tick(Duration(milliseconds: entry.value - 1));
+          expect(rig.openedIds.length, 1, reason: 'jitter ${entry.key}');
+          rig.tick(const Duration(milliseconds: 1));
+          expect(rig.openedIds.length, 2, reason: 'jitter ${entry.key}');
+        }, jitter: () => entry.key);
+      }
+    });
+
+    test('jitter values beyond +/-20% are clamped, and the default jitter stays within bounds', () {
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        rig.last.addError(Exception('x'));
+        rig.flush();
+        rig.tick(const Duration(milliseconds: 1199));
+        expect(rig.openedIds.length, 1);
+        rig.tick(const Duration(milliseconds: 1));
+        expect(rig.openedIds.length, 2);
+      }, jitter: () => 5.0);
+
+      // default (random) jitter: the first retry of a 1 s delay lands in [800, 1200] ms
+      for (var i = 0; i < 20; i++) {
+        fakeAsync((async) {
+          var opens = 0;
+          final p = LocationProvider(
+            opener: (_) {
+              opens++;
+              return Stream<String>.error(Exception('down'));
+            },
+            now: () => _t0,
+          );
+          p.watch('o1');
+          async.elapse(const Duration(milliseconds: 799));
+          expect(opens, 1);
+          async.elapse(const Duration(milliseconds: 401));
+          expect(opens, greaterThanOrEqualTo(2));
+          p.dispose();
+        });
+      }
     });
 
     test('reconnect delay is capped at 30 s with the default function', () {
@@ -491,6 +611,7 @@ void main() {
             opens++;
             return Stream<String>.error(Exception('down'));
           },
+          jitter: () => 0,
           now: () => _t0,
         );
         p.watch('o1');
@@ -502,6 +623,180 @@ void main() {
         async.elapse(const Duration(seconds: 1));
         expect(opens, 7);
         p.dispose();
+      });
+    });
+  });
+
+  group('closed event is reason-aware', () {
+    String closedWith(String data) => 'event: closed\ndata: $data\n\n';
+
+    for (final reason in ['not_trackable', 'delivery_closed']) {
+      test('closed/$reason is terminal: closed, point cleared, no reconnect', () {
+        _fake((rig, async) {
+          rig.provider.watch('o1');
+          rig.last.add(_loc(capturedAt: _t0));
+          rig.flush();
+          rig.last.add(closedWith('{"reason":"$reason"}'));
+          rig.flush();
+          expect(rig.provider.closed, isTrue);
+          expect(rig.provider.unavailable, isFalse);
+          expect(rig.provider.current, isNull);
+          expect(rig.provider.freshness, isNull);
+          rig.last.close();
+          rig.flush();
+          rig.tick(const Duration(minutes: 5));
+          expect(rig.openedIds.length, 1);
+          expect(async.periodicTimerCount, 0);
+          expect(async.nonPeriodicTimerCount, 0);
+        });
+      });
+    }
+
+    test('closed/server_shutdown is NOT terminal: keeps the point, reconnects, and receives fresh points', () {
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        rig.last.add(_loc(lat: 1, capturedAt: _t0));
+        rig.flush();
+        rig.last.add(closedWith('{"reason":"server_shutdown"}'));
+        rig.flush();
+        expect(rig.provider.closed, isFalse);
+        expect(rig.provider.unavailable, isFalse);
+        expect(rig.provider.current!.latitude, 1);
+        expect(rig.provider.freshness, LocationFreshness.live);
+        // the server then ends the response; that must not double-schedule
+        rig.last.close();
+        rig.flush();
+        expect(async.nonPeriodicTimerCount, 1, reason: 'exactly one reconnect timer');
+        rig.tick(const Duration(milliseconds: 500));
+        expect(rig.openedIds.length, 1);
+        rig.tick(const Duration(milliseconds: 500));
+        expect(rig.openedIds, ['o1', 'o1']);
+        rig.last.add(_loc(lat: 2, capturedAt: _t0.add(const Duration(seconds: 20))));
+        rig.flush();
+        expect(rig.provider.current!.latitude, 2);
+        expect(rig.provider.closed, isFalse);
+      });
+    });
+
+    test('server_shutdown keeps aging the retained point while disconnected', () {
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        rig.last.add(_loc(capturedAt: _t0));
+        rig.flush();
+        rig.last.add(closedWith('{"reason":"server_shutdown"}'));
+        rig.flush();
+        for (var i = 0; i < 5; i++) {
+          rig.tick(const Duration(seconds: 5));
+        }
+        expect(rig.provider.freshness, LocationFreshness.stale);
+        expect(rig.provider.current, isNotNull);
+      }, delay: (a) => const Duration(minutes: 10));
+    });
+
+    test('server_shutdown drops the rest of that connection and cancels it', () {
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        rig.last.add(closedWith('{"reason":"server_shutdown"}') + _loc(lat: 9, capturedAt: _t0));
+        rig.flush();
+        expect(rig.provider.current, isNull, reason: 'data after the shutdown frame on the dead connection is dropped');
+        expect(rig.provider.closed, isFalse);
+        expect(rig.controllers.first.hasListener, isFalse);
+        rig.tick(const Duration(seconds: 1));
+        expect(rig.openedIds.length, 2);
+      });
+    });
+
+    for (final data in [
+      '{"reason":"something_new"}',
+      '{"reason":null}',
+      '{"reason":42}',
+      '{}',
+      '{not json',
+      '[1]',
+      '"server_shutdown"',
+      '',
+    ]) {
+      test('closed with unknown/absent/malformed reason ($data) is treated as a dropped stream', () {
+        _fake((rig, async) {
+          rig.provider.watch('o1');
+          rig.last.add(_loc(lat: 1, capturedAt: _t0));
+          rig.flush();
+          rig.last.add(closedWith(data));
+          rig.flush();
+          expect(rig.provider.closed, isFalse);
+          expect(rig.provider.current!.latitude, 1);
+          rig.tick(const Duration(seconds: 1));
+          expect(rig.openedIds.length, 2);
+        });
+      });
+    }
+
+    test('closed with no data line at all is not terminal', () {
+      _fake((rig, async) {
+        rig.provider.watch('o1');
+        rig.last.add('event: closed\n\n');
+        rig.flush();
+        expect(rig.provider.closed, isFalse);
+        rig.tick(const Duration(seconds: 1));
+        expect(rig.openedIds.length, 2);
+      });
+    });
+  });
+
+  group('re-entrancy in watch()', () {
+    test('a listener that calls stopWatching() during watch() leaves no connection or timers', () {
+      fakeAsync((async) {
+        var opens = 0;
+        final p = LocationProvider(
+          opener: (_) {
+            opens++;
+            return StreamController<String>().stream;
+          },
+          now: () => _t0,
+        );
+        var stopped = false;
+        p.addListener(() {
+          if (!stopped) {
+            stopped = true;
+            p.stopWatching();
+          }
+        });
+        p.watch('o1');
+        expect(opens, 0);
+        expect(async.periodicTimerCount, 0);
+        expect(async.nonPeriodicTimerCount, 0);
+        p.dispose();
+      });
+    });
+
+    test('a listener that calls watch(other) during watch() leaves exactly one connection', () {
+      fakeAsync((async) {
+        final opened = <String>[];
+        final controllers = <StreamController<String>>[];
+        late LocationProvider p;
+        p = LocationProvider(
+          opener: (id) {
+            opened.add(id);
+            final c = StreamController<String>();
+            controllers.add(c);
+            return c.stream;
+          },
+          now: () => _t0,
+        );
+        var reentered = false;
+        p.addListener(() {
+          if (!reentered) {
+            reentered = true;
+            p.watch('other');
+          }
+        });
+        p.watch('first');
+        expect(opened, ['other'], reason: 'the superseded outer watch must not connect');
+        expect(controllers.length, 1);
+        expect(controllers.single.hasListener, isTrue);
+        expect(async.periodicTimerCount, 1);
+        p.dispose();
+        expect(controllers.single.hasListener, isFalse);
       });
     });
   });
@@ -558,6 +853,7 @@ void main() {
         final p = LocationProvider(
           opener: (_) => opens++ == 0 ? first : second,
           reconnectDelay: (_) => const Duration(seconds: 1),
+          jitter: () => 0,
           now: () => _t0,
         );
         p.watch('o1');
@@ -850,13 +1146,34 @@ void main() {
       expect(body.hasListener, isFalse);
       await body.close();
     });
+
+    test('cancelling before the response arrives aborts the request immediately', () async {
+      final gate = Completer<void>();
+      final adapter = _FakeAdapter(
+        (_) => ResponseBody(const Stream<Uint8List>.empty(), 200),
+        gate: gate.future,
+      );
+      final dio = Dio(BaseOptions(baseUrl: 'https://h.test'))..httpClientAdapter = adapter;
+      final events = <String>[];
+      final sub = openLocationStream(dio, 'o').listen(events.add, onError: (_) {});
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(adapter.requests.length, 1, reason: 'request is in flight (gated)');
+      expect(adapter.cancelled, isFalse);
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(adapter.cancelled, isTrue, reason: 'abort must not wait for the connect to finish');
+      gate.complete(); // the transport finally returns; nothing may blow up or leak events
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(events, isEmpty);
+    });
   });
 }
 
 class _FakeAdapter implements HttpClientAdapter {
-  _FakeAdapter(this._respond);
+  _FakeAdapter(this._respond, {this.gate});
 
   final ResponseBody Function(RequestOptions options) _respond;
+  final Future<void>? gate;
   final requests = <RequestOptions>[];
   bool cancelled = false;
 
@@ -868,6 +1185,7 @@ class _FakeAdapter implements HttpClientAdapter {
   ) async {
     requests.add(options);
     cancelFuture?.then((_) => cancelled = true);
+    if (gate != null) await gate;
     return _respond(options);
   }
 

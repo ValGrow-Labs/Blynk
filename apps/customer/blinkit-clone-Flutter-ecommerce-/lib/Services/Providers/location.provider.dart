@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -54,12 +55,14 @@ const Duration _sseReceiveTimeout = Duration(seconds: 45);
 /// which closes the HTTP connection instead of leaking it until the next
 /// heartbeat.
 @visibleForTesting
-Stream<String> openLocationStream(Dio dio, String orderId) async* {
+Stream<String> openLocationStream(Dio dio, String orderId) {
   final cancelToken = CancelToken();
-  try {
-    final Response<ResponseBody> response;
+  StreamSubscription<String>? bodySub;
+  late final StreamController<String> controller;
+
+  Future<void> connect() async {
     try {
-      response = await dio.get<ResponseBody>(
+      final response = await dio.get<ResponseBody>(
         '/orders/${Uri.encodeComponent(orderId)}/location/stream',
         cancelToken: cancelToken,
         options: Options(
@@ -68,20 +71,55 @@ Stream<String> openLocationStream(Dio dio, String orderId) async* {
           headers: const {'Accept': 'text/event-stream'},
         ),
       );
-    } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      if (e.type == DioExceptionType.badResponse && status != null) {
-        throw LocationStreamRefused(status);
+      if (cancelToken.isCancelled) return; // cancelled while connecting
+      // A stateful UTF-8 decoder: multi-byte characters split across network
+      // chunks are reassembled, never corrupted.
+      bodySub = utf8.decoder.bind(response.data!.stream).listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: () {
+          cancelToken.cancel(); // release the socket
+          controller.close();
+        },
+      );
+    } catch (e) {
+      final cancelledByListener = cancelToken.isCancelled;
+      cancelToken.cancel(); // release an unread error body / half-open socket
+      if (cancelledByListener) return; // nobody is listening any more
+      var error = e;
+      if (e is DioException) {
+        final status = e.response?.statusCode;
+        if (e.type == DioExceptionType.badResponse && status != null) {
+          error = LocationStreamRefused(status);
+        }
       }
-      rethrow;
+      controller.addError(error);
+      await controller.close();
     }
-    // A stateful UTF-8 decoder: multi-byte characters split across network
-    // chunks are reassembled, never corrupted.
-    yield* utf8.decoder.bind(response.data!.stream);
-  } finally {
-    cancelToken.cancel();
   }
+
+  // The controller (not an async* body) drives the request so that cancelling
+  // the subscription aborts the HTTP request at once, even while Dio is still
+  // connecting - an async* generator would only notice at its next yield.
+  controller = StreamController<String>(
+    onListen: () => unawaited(connect()),
+    onPause: () => bodySub?.pause(),
+    onResume: () => bodySub?.resume(),
+    onCancel: () {
+      cancelToken.cancel();
+      return bodySub?.cancel();
+    },
+  );
+  return controller.stream;
 }
+
+final Random _random = Random();
+
+const double _maxJitter = 0.2;
+
+/// Fraction added to a backoff delay, uniformly in [-0.2, +0.2], so clients
+/// that were all cut off together (a deploy) do not reconnect in lockstep.
+double _randomJitter() => (_random.nextDouble() * 2 - 1) * _maxJitter;
 
 Stream<String> _dioStreamOpener(String orderId) => openLocationStream(ApiService.dio, orderId);
 
@@ -101,15 +139,21 @@ class LocationProvider extends ChangeNotifier {
     DateTime Function()? now,
     Duration freshnessInterval = const Duration(seconds: 5),
     ReconnectDelay reconnectDelay = defaultReconnectDelay,
+    double Function()? jitter,
+    Duration minHealthyDuration = const Duration(seconds: 30),
   })  : _opener = opener ?? _dioStreamOpener,
         _now = now ?? (() => DateTime.now().toUtc()),
         _freshnessInterval = freshnessInterval,
-        _reconnectDelay = reconnectDelay;
+        _reconnectDelay = reconnectDelay,
+        _jitter = jitter ?? _randomJitter,
+        _minHealthy = minHealthyDuration;
 
   final LocationStreamOpener _opener;
   final DateTime Function() _now;
   final Duration _freshnessInterval;
   final ReconnectDelay _reconnectDelay;
+  final double Function() _jitter;
+  final Duration _minHealthy;
 
   RiderLocationPoint? _current;
   bool _closed = false;
@@ -119,6 +163,8 @@ class LocationProvider extends ChangeNotifier {
   StreamSubscription<String>? _sub;
   Timer? _ageTimer;
   Timer? _reconnectTimer;
+  Timer? _healthyTimer;
+  bool _healthyArmed = false;
   int _generation = 0;
   int _attempt = 0;
   String _buffer = '';
@@ -147,7 +193,7 @@ class LocationProvider extends ChangeNotifier {
   /// watch and clearing all state from it.
   void watch(String orderId) {
     if (_disposed) return;
-    _generation++;
+    final gen = ++_generation;
     _stopAll();
     _current = null;
     _closed = false;
@@ -157,7 +203,10 @@ class LocationProvider extends ChangeNotifier {
     _orderId = orderId;
     _startAgeTimer();
     _notify();
-    _connect(_generation);
+    // A listener may have re-entered watch()/stopWatching()/dispose(): this
+    // watch has been superseded, so it must not open a (second) connection.
+    if (gen != _generation) return;
+    _connect(gen);
   }
 
   /// Closes the stream and resets all state.
@@ -195,6 +244,8 @@ class LocationProvider extends ChangeNotifier {
     _ageTimer = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _healthyTimer?.cancel();
+    _healthyTimer = null;
   }
 
   /// Pure re-render tick: re-evaluates freshness from data already received.
@@ -208,8 +259,9 @@ class LocationProvider extends ChangeNotifier {
 
   void _connect(int gen) {
     final orderId = _orderId;
-    if (orderId == null) return;
+    if (orderId == null || gen != _generation) return;
     _buffer = '';
+    _healthyArmed = false;
     final Stream<String> stream;
     try {
       stream = _opener(orderId);
@@ -230,6 +282,8 @@ class LocationProvider extends ChangeNotifier {
   void _onEnded(int gen, Object? error) {
     if (_disposed || gen != _generation || _closed || _unavailable) return;
     _sub = null;
+    _healthyTimer?.cancel(); // dropped before proving itself healthy
+    _healthyTimer = null;
 
     if (error is LocationStreamRefused && error.permanent) {
       // The server deliberately said no (not authenticated / not your order /
@@ -245,7 +299,9 @@ class LocationProvider extends ChangeNotifier {
     // Keep the last point: it ages to STALE/OFFLINE via the age timer. A
     // dropped connection is never presented as `closed`.
     _reconnectTimer?.cancel();
-    final delay = _reconnectDelay(_attempt++);
+    final base = _reconnectDelay(_attempt++);
+    final j = _jitter().clamp(-_maxJitter, _maxJitter);
+    final delay = Duration(microseconds: (base.inMicroseconds * (1 + j)).round());
     _reconnectTimer = Timer(delay, () {
       _reconnectTimer = null;
       if (_disposed || gen != _generation) return;
@@ -263,25 +319,45 @@ class LocationProvider extends ChangeNotifier {
     while ((idx = buf.indexOf('\n\n')) >= 0) {
       final frame = buf.substring(0, idx);
       buf = buf.substring(idx + 2);
-      _applyFrame(frame);
+      _armHealthyTimer(gen);
+      final endsConnection = _applyFrame(frame);
       // A listener may have re-entered watch()/stopWatching(), or the frame
-      // was `closed`: this stream's remaining data no longer applies.
+      // was a terminal `closed`: this stream's remaining data no longer applies.
       if (gen != _generation || _closed) return;
+      if (endsConnection) {
+        // A non-terminal `closed` (server_shutdown / unknown reason): the
+        // server is ending this response. Treat it exactly like a drop.
+        _sub?.cancel().catchError((Object _) {});
+        _onEnded(gen, null);
+        return;
+      }
     }
     _buffer = buf.length > _maxBufferChars ? '' : buf;
   }
 
-  void _applyFrame(String frame) {
+  /// After the first frame of a connection, the connection only counts as
+  /// healthy (backoff reset) once it has then stayed up for [_minHealthy].
+  /// Duplicate snapshots, heartbeats and ignored points do not reset it.
+  void _armHealthyTimer(int gen) {
+    if (_healthyArmed) return;
+    _healthyArmed = true;
+    _healthyTimer?.cancel();
+    _healthyTimer = Timer(_minHealthy, () {
+      _healthyTimer = null;
+      if (_disposed || gen != _generation) return;
+      _attempt = 0;
+    });
+  }
+
+  /// Returns true when the frame ends this connection without being the
+  /// authoritative close (see `closed` handling below).
+  bool _applyFrame(String frame) {
     String? event;
     final dataLines = <String>[];
-    var sawComment = false;
 
     for (final line in frame.split('\n')) {
       if (line.isEmpty) continue;
-      if (line.startsWith(':')) {
-        sawComment = true; // heartbeat / comment
-        continue;
-      }
+      if (line.startsWith(':')) continue; // heartbeat / comment
       final colon = line.indexOf(':');
       final field = colon < 0 ? line : line.substring(0, colon);
       var value = colon < 0 ? '' : line.substring(colon + 1);
@@ -294,22 +370,40 @@ class LocationProvider extends ChangeNotifier {
     }
 
     if (event == 'location') {
-      _attempt = 0; // a healthy frame resets the backoff
       final point = _parsePoint(dataLines.join('\n'));
-      if (point == null) return;
+      if (point == null) return false;
       final cur = _current;
       // Defense in depth: duplicates and out-of-order events never move the
       // marker backwards (or re-notify).
-      if (cur != null && !point.capturedAt.isAfter(cur.capturedAt)) return;
+      if (cur != null && !point.capturedAt.isAfter(cur.capturedAt)) return false;
       _current = point;
       _notify();
     } else if (event == 'closed') {
-      _closed = true;
-      _current = null;
-      _stopAll();
-      _notify();
-    } else if (event == null && sawComment) {
-      _attempt = 0;
+      if (_isTerminalClose(dataLines.join('\n'))) {
+        _closed = true;
+        _current = null;
+        _stopAll();
+        _notify();
+        return false;
+      }
+      // server_shutdown (a deploy/restart) or an unknown/absent reason is not
+      // an authoritative end: keep the last point and reconnect.
+      return true;
+    }
+    return false;
+  }
+
+  /// `not_trackable` and `delivery_closed` are the server's authoritative
+  /// ends. Anything else (server_shutdown, a reason this client does not
+  /// know, missing or malformed data) is not terminal.
+  bool _isTerminalClose(String data) {
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is! Map) return false;
+      final reason = decoded['reason'];
+      return reason == 'not_trackable' || reason == 'delivery_closed';
+    } catch (_) {
+      return false;
     }
   }
 
