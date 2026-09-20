@@ -1,10 +1,10 @@
 # Map Tile Hosting Setup (Self-Hosted PMTiles + MapLibre)
 
-**Status:** Archive built and committed (2026-09-20). Backend serving route and Docker inclusion implemented in Task M0b (section 8.1, verified by `backend/api/tests/map-tiles.test.ts`). The Flutter `MapProvider` is implemented in a later task.
+**Status:** Archive built and committed (2026-09-20). Backend serving route and Docker inclusion implemented in Task M0b (section 8.1, verified by `backend/api/tests/map-tiles.test.ts`). The Flutter `MapProvider`/MapLibre adapter was implemented in Tasks M4 to M6; Task M4 also resolved the minimum-package-version question (native PMTiles support arrived in `maplibre_gl` 0.22.0; the app uses 0.25.0), so the "minimum `maplibre_gl` version UNVERIFIED" notes in sections 5 and 12 are superseded. **Map rendering, tile loading over the network and the Android build have still never been verified on a device** (see `docs/05-implementation/blynk-live-location-tracking-report.md`).
 **Supersedes:** the withdrawn Google Maps setup idea. No Google Maps, no Google Cloud project, no Google API key anywhere.
 **Gate for:** Customer app live-delivery map (plan: `docs/superpowers/plans/2026-09-19-blynk-live-location-tracking.md`, section "Map Provider" and section 8).
 
-All external facts below were checked against the official page named next to them on **2026-09-20**. Anything that could not be verified is marked **UNVERIFIED**. No download URL or command in this document is invented; each one was executed or fetched as written.
+All external facts below were checked against the official page named next to them on **2026-09-20**. Anything that could not be verified is marked **UNVERIFIED**. No download URL or command in this document is invented; each one was executed or fetched as written, except items marked UNVERIFIED.
 
 ---
 

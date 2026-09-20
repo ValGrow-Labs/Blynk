@@ -6,6 +6,8 @@ This is the executable checklist for Task RG (the background-tracking gate that 
 
 No box in this document is ticked. A tester fills in the `Observed / PASS|FAIL / date / tester` line for each scenario.
 
+**Note (2026-09-20):** Tasks M0 to V1 (map tiles, Customer app, live pipeline test) were executed under the user's instruction to continue with automated tests while this gate is BLOCKED/PENDING. That does not satisfy the gate: nothing here has been run, and the feature is not production-ready until it is. The live pipeline test that was run (a real backend and database, a real customer `LocationProvider`, synthetic coordinates POSTed through the real rider API) proves API and stream behaviour only; it is not GPS or background-tracking verification. See `docs/05-implementation/blynk-live-location-tracking-report.md`.
+
 ---
 
 ## 0. Read this first: known risks from the desk research (2026-09-20)
@@ -57,13 +59,15 @@ cd android
 export JAVA_HOME="C:\\Program Files\\Android\\Android Studio\\jbr"
 export ANDROID_HOME="C:\\Users\\pc\\AppData\\Local\\Android\\Sdk"
 ./gradlew.bat assembleDebug
-# APK: apps/rider/android/app/build/outputs/apk/debug/app-debug.apk
+# APK (relative to apps/rider/android, where this shell now is): app/build/outputs/apk/debug/app-debug.apk
 ```
 Enable Developer options + USB debugging on the phone, then:
 ```bash
 "$ADB" devices -l                 # MUST list the phone as "device" (not "unauthorized")
 "$ADB" uninstall $PKG || true     # fresh install so first-permission behaviour is exercised (risk R-C)
-"$ADB" install -r apps/rider/android/app/build/outputs/apk/debug/app-debug.apk
+# Run from apps/rider/android, the directory the build step above left the shell in:
+"$ADB" install -r app/build/outputs/apk/debug/app-debug.apk
+# (from the repository root the same file is apps/rider/android/app/build/outputs/apk/debug/app-debug.apk)
 ```
 Expected: `Success`. If `adb devices -l` is empty the whole runbook stays BLOCKED.
 
@@ -76,24 +80,28 @@ Expected: `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `FOREGROUND_SERVICE`
 **Battery testing note.** Doze and most OEM killers do not engage while the phone is charging / on USB. For scenarios 3-5, 8, 12: after install, **unplug USB** (use wireless debugging, `adb pair` / `adb connect <ip>:<port>`, or simply do not use adb during the walk and rely on DB/SSE observation from the laptop).
 
 ### 1.4 Pointing the phone at the dev backend (not `localhost`)
-The Capacitor Android WebView serves the app from origin `https://localhost` (Capacitor 7 default `androidScheme: https`). Two consequences:
-1. **Mixed content:** an `http://<LAN-IP>:3000` API called from that `https://` origin will be blocked. Preferred: an HTTPS tunnel.
-   ```bash
-   cloudflared tunnel --url http://localhost:3000        # or: ngrok http 3000
-   export API="https://<printed-host>/api/v1"
-   ```
-2. **CORS:** the backend only allows `CORS_ORIGINS`. Add the WebView origin and restart the API:
-   ```
-   CORS_ORIGINS=http://localhost:3000,http://localhost:5173,https://localhost,capacitor://localhost
-   ```
-   Confirm with: `curl -i -X OPTIONS "$API/auth/status" -H "Origin: https://localhost" -H "Access-Control-Request-Method: GET"` -> `Access-Control-Allow-Origin: https://localhost`.
+The Capacitor Android WebView serves the app from origin `https://localhost` (Capacitor 7 default `androidScheme: https`). The committed `capacitor.config.ts` enables `CapacitorHttp`, which patches global `fetch` so API calls use native Android HTTP instead of the WebView (see risk R-A and scenario S20). That decides which network rules apply, so read this section with `CapacitorHttp` in mind:
 
-LAN alternative (only if no tunnel): build with `VITE_API_BASE_URL=http://<LAN-IP>:3000/api/v1` and locally (uncommitted) set `server: { androidScheme: 'http', cleartext: true }` in `capacitor.config.ts`, allow `http://localhost` in `CORS_ORIGINS`, open the API port in the Windows firewall. Note the API listens on `PORT` (default 3000), whereas the rider client's fallback default is `:4000`; always set `VITE_API_BASE_URL` explicitly.
+- **With `CapacitorHttp` active (the committed config, and what S20 tests):** API calls do not go through the WebView, so the WebView's **mixed-content and CORS checks do not apply to them**, and the backend's `CORS_ORIGINS` list does not matter for API calls. What applies instead is Android's **native cleartext policy**: plain `http://` (for example `http://<LAN-IP>:3000`) is blocked on Android 9+ unless cleartext is explicitly allowed. So an `https` endpoint is still required for a normal run, for a different reason than mixed content.
+- **Only if `CapacitorHttp` is not active** (an older build, or the setting was removed while debugging): API calls go through WebView `fetch()`, an `http://` API is blocked as mixed content from the `https://localhost` origin, and `CORS_ORIGINS` must include the WebView origin.
+
+Preferred setup for the device test, in either case, is an HTTPS tunnel:
+```bash
+cloudflared tunnel --url http://localhost:3000        # or: ngrok http 3000
+export API="https://<printed-host>/api/v1"
+```
+If the WebView `fetch()` path is in play (see above), add the WebView origin to `CORS_ORIGINS` and restart the API (harmless to add regardless):
+```
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,https://localhost,capacitor://localhost
+```
+Check with: `curl -i -X OPTIONS "$API/auth/status" -H "Origin: https://localhost" -H "Access-Control-Request-Method: GET"` -> `Access-Control-Allow-Origin: https://localhost`.
+
+LAN alternative (only if no tunnel; not recommended): build with `VITE_API_BASE_URL=http://<LAN-IP>:3000/api/v1`, open the API port in the Windows firewall, and allow cleartext only in an **uncommitted, debug-only** override (for example `server: { androidScheme: 'http', cleartext: true }` in `capacitor.config.ts` and, because native HTTP follows Android's own cleartext rules, a debug-only network security config). If you turn `CapacitorHttp` off for such a run, also allow `http://localhost` in `CORS_ORIGINS`. Note the API listens on `PORT` (default 3000), whereas the rider client's fallback default is `:4000`; always set `VITE_API_BASE_URL` explicitly.
 
 **Android cleartext / base URL notes (2026-09-20).**
-- `apps/rider/.env.example` defaults the API base URL to `http://localhost:4000` (the client fallback is `http://localhost:4000/api/v1`). On a physical phone `localhost` is the phone itself, so the build MUST bake in a reachable absolute `VITE_API_BASE_URL` at build time (see 1.3).
-- With CapacitorHttp enabled, API calls go through native `HttpURLConnection`, not the WebView. Plain `http://` to a LAN IP is then blocked by Android 9+ (targetSdk 28+) unless cleartext is explicitly allowed, and the WebView-only workaround of `server.cleartext` may not be the only gate. Recommendation: use an `https` tunnel (cloudflared/ngrok, above) for the device test. Do NOT enable cleartext traffic (`usesCleartextTraffic`, a network security config, or `server.cleartext`) in the committed production config. If a LAN `http` run is unavoidable, allow cleartext only in an uncommitted debug-only override.
-- Because the native path bypasses the WebView origin, the `CORS_ORIGINS` step above is not needed for API calls once CapacitorHttp is active (harmless to keep).
+- `apps/rider/.env.example` sets `VITE_API_BASE_URL=http://localhost:4000/api/v1`, which is also the client's built-in fallback. On a physical phone `localhost` is the phone itself, so the build MUST bake in a reachable absolute `VITE_API_BASE_URL` at build time (see 1.3).
+- With `CapacitorHttp` enabled, API calls go through native `HttpURLConnection`. Plain `http://` to a LAN IP is then blocked by Android 9+ (targetSdk 28+) unless cleartext is explicitly allowed, and the WebView-only workaround of `server.cleartext` may not be the only gate. Use an `https` tunnel (above) for the device test. Do NOT enable cleartext traffic (`usesCleartextTraffic`, a network security config, or `server.cleartext`) in the committed production config.
+- Because the native path bypasses the WebView origin, the `CORS_ORIGINS` step is not needed for API calls once `CapacitorHttp` is active (harmless to keep). The patched `fetch` also ignores `AbortSignal`, so the client's 15 s request timeout does not fire on Android (risk R-A, scenario S21).
 
 Sanity check from the phone's browser: `https://<tunnel-host>/api/v1/auth/status` returns JSON.
 
@@ -331,7 +339,7 @@ Observed: ______________  PASS | FAIL   date: ______  tester: ______
   psql "$DB" -c "SELECT now()-location_captured_at AS captured_age, now()-location_received_at AS received_age FROM deliveries WHERE id='$DELIVERY_ID';"
   ```
   and the SSE stream (no `location` frames, only heartbeats). Server broadcast staleness threshold is 5 min (`STALE_BROADCAST_THRESHOLD_MS` in `rider.location.service.ts`); the plan's freshness states are LIVE (about 1.5-2x the update interval), STALE (up to about 2 min), OFFLINE beyond that.
-- **Expected:** the age keeps growing and crosses the plan section 10 thresholds: `captured_age` roughly under 20 s = LIVE, up to about 2 min = STALE, beyond = OFFLINE. (No customer UI exists yet; this checks that the raw data supports the classification.)
+- **Expected:** the age keeps growing and crosses the plan section 10 thresholds: `captured_age` roughly under 20 s = LIVE, up to about 2 min = STALE, beyond = OFFLINE. (The Customer app now classifies with the same thresholds, LIVE up to 18 s, STALE up to 2 minutes, OFFLINE beyond, but it has never been run on a device; this scenario checks that the raw server data supports that classification.)
 ```
 Observed: ______________  PASS | FAIL   date: ______  tester: ______
 ```
@@ -431,7 +439,8 @@ Observed: ______________  PASS | FAIL   date: ______  tester: ______
 
 ## 8. Verdict (fill after the run)
 ```
-All of S1-S15 PASS on debug build?  ______   Additional S16-S19?  ______   S20 (CapacitorHttp >5 min)?  ______   Release spot-check?  ______
+All of S1-S15 PASS on debug build?  ______   Additional S16-S19?  ______   Release spot-check?  ______
+S20 (CapacitorHttp >5 min locked)?  ______   S21 (token expiry while backgrounded)?  ______
 Open items O-1 ____  O-2 ____   Risk R-A observed? ____  R-D notification visible? ____
 Device(s) used: ______________________   Verdict: PROCEED to Task M0 | STOP AND ESCALATE
 Signed: ______________  Date: ______________
