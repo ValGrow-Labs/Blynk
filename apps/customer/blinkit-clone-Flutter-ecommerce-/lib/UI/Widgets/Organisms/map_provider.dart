@@ -79,9 +79,22 @@ abstract class TrackingMapView extends StatelessWidget {
   Set<MapMarkerSpec> get markers;
 }
 
-/// An interactive map with a single draggable pin - the address location
-/// picker (Task M6; nothing builds it yet). The concrete widget returned is
-/// MapLibreLocationPickerView.
+/// Builds a [LocationPickerMapView]. The default is the real map; the picker
+/// screen accepts an override so widget tests can supply a fake without a
+/// native platform view.
+typedef LocationPickerMapBuilder = LocationPickerMapView Function({
+  required GeoPoint initialPosition,
+  required ValueChanged<GeoPoint> onPositionChanged,
+});
+
+/// An interactive map with ONE fixed pin - the address location picker
+/// (Task M6). The pin stays at the centre of the view and the map pans
+/// underneath it, so the picked coordinate is whatever is under the pin.
+/// [onPositionChanged] reports that coordinate as the map moves and once more
+/// when it settles. When the map itself cannot be shown the implementation
+/// shows an honest "Map unavailable" state (no pin) and never reports a
+/// position: the caller keeps the last one it knew. The concrete widget
+/// returned is MapLibreLocationPickerView.
 abstract class LocationPickerMapView extends StatelessWidget {
   const factory LocationPickerMapView({
     Key? key,

@@ -27,15 +27,32 @@ import 'package:maplibre_gl/maplibre_gl.dart'
         MapLibreMapController,
         MinMaxZoomPreference;
 
+import 'package:ecom/app_colors.dart';
 import 'package:ecom/app_design.dart';
 
 import 'map_marker_logic.dart';
 import 'map_provider.dart';
 import 'map_tile_config.dart';
+import 'order_tracking_map.dart' show mapAttributionText;
 
 /// Padding (logical px) around the two markers when the camera fits them.
 const double _fitPadding = 48;
 const Duration _fitDuration = Duration(milliseconds: 500);
+
+/// The bundled style with the tile URL substituted (map_tile_config.dart), or
+/// null when it cannot be prepared safely - the caller then shows "Map
+/// unavailable" rather than a map built from a guessed URL. Shared by every map
+/// widget in this file.
+Future<String?> _prepareMapStyle() async {
+  try {
+    final raw = await rootBundle.loadString(kMapStyleAsset);
+    final tilesUrl = resolveMapTilesUrlFromEnvironment();
+    if (tilesUrl != null) return substituteTilesUrl(raw, tilesUrl);
+  } catch (e) {
+    debugPrint('Map style could not be prepared: $e');
+  }
+  return null;
+}
 
 class MapLibreTrackingMapView extends TrackingMapView {
   const MapLibreTrackingMapView({
@@ -103,14 +120,7 @@ class _TrackingMapBodyState extends State<_TrackingMapBody> {
   }
 
   Future<void> _loadStyle() async {
-    String? style;
-    try {
-      final raw = await rootBundle.loadString(kMapStyleAsset);
-      final tilesUrl = resolveMapTilesUrlFromEnvironment();
-      if (tilesUrl != null) style = substituteTilesUrl(raw, tilesUrl);
-    } catch (e) {
-      debugPrint('Map style could not be prepared: $e');
-    }
+    final style = await _prepareMapStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -314,10 +324,164 @@ class MapLibreLocationPickerView extends LocationPickerMapView {
   final ValueChanged<GeoPoint> onPositionChanged;
 
   @override
+  Widget build(BuildContext context) =>
+      _PickerMapBody(initialPosition: initialPosition, onPositionChanged: onPositionChanged);
+}
+
+/// Zoom for the address picker: street level, inside the archive's coverage
+/// (the tracking map uses the same 10..18 range).
+const double _pickerZoom = 16;
+
+class _PickerMapBody extends StatefulWidget {
+  const _PickerMapBody({required this.initialPosition, required this.onPositionChanged});
+  final GeoPoint initialPosition;
+  final ValueChanged<GeoPoint> onPositionChanged;
+
+  @override
+  State<_PickerMapBody> createState() => _PickerMapBodyState();
+}
+
+/// A fixed centre pin over a pannable map (not an annotation dragged around):
+/// the picked coordinate is the camera target. maplibre_gl 0.25.0 reports it
+/// through MapLibreMap.onCameraMove (each frame, with the CameraPosition) and
+/// onCameraIdle (once settled; the position is then on the controller). Both
+/// only carry a position when trackCameraPosition is true - the Android and iOS
+/// controllers return null / send nothing otherwise - so it is switched on.
+/// Nothing here uses annotations, so no annotation manager or drag setting
+/// matters, and the pin is plain Flutter (no image asset, immune to style
+/// reloads).
+///
+/// When the style cannot be prepared the placeholder is shown WITHOUT the pin
+/// (a fixed pin over no map would look like a chosen spot) and no position is
+/// ever reported: the screen keeps the last one it knew.
+///
+/// Like the tracking view, this has NOT been exercised on a device or emulator
+/// in the task that wrote it.
+class _PickerMapBodyState extends State<_PickerMapBody> {
+  String? _style;
+  bool _styleFailed = false;
+  MapLibreMapController? _controller;
+  GeoPoint? _lastReported;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadStyle());
+  }
+
+  Future<void> _loadStyle() async {
+    final style = await _prepareMapStyle();
+    if (!mounted) return;
+    setState(() {
+      _style = style;
+      _styleFailed = style == null;
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller = null;
+    super.dispose();
+  }
+
+  /// Reports a camera target, skipping repeats (idle usually re-reports the
+  /// last move) and anything after dispose.
+  void _report(LatLng target) {
+    if (!mounted) return;
+    final point = GeoPoint(target.latitude, target.longitude);
+    if (point == _lastReported) return;
+    _lastReported = point;
+    widget.onPositionChanged(point);
+  }
+
+  void _onCameraMove(CameraPosition position) => _report(position.target);
+
+  void _onCameraIdle() {
+    final position = _controller?.cameraPosition;
+    if (position != null) _report(position.target);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Completed in Task M6 together with the picker screen that uses it (a
-    // draggable single circle whose drag end calls onPositionChanged). Nothing
-    // in the app builds it yet, so this cannot be reached from a screen.
-    throw UnimplementedError('implemented in Task M6');
+    final style = _style;
+    final Widget map;
+    if (_styleFailed) {
+      map = const _MapUnavailable();
+    } else if (style == null) {
+      map = const ColoredBox(color: AppSurfaces.tile);
+    } else {
+      map = MapLibreMap(
+        styleString: style,
+        initialCameraPosition: CameraPosition(
+          target: LatLng(widget.initialPosition.latitude, widget.initialPosition.longitude),
+          zoom: _pickerZoom,
+        ),
+        onMapCreated: (controller) => _controller = controller,
+        onCameraMove: _onCameraMove,
+        onCameraIdle: _onCameraIdle,
+        trackCameraPosition: true,
+        // A confirmation aid: keep it light on low/mid-range Android.
+        compassEnabled: false,
+        rotateGesturesEnabled: false,
+        tiltGesturesEnabled: false,
+        myLocationEnabled: false, // the position comes from the address flow's own permission ask
+        logoEnabled: false,
+        annotationOrder: const [],
+        minMaxZoomPreference: const MinMaxZoomPreference(10, 18),
+        attributionButtonPosition: AttributionButtonPosition.bottomRight,
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        map,
+        if (style != null && !_styleFailed)
+          const Positioned.fill(child: IgnorePointer(child: _CentrePin(key: Key('picker-pin')))),
+        const Positioned(left: AppSpacing.sm, bottom: AppSpacing.sm, child: _PickerAttribution()),
+      ],
+    );
+  }
+}
+
+/// The pin's tip sits exactly on the centre of the view (the camera target):
+/// the glyph is lifted by half its height.
+class _CentrePin extends StatelessWidget {
+  const _CentrePin({super.key});
+
+  static const double _size = 44;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Transform.translate(
+        offset: const Offset(0, -_size / 2),
+        child: const Icon(Icons.location_on, size: _size, color: AppColors.primaryGreenColor),
+      ),
+    );
+  }
+}
+
+/// The permanent OSM credit (same treatment as OrderTrackingMap's overlay),
+/// drawn by Blynk's own widget tree so it survives a style or provider swap.
+class _PickerAttribution extends StatelessWidget {
+  const _PickerAttribution();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        key: const Key('map-attribution'),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm - 2, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          mapAttributionText,
+          style: TextStyle(color: AppTextColors.primary, fontSize: 10.5, fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
   }
 }

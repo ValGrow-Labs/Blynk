@@ -40,6 +40,27 @@ void main() {
     expect(importing.single, endsWith('lib/UI/Widgets/Organisms/maplibre_map_view.dart'));
   });
 
+  test('exactly one file under lib/ imports package:geolocator, and it is the location adapter', () {
+    // Device-location types stay behind DeviceLocationSource, the same way the
+    // map SDK stays behind map_provider.dart: the screen and every test depend
+    // on the interface, and swapping the plugin touches the adapter only.
+    final importing = _dartFilesUnder('lib')
+        .where((f) => RegExp(r'''(import|export)\s+['"]package:geolocator[/'"]''').hasMatch(f.readAsStringSync()))
+        .map((f) => _norm(f.path))
+        .toList();
+
+    expect(importing, hasLength(1), reason: 'geolocator importers: $importing');
+    expect(importing.single, endsWith('lib/Services/Location/geolocator_location_source.dart'));
+  });
+
+  test('no geolocator platform package is imported directly (the adapter imports the umbrella package only)', () {
+    final offenders = _dartFilesUnder('lib')
+        .where((f) => f.readAsStringSync().contains('package:geolocator_'))
+        .map((f) => _norm(f.path))
+        .toList();
+    expect(offenders, isEmpty, reason: 'geolocator_* platform packages must not be imported: $offenders');
+  });
+
   test('no other map SDK is imported anywhere in lib/ (only maplibre_gl or maplibre_gl_* platform packages via the adapter)', () {
     final offenders = _dartFilesUnder('lib')
         .where((f) => f.readAsStringSync().contains('package:maplibre_gl_'))
@@ -102,5 +123,16 @@ void main() {
       }
     }
     expect(offenders, isEmpty);
+  });
+
+  test('location permission is declared for the address picker (iOS usage string, Android permissions once)', () {
+    final plist = File('ios/Runner/Info.plist').readAsStringSync();
+    expect(RegExp(r'<key>NSLocationWhenInUseUsageDescription</key>\s*<string>[^<]{20,}</string>').hasMatch(plist), isTrue);
+    expect('NSLocationWhenInUseUsageDescription'.allMatches(plist), hasLength(1));
+
+    final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    for (final permission in ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION']) {
+      expect('android.permission.$permission'.allMatches(manifest), hasLength(1), reason: permission);
+    }
   });
 }

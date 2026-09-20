@@ -5,19 +5,35 @@ import 'package:ecom/UI/Widgets/Atoms/app_toast.dart';
 import 'package:provider/provider.dart';
 
 import '../Models/address_model.dart';
+import '../Services/Location/device_location_source.dart';
 import '../Services/Providers/address.provider.dart';
+import '../UI/Widgets/Organisms/map_provider.dart';
 import '../app_colors.dart';
 import '../app_design.dart';
+import 'live_location_picker_screen.dart';
 
 // The backend's createAddressSchema requires explicit numeric latitude and
-// longitude (see backend/api/src/modules/users/address.schema.ts) - there's
-// no map-picker or geocoding library in this project, so these stay plain
-// editable fields defaulted to the real Dharga Town hub coordinates rather
-// than faking a location picker that doesn't exist.
+// longitude (see backend/api/src/modules/users/address.schema.ts). They stay
+// plain editable fields defaulted to the real Dharga Town hub coordinates:
+// "Use my current location" opens LiveLocationPickerScreen (a real device fix
+// the customer confirms on a map) and writes its result into these same
+// fields, which remain as the fallback and for corrections. There is no
+// geocoding: nothing turns coordinates into an address or the reverse.
 class AddEditAddressScreen extends StatefulWidget {
-  const AddEditAddressScreen({super.key, this.existing});
+  const AddEditAddressScreen({
+    super.key,
+    this.existing,
+    this.locationSource,
+    this.pickerMapBuilder,
+  });
 
   final AddressModel? existing;
+
+  /// Test seams, passed straight to [LiveLocationPickerScreen]: fake device
+  /// location and a fake map, so widget tests touch no plugin or platform
+  /// view. Production callers leave both null.
+  final DeviceLocationSource? locationSource;
+  final LocationPickerMapBuilder? pickerMapBuilder;
 
   @override
   State<AddEditAddressScreen> createState() => _AddEditAddressScreenState();
@@ -94,6 +110,24 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _lngController.dispose();
     _instructionsController.dispose();
     super.dispose();
+  }
+
+  /// Opens the picker; a confirmed position replaces both coordinate fields
+  /// (6 decimals, about 0.1 m). Backing out returns null and changes nothing.
+  Future<void> _useCurrentLocation() async {
+    final picked = await Navigator.of(context).push<GeoPoint>(
+      MaterialPageRoute(
+        builder: (_) => LiveLocationPickerScreen(
+          locationSource: widget.locationSource,
+          mapBuilder: widget.pickerMapBuilder,
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _latController.text = picked.latitude.toStringAsFixed(6);
+      _lngController.text = picked.longitude.toStringAsFixed(6);
+    });
   }
 
   /// What goes into the backend's existing free-text `label`.
@@ -269,15 +303,32 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                 const _SectionLabel('LOCATION'),
                 _FormSection(
                   children: [
-                    // No GPS, geocoding or map picker exists in this build,
-                    // so this says what the numbers are for and nothing
-                    // more - it never implies a detected position.
+                    // Says what the numbers are for and nothing more - it
+                    // never implies a detected position; only the picker
+                    // below detects one, and only when tapped.
                     const _SectionNote(
                       icon: Icons.my_location_rounded,
                       title: 'Delivery location',
                       message:
                           'Your delivery location helps us confirm service '
                           'availability.',
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: OutlinedButton.icon(
+                          onPressed: _useCurrentLocation,
+                          icon: const Icon(Icons.gps_fixed_rounded, size: 18),
+                          label: const Text('Use my current location'),
+                        ),
+                      ),
                     ),
                     Row(
                       children: [
