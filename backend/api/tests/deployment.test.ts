@@ -150,6 +150,36 @@ describe('Stage 7: Deployment, Docker & Environment Packaging', () => {
     });
   });
 
+  describe('2b. Map Tile Archive Packaging', () => {
+    const apiRoot = path.join(__dirname, '..');
+    const dockerfile = fs.readFileSync(path.join(apiRoot, 'Dockerfile'), 'utf-8');
+    const dockerignore = fs.readFileSync(path.join(apiRoot, '.dockerignore'), 'utf-8');
+    const runtimeStage = dockerfile.slice(dockerfile.indexOf('FROM base AS runtime'));
+
+    it('the archive to ship exists outside src/', () => {
+      expect(fs.existsSync(path.join(apiRoot, 'map-tiles/blynk-service-area.pmtiles'))).toBe(true);
+    });
+
+    it('the runtime image stage copies map-tiles/ with non-root ownership', () => {
+      expect(runtimeStage).toMatch(/^COPY --chown=node:node map-tiles\/ \.\/map-tiles\/$/m);
+      // MAP_TILES_DIR defaults to a path relative to WORKDIR /app, which is where it lands.
+      expect(runtimeStage).toMatch(/^ENV MAP_TILES_DIR=\/app\/map-tiles$/m);
+    });
+
+    it('the copy happens after USER node (so files are owned by the non-root user)', () => {
+      expect(runtimeStage.indexOf('USER node')).toBeGreaterThanOrEqual(0);
+      expect(runtimeStage.indexOf('USER node')).toBeLessThan(runtimeStage.indexOf('COPY --chown=node:node map-tiles/'));
+    });
+
+    it('.dockerignore does not exclude map-tiles/ or *.pmtiles', () => {
+      const active = dockerignore
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith('#'));
+      expect(active.some((l) => /map-tiles|pmtiles|^\*\*?$/.test(l))).toBe(false);
+    });
+  });
+
   describe('3. Production Gateway Mock Prevention', () => {
     it('SmsProvider rejects mock delivery when executed under production environment', async () => {
       const originalNodeEnv = process.env.NODE_ENV;

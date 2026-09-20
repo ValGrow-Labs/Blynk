@@ -57,6 +57,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV API_PREFIX=/api/v1
 ENV APP_NAME=blynk-backend-api
+# Self-hosted PMTiles archive directory (served publicly at /map-tiles/*.pmtiles)
+ENV MAP_TILES_DIR=/app/map-tiles
 
 # Security: Run as unprivileged standard non-root user (node:node, uid/gid 1000)
 USER node
@@ -65,6 +67,9 @@ USER node
 COPY --chown=node:node package.json ./
 COPY --chown=node:node --from=production-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/dist ./dist
+
+# Self-hosted map tiles (~2 MB PMTiles archive; not compiled, lives outside src/)
+COPY --chown=node:node map-tiles/ ./map-tiles/
 
 # Document exposed HTTP API port
 EXPOSE 3000
