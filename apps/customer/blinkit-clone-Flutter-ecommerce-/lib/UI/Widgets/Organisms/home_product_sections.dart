@@ -11,7 +11,9 @@ import '../../../Services/Providers/product.provider.dart';
 /// Capped at [maxSections] so Home stays a browsable summary rather than
 /// the entire catalog; the Categories screen is the full list.
 class HomeProductSections extends StatelessWidget {
-  const HomeProductSections({super.key, this.maxSections = 4});
+  const HomeProductSections({super.key, this.maxSections = defaultMaxSections});
+
+  static const int defaultMaxSections = 4;
 
   final int maxSections;
 

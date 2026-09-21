@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../Models/order_model.dart';
 import '../../../Models/order_status_labels.dart';
 import '../../../app_design.dart';
+import '../../../design/tokens.dart';
 
 /// The chip's foreground/background pair for a tone - the single source of
 /// truth used by both the widget below and its contrast tests. Every pair
@@ -21,10 +22,10 @@ import '../../../app_design.dart';
     case OrderTone.active:
       return (foreground: AppTextColors.primary, background: Colors.transparent);
     case OrderTone.success:
-      const fg = Color(0xff0A6B19); // darker than AppColors.primaryGreenColor for contrast
+      const fg = BlynkColors.positiveInk; // darker than the positive fill, for text contrast
       return (foreground: fg, background: Colors.transparent);
     case OrderTone.neutral:
-      const fg = Color(0xff4B5563); // darker than AppTextColors.secondary for contrast
+      const fg = BlynkColors.ink3; // darker than AppTextColors.secondary for contrast
       return (foreground: fg, background: Colors.transparent);
     case OrderTone.problem:
       const fg = AppTextColors.problem;

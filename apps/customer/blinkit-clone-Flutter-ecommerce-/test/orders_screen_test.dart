@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -5,10 +7,13 @@ import 'package:provider/provider.dart';
 import 'package:ecom/Models/order_format.dart';
 import 'package:ecom/Models/order_model.dart';
 import 'package:ecom/Screens/user_orders_screen.dart';
+import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
+import 'package:ecom/Services/app_errors.dart';
 import 'package:ecom/UI/Widgets/Atoms/card_order_details.dart';
 
 import 'fixtures/order_fixtures.dart';
+import 'fixtures/session_fakes.dart';
 
 /// Builds a list-shaped order (GET /orders row - no history/delivery/payment)
 /// from the shared fixture, with the item list built by the caller so tests
@@ -41,17 +46,17 @@ OrderModel _order({
 class _FixedOrders extends OrderProvider {
   _FixedOrders(
     this._fixed, {
-    String? ordersError,
+    CustomerError? ordersFailure,
     bool hasMoreOrders = false,
     bool isLoadingMore = false,
     String? loadMoreError,
-  })  : _ordersError = ordersError,
+  })  : _ordersFailure = ordersFailure,
         _fixedHasMoreOrders = hasMoreOrders,
         _fixedIsLoadingMore = isLoadingMore,
         _loadMoreError = loadMoreError;
 
   final List<OrderModel> _fixed;
-  final String? _ordersError;
+  final CustomerError? _ordersFailure;
   final bool _fixedHasMoreOrders;
   final bool _fixedIsLoadingMore;
   final String? _loadMoreError;
@@ -64,7 +69,7 @@ class _FixedOrders extends OrderProvider {
   @override
   bool get isLoadingOrders => false;
   @override
-  String? get ordersError => _ordersError;
+  CustomerError? get ordersFailure => _ordersFailure;
   @override
   bool get hasMoreOrders => _fixedHasMoreOrders;
   @override
@@ -83,7 +88,7 @@ class _FixedOrders extends OrderProvider {
   }
 }
 
-/// A provider fake whose `ordersError` can change between calls, without
+/// A provider fake whose `ordersFailure` can change between calls, without
 /// ever clearing `orders` - the shape a real refresh failure takes once
 /// orders are already on screen (see OrderProvider.loadOrders: it never
 /// touches `_orders` on a caught error). Lets a test drive "refresh fails,
@@ -92,13 +97,13 @@ class _MutableOrders extends OrderProvider {
   _MutableOrders(this._orders);
 
   final List<OrderModel> _orders;
-  String? _ordersError;
+  CustomerError? _ordersFailure;
 
   /// Consumed by the next loadOrders() call, then left in place as the
-  /// resulting `ordersError` - set by the test right before triggering a
+  /// resulting `ordersFailure` - set by the test right before triggering a
   /// refresh (pull-to-refresh or retry) to make that refresh fail or
   /// succeed.
-  String? nextError;
+  CustomerError? nextError;
 
   int loadOrdersCalls = 0;
 
@@ -107,7 +112,7 @@ class _MutableOrders extends OrderProvider {
   @override
   bool get isLoadingOrders => false;
   @override
-  String? get ordersError => _ordersError;
+  CustomerError? get ordersFailure => _ordersFailure;
   @override
   bool get hasMoreOrders => false;
   @override
@@ -118,7 +123,7 @@ class _MutableOrders extends OrderProvider {
   @override
   Future<void> loadOrders() async {
     loadOrdersCalls++;
-    _ordersError = nextError;
+    _ordersFailure = nextError;
     notifyListeners();
   }
 }
@@ -130,7 +135,7 @@ void main() {
     Future<_FixedOrders> pumpList(
       WidgetTester tester,
       List<OrderModel> orders, {
-      String? ordersError,
+      CustomerError? ordersFailure,
       bool hasMoreOrders = false,
       bool isLoadingMore = false,
       String? loadMoreError,
@@ -138,14 +143,17 @@ void main() {
       pushed = [];
       final provider = _FixedOrders(
         orders,
-        ordersError: ordersError,
+        ordersFailure: ordersFailure,
         hasMoreOrders: hasMoreOrders,
         isLoadingMore: isLoadingMore,
         loadMoreError: loadMoreError,
       );
       await tester.pumpWidget(
-        ChangeNotifierProvider<OrderProvider>.value(
-          value: provider,
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: SignedInAuth()),
+            ChangeNotifierProvider<OrderProvider>.value(value: provider),
+          ],
           child: MaterialApp(
             home: const OrdersScreen(),
             onGenerateRoute: (settings) {
@@ -184,6 +192,38 @@ void main() {
       await tester.pumpAndSettle();
       expect(pushed.map((s) => s.name), contains('/order'));
       expect(pushed.firstWhere((s) => s.name == '/order').arguments, equals('o1'));
+    });
+
+    testWidgets('an order row is at least 48 dp tall and meets the tap-target guidelines', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpList(tester, [_order(id: 'o1', number: 'BL-20260919-0001', status: 'DELIVERED')]);
+      final row = find.ancestor(of: find.text('Kotmale Fresh Milk 1L, Butter 200g'), matching: find.byType(InkWell));
+      expect(tester.getSize(row.first).height, greaterThanOrEqualTo(48));
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
+
+    testWidgets('the load-more retry row is a labelled button, 48 dp tall, and retries', (tester) async {
+      final handle = tester.ensureSemantics();
+      final provider = await pumpList(
+        tester,
+        [_order(id: 'o1', number: 'BL-20260919-0001', status: 'PLACED')],
+        loadMoreError: 'boom',
+      );
+      final retry = find.bySemanticsLabel('Retry loading more orders');
+      expect(retry, findsOneWidget);
+      final data = tester.getSemantics(retry).getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue);
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+      final row = find.ancestor(of: find.textContaining('Tap to retry'), matching: find.byType(InkWell));
+      expect(tester.getSize(row.first).height, greaterThanOrEqualTo(48));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+
+      await tester.tap(find.textContaining('Tap to retry'));
+      await tester.pump();
+      expect(provider.loadMoreOrdersCalls, 1);
+      handle.dispose();
     });
 
     testWidgets('row exposes a single semantics label with number, status and total', (tester) async {
@@ -245,10 +285,11 @@ void main() {
       expect(find.textContaining('Scheduled ·'), findsNothing);
     });
 
-    testWidgets('error state shows the message and a retry button that calls loadOrders', (tester) async {
-      final provider = await pumpList(tester, [], ordersError: 'Network unreachable');
+    testWidgets('error state shows the mapped message and a retry button that calls loadOrders', (tester) async {
+      final provider = await pumpList(tester, [], ordersFailure: AppErrors.server);
       expect(find.text("Couldn't load your orders."), findsOneWidget);
-      expect(find.text('Network unreachable'), findsOneWidget);
+      // The customer reads the mapped sentence, never the backend's text.
+      expect(find.text('Something went wrong on our side. Try again in a moment.'), findsOneWidget);
 
       final retry = find.byKey(const Key('orders-retry'));
       expect(retry, findsOneWidget);
@@ -264,7 +305,7 @@ void main() {
     });
 
     testWidgets('pull-to-refresh works in the error state', (tester) async {
-      final provider = await pumpList(tester, [], ordersError: 'Network unreachable');
+      final provider = await pumpList(tester, [], ordersFailure: AppErrors.server);
       final callsBeforeRefresh = provider.loadOrdersCalls; // initState's own load already ran once
       await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
       await tester.pump();
@@ -309,8 +350,11 @@ void main() {
         _order(id: 'o1', number: 'BL-20260919-0001', status: 'PLACED'),
       ]);
       await tester.pumpWidget(
-        ChangeNotifierProvider<OrderProvider>.value(
-          value: provider,
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: SignedInAuth()),
+            ChangeNotifierProvider<OrderProvider>.value(value: provider),
+          ],
           child: const MaterialApp(home: OrdersScreen()),
         ),
       );
@@ -319,7 +363,7 @@ void main() {
       expect(find.byKey(const Key('orders-refresh-failed')), findsNothing);
       expect(find.text('BL-20260919-0001'), findsOneWidget);
 
-      provider.nextError = 'Network unreachable';
+      provider.nextError = AppErrors.offline;
       await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));

@@ -2,16 +2,32 @@ import 'package:flutter/material.dart';
 
 import 'package:ecom/Infrastructure/HttpMethods/requesting_methods.dart';
 import 'package:ecom/Models/address_model.dart';
-import 'package:ecom/Services/Exceptions/api_exception.dart';
+import 'package:ecom/Services/app_errors.dart';
+
+/// A request against the addresses API. Defaults to the app's ApiService;
+/// injectable so tests can supply the customer's addresses without a network.
+typedef AddressRequest = Future<dynamic> Function({
+  String? methodType,
+  String? url,
+  dynamic body,
+});
 
 class AddressProvider extends ChangeNotifier {
+  AddressProvider({AddressRequest? request})
+      : _request = request ?? ApiService.requestMethods;
+
+  final AddressRequest _request;
+
   List<AddressModel> _addresses = [];
   bool _isLoading = false;
-  String? _errorMessage;
+  CustomerError? _failure;
 
   List<AddressModel> get addresses => _addresses;
   bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
+  String? get errorMessage => _failure?.message;
+
+  /// The customer-facing reason the last address call failed, or null.
+  CustomerError? get failure => _failure;
 
   AddressModel? get defaultAddress {
     for (final a in _addresses) {
@@ -20,13 +36,21 @@ class AddressProvider extends ChangeNotifier {
     return _addresses.isNotEmpty ? _addresses.first : null;
   }
 
+  /// Forgets the signed-in customer's addresses (logout / session end).
+  void clear() {
+    _addresses = [];
+    _isLoading = false;
+    _failure = null;
+    notifyListeners();
+  }
+
   Future<void> loadAddresses() async {
     _isLoading = true;
-    _errorMessage = null;
+    _failure = null;
     notifyListeners();
 
     try {
-      final response = await ApiService.requestMethods(
+      final response = await _request(
         methodType: 'GET',
         url: '/me/addresses',
       );
@@ -35,7 +59,7 @@ class AddressProvider extends ChangeNotifier {
       _addresses =
           raw.map((a) => AddressModel.fromJson(a as Map<String, dynamic>)).toList();
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      _failure = AppErrors.from(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -43,9 +67,9 @@ class AddressProvider extends ChangeNotifier {
   }
 
   Future<AddressModel?> createAddress(AddressModel address) async {
-    _errorMessage = null;
+    _failure = null;
     try {
-      final response = await ApiService.requestMethods(
+      final response = await _request(
         methodType: 'POST',
         url: '/me/addresses',
         body: address.toCreatePayload(),
@@ -58,7 +82,7 @@ class AddressProvider extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      _failure = AppErrors.from(e);
       notifyListeners();
       rethrow;
     }
@@ -68,9 +92,9 @@ class AddressProvider extends ChangeNotifier {
     String id,
     Map<String, dynamic> changes,
   ) async {
-    _errorMessage = null;
+    _failure = null;
     try {
-      final response = await ApiService.requestMethods(
+      final response = await _request(
         methodType: 'PATCH',
         url: '/me/addresses/$id',
         body: changes,
@@ -83,32 +107,32 @@ class AddressProvider extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      _failure = AppErrors.from(e);
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> deleteAddress(String id) async {
-    _errorMessage = null;
+    _failure = null;
     try {
-      await ApiService.requestMethods(
+      await _request(
         methodType: 'DELETE',
         url: '/me/addresses/$id',
       );
       _addresses = _addresses.where((a) => a.id != id).toList();
       notifyListeners();
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      _failure = AppErrors.from(e);
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> setDefaultAddress(String id) async {
-    _errorMessage = null;
+    _failure = null;
     try {
-      await ApiService.requestMethods(
+      await _request(
         methodType: 'POST',
         url: '/me/addresses/$id/default',
       );
@@ -130,7 +154,7 @@ class AddressProvider extends ChangeNotifier {
           .toList();
       notifyListeners();
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      _failure = AppErrors.from(e);
       notifyListeners();
       rethrow;
     }

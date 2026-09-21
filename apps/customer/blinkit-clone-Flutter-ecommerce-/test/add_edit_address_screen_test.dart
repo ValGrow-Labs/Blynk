@@ -109,12 +109,12 @@ void main() {
 
       expect(find.text('Add Address'), findsOneWidget);
       expect(find.text('Save address as'), findsOneWidget);
-      expect(find.text('CONTACT'), findsOneWidget);
-      expect(find.text('DELIVERY ADDRESS'), findsOneWidget);
+      expect(find.text('Contact'), findsOneWidget);
+      expect(find.text('Delivery address'), findsOneWidget);
 
       await scrollToBottom(tester);
-      expect(find.text('LOCATION'), findsOneWidget);
-      expect(find.text('DELIVERY NOTES'), findsOneWidget);
+      expect(find.text('Location'), findsOneWidget);
+      expect(find.text('Delivery notes'), findsOneWidget);
       expect(find.text('Save Address'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
     });

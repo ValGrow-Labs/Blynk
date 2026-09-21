@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 
 import '../Models/order_format.dart';
 import '../Services/Providers/order.provider.dart';
+import '../Services/store_info.dart';
 import '../app_colors.dart';
 import '../app_design.dart';
+import '../design/tokens.dart';
 
 class OrderConfirmationScreen extends StatelessWidget {
   const OrderConfirmationScreen({super.key});
@@ -22,12 +23,11 @@ class OrderConfirmationScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Lottie.asset(
-                'Assets/cart_packing.json',
-                height: 180,
-                width: 180,
-                repeat: true,
+              // A static check mark: the order is placed, nothing is moving.
+              const ExcludeSemantics(
+                child: Icon(BlynkIcons.check, size: 96, color: BlynkColors.positive),
               ),
+              const SizedBox(height: AppSpacing.lg),
               if (order != null) ...[
                 Text(
                   order.orderNumber,
@@ -44,7 +44,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
               ],
               const Text(
-                'Gotcha!',
+                'Order placed',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -64,7 +64,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                 Text(
                   key: const Key('confirmation-amount'),
                   order.paymentMethod == 'COD'
-                      ? '${formatLkr(order.totalAmount)} · Cash on delivery'
+                      ? '${formatLkr(order.totalAmount)} · ${StoreInfo.paymentMethodLabel}'
                       : formatLkr(order.totalAmount),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
@@ -83,7 +83,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(AppRadius.chip),
-                      border: Border.all(color: AppSurfaces.border),
+                      border: Border.all(color: BlynkColors.lineStrong),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

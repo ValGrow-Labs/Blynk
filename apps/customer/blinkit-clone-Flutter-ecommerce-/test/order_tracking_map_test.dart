@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:ecom/Models/order_model.dart';
 import 'package:ecom/Services/Providers/location.provider.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_provider.dart';
+import 'package:ecom/UI/Widgets/Organisms/map_provider_config.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_tracking_map.dart';
 import 'package:ecom/app_design.dart';
 
@@ -278,6 +279,11 @@ void main() {
   });
 
   group('OrderTrackingMap - attribution overlay', () {
+    // The OSM credit belongs to the MapLibre provider only (Google draws its
+    // own logo and copyright); google_logo_clearance_test.dart covers Google.
+    setUp(() => MapProviderConfig.debugOverride = MapProviderKind.maplibre);
+    tearDown(() => MapProviderConfig.debugOverride = null);
+
     _testMap('present in every state: no point, live, stale, offline, closed', (tester) async {
       final order = _order();
       final h = await _watching(tester, order);

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,7 +14,28 @@ import 'package:ecom/constants.dart';
 export 'package:ecom/Infrastructure/HttpMethods/auth_response_parsing.dart'
     show AuthTokenPair, extractAuthTokens, extractUserJson;
 
+/// A request against the auth API. Defaults to the app's ApiService;
+/// injectable so tests can replay offline / rejected / accepted answers.
+typedef AuthRequest = Future<dynamic> Function({
+  String? methodType,
+  String? url,
+  dynamic body,
+});
+
+/// Why a signed-in session ended without the customer asking for it.
+enum SessionEndReason { rejected }
+
 class AuthProvider extends ChangeNotifier {
+  AuthProvider({AuthRequest? request})
+      : _request = request ?? ApiService.requestMethods;
+
+  final AuthRequest _request;
+
+  final StreamController<SessionEndReason> _sessionEnded =
+      StreamController<SessionEndReason>.broadcast();
+  Future<bool>? _restoreFuture;
+  bool _hasRestored = false;
+
   String? _accessToken;
   String? _refreshToken;
   UserModel? _currentUser;
@@ -27,19 +51,27 @@ class AuthProvider extends ChangeNotifier {
   String? get rawRefreshToken => _refreshToken;
   String? get lastDevOtp => _lastDevOtp;
   UserModel? get currentUser => _currentUser;
-  bool get isAuthenticated => _accessToken != null && _accessToken!.isNotEmpty;
+
+  /// Signed in = holds a credential. A restored session may have only the
+  /// refresh token (the HTTP interceptor renews the access token on first use).
+  bool get isAuthenticated => _has(_accessToken) || _has(_refreshToken);
+
+  /// True once the local session decision has been made (no network needed).
+  bool get hasRestored => _hasRestored;
+
+  /// Fires when a session ends without the customer asking (the server
+  /// rejected the refresh token). Wired once, at the app root.
+  Stream<SessionEndReason> get onSessionEnded => _sessionEnded.stream;
+
   bool get isLoading => _isLoading;
   bool get isRequestingOtp => _isRequestingOtp;
   bool get isVerifyingOtp => _isVerifyingOtp;
   String? get errorMessage => _errorMessage;
 
+  static bool _has(String? token) => token != null && token.isNotEmpty;
+
   void clearError() {
     _errorMessage = null;
-    notifyListeners();
-  }
-
-  void _setLoading(bool value) {
-    _isLoading = value;
     notifyListeners();
   }
 
@@ -51,14 +83,15 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final formattedPhone = formatToE164(phone);
-      final response = await ApiService.requestMethods(
+      final response = await _request(
         methodType: 'POST',
         url: '/auth/otp/request',
         body: {'phone': formattedPhone},
       );
 
       if (response is Map && response['data'] is Map) {
-        _lastDevOtp = response['data']['dev_otp']?.toString();
+        // The dev code is a debug-build aid only; a release build ignores it.
+        _lastDevOtp = kDebugMode ? response['data']['dev_otp']?.toString() : null;
       }
 
       final success = response is Map &&
@@ -80,9 +113,15 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    // A session end while this request is on the wire (or any other change of
+    // session) discards the answer instead of signing anyone in with it.
+    final epoch = ApiService.sessionEpoch;
+    bool stale() => epoch != ApiService.sessionEpoch;
+    final interrupted = ApiException(409, 'Your login was interrupted. Please try again.');
+
     try {
       final formattedPhone = formatToE164(phone);
-      final response = await ApiService.requestMethods(
+      final response = await _request(
         methodType: 'POST',
         url: '/auth/otp/verify',
         body: {
@@ -96,21 +135,27 @@ class AuthProvider extends ChangeNotifier {
         final pair = extractAuthTokens(data);
 
         if (pair.isComplete) {
+          final wrote = await TokenStorage.saveTokensIf(
+            stillValid: () => !stale(),
+            accessToken: pair.accessToken!,
+            refreshToken: pair.refreshToken!,
+          );
+          // Checked again with no await before memory is touched.
+          if (!wrote || stale()) throw interrupted;
           _accessToken = pair.accessToken;
           _refreshToken = pair.refreshToken;
 
-          await TokenStorage.saveTokens(
-            accessToken: _accessToken!,
-            refreshToken: _refreshToken!,
-          );
-
           if (data['user'] != null) {
-            _currentUser =
-                UserModel.fromJson(data['user'] as Map<String, dynamic>);
-            await TokenStorage.saveUserCache(_currentUser!.toJsonString());
+            final user = UserModel.fromJson(data['user'] as Map<String, dynamic>);
+            final cached = await TokenStorage.saveUserCacheIf(
+              stillValid: () => !stale(),
+              userJson: user.toJsonString(),
+            );
+            if (cached && !stale()) _currentUser = user;
           } else {
             await loadCurrentUser();
           }
+          if (stale()) throw interrupted;
 
           _isVerifyingOtp = false;
           _errorMessage = null;
@@ -128,20 +173,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Refresh the access token using the stored refresh token
+  /// Refresh the access token using the stored refresh token. Only a token the
+  /// server rejects ends the session; being offline or a server error just
+  /// returns false and leaves the customer signed in.
   Future<bool> refreshToken() async {
-    final currentRefreshToken =
-        _refreshToken ?? await TokenStorage.getRefreshToken();
-    if (currentRefreshToken == null || currentRefreshToken.isEmpty) {
-      await logout();
+    // Storage first: the HTTP interceptor rotates the pair there.
+    final epoch = ApiService.sessionEpoch;
+    final current = await TokenStorage.getRefreshToken() ?? _refreshToken;
+    // The read can straddle a logout + login: never refresh with the new
+    // customer's rotating token on the old customer's behalf.
+    if (epoch != ApiService.sessionEpoch) return false;
+    if (!_has(current)) {
+      await endSession();
       return false;
     }
 
     try {
-      final response = await ApiService.requestMethods(
+      final response = await _request(
         methodType: 'POST',
         url: '/auth/refresh',
-        body: {'refresh_token': currentRefreshToken},
+        body: {'refresh_token': current},
       );
 
       if (response is Map && response['data'] != null) {
@@ -149,22 +200,27 @@ class AuthProvider extends ChangeNotifier {
         final pair = extractAuthTokens(data);
 
         if (pair.isComplete) {
+          // A logout / session end while this was in flight discards it.
+          final wrote = await TokenStorage.saveTokensIf(
+            stillValid: () => epoch == ApiService.sessionEpoch,
+            accessToken: pair.accessToken!,
+            refreshToken: pair.refreshToken!,
+          );
+          if (!wrote) return false;
           _accessToken = pair.accessToken;
           _refreshToken = pair.refreshToken;
-
-          await TokenStorage.saveTokens(
-            accessToken: _accessToken!,
-            refreshToken: _refreshToken!,
-          );
 
           notifyListeners();
           return true;
         }
       }
-      await logout();
       return false;
     } catch (e) {
-      await logout();
+      if (e is ApiException &&
+          (e.statusCode == 401 || e.statusCode == 403) &&
+          epoch == ApiService.sessionEpoch) {
+        await endSession();
+      }
       return false;
     }
   }
@@ -172,108 +228,172 @@ class AuthProvider extends ChangeNotifier {
   /// Fetch authenticated user profile
   Future<UserModel?> loadCurrentUser() async {
     if (!isAuthenticated) return null;
-
     try {
-      final response = await ApiService.requestMethods(
-        methodType: 'GET',
-        url: '/auth/me',
-      );
-
-      if (response is Map && response['data'] != null) {
-        final data = response['data'] as Map<String, dynamic>;
-        final userJson = extractUserJson(data);
-        if (userJson != null) {
-          _currentUser = UserModel.fromJson(userJson);
-          await TokenStorage.saveUserCache(_currentUser!.toJsonString());
-          notifyListeners();
-          return _currentUser;
-        }
-      }
-      return _currentUser;
-    } catch (e) {
-      return _currentUser;
-    }
+      await _fetchAndCacheUser();
+    } catch (_) {}
+    return _currentUser;
   }
 
-  /// Logout current user and clear stored credentials
+  /// Logout: local state and stored credentials are cleared first (so the
+  /// customer is signed out at once, even offline); revoking the refresh
+  /// token on the server is best effort.
   Future<void> logout() async {
-    final tokenToRevoke = _refreshToken ?? await TokenStorage.getRefreshToken();
+    // Bump first, synchronously: any refresh still in flight now discards its
+    // result instead of writing tokens back after the clear below.
+    ApiService.invalidateSession();
+    final memoryToken = _refreshToken;
+    _clearSession();
+    notifyListeners();
+    // Reads the token that is current in storage (the interceptor may have
+    // rotated it) and clears in one step.
+    final stored = await TokenStorage.takeRefreshTokenAndClearAll();
+    _restoreFuture = null;
+    notifyListeners();
 
-    if (tokenToRevoke != null && tokenToRevoke.isNotEmpty) {
-      try {
-        await ApiService.requestMethods(
+    final tokenToRevoke = _has(stored) ? stored : memoryToken;
+    if (_has(tokenToRevoke)) {
+      unawaited(
+        _request(
           methodType: 'POST',
           url: '/auth/logout',
           body: {'refresh_token': tokenToRevoke},
-        );
-      } catch (_) {}
+        ).then<void>((_) {}, onError: (_) {}),
+      );
     }
+  }
 
+  /// The server no longer accepts this login. Clears everything locally with
+  /// no server call (the token is already dead) and tells the app root.
+  /// A no-op when nothing was signed in, so racing detectors end it once.
+  Future<void> endSession() async {
+    final wasSignedIn = isAuthenticated;
+    ApiService.invalidateSession();
+    _clearSession();
+    notifyListeners();
+    // Local-first: the app root signs the customer out of the UI now; the
+    // storage clear below must not delay that.
+    if (wasSignedIn && !_sessionEnded.isClosed) {
+      _sessionEnded.add(SessionEndReason.rejected);
+    }
+    await TokenStorage.clearAll();
+    _restoreFuture = null;
+    notifyListeners();
+  }
+
+  void _clearSession() {
     _accessToken = null;
     _refreshToken = null;
     _currentUser = null;
     _errorMessage = null;
-
-    await TokenStorage.clearAll();
-    notifyListeners();
+    _lastDevOtp = null;
   }
 
-  /// Check stored credentials and restore user session on startup
-  Future<bool> restoreSession() async {
-    _setLoading(true);
+  /// Local-first restore for app start: reads storage only. A stored refresh
+  /// token means signed in, at once, whether or not the network is up; the
+  /// answer is `true` and the session is re-checked in the background (see
+  /// [_revalidate]). Safe to call more than once.
+  Future<bool> restoreSession() => _restoreFuture ??= _restoreLocally();
 
+  Future<bool> _restoreLocally() async {
+    _isLoading = true;
+    final epoch = ApiService.sessionEpoch;
     try {
       final savedAccessToken = await TokenStorage.getAccessToken();
       final savedRefreshToken = await TokenStorage.getRefreshToken();
       final cachedUserJson = await TokenStorage.getUserCache();
 
-      if (cachedUserJson != null && cachedUserJson.isNotEmpty) {
-        try {
-          _currentUser = UserModel.fromJsonString(cachedUserJson);
-        } catch (_) {}
+      // A logout / session end while storage was being read: what was read
+      // belongs to a session that no longer exists. Apply none of it.
+      if (epoch != ApiService.sessionEpoch) {
+        _isLoading = false;
+        _hasRestored = true;
+        notifyListeners();
+        return false;
       }
 
-      if (savedRefreshToken != null && savedRefreshToken.isNotEmpty) {
+      if (_has(savedRefreshToken)) {
         _accessToken = savedAccessToken;
         _refreshToken = savedRefreshToken;
-
-        try {
-          final user = await loadCurrentUser();
-          if (user != null) {
-            _setLoading(false);
-            return true;
-          }
-        } catch (_) {
-          final refreshed = await refreshToken();
-          if (refreshed) {
-            await loadCurrentUser();
-            _setLoading(false);
-            return true;
-          }
+        if (_has(cachedUserJson)) {
+          try {
+            _currentUser = UserModel.fromJsonString(cachedUserJson!);
+          } catch (_) {}
         }
+        _isLoading = false;
+        _hasRestored = true;
+        notifyListeners();
+        unawaited(_revalidate());
+        return true;
       }
 
-      _accessToken = null;
-      _refreshToken = null;
-      _currentUser = null;
+      // An access token without a refresh token cannot be renewed: not a session.
+      ApiService.invalidateSession();
+      _clearSession();
       await TokenStorage.clearAll();
-      _setLoading(false);
-      return false;
-    } catch (e) {
-      _accessToken = null;
-      _refreshToken = null;
-      _currentUser = null;
+    } catch (_) {
+      _clearSession();
       await TokenStorage.clearAll();
-      _setLoading(false);
-      return false;
+    }
+    _isLoading = false;
+    _hasRestored = true;
+    notifyListeners();
+    return false;
+  }
+
+  /// Background check after a local restore. Never blocks the UI and never
+  /// signs the customer out for being offline: only a refresh the server
+  /// rejects does (via [refreshToken] here, or the HTTP interceptor).
+  Future<void> _revalidate() async {
+    try {
+      await _fetchAndCacheUser();
+    } on ApiException catch (e) {
+      if (e.statusCode == 401 && await refreshToken()) {
+        try {
+          await _fetchAndCacheUser();
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  /// GET /auth/me, applied only to the session it was asked for: if the
+  /// session changed while the request was on the wire (logout, forced end,
+  /// another login) the answer is dropped - no state, no cache write - so one
+  /// customer's profile can never land in the next customer's session.
+  Future<void> _fetchAndCacheUser() async {
+    final epoch = ApiService.sessionEpoch;
+    final response = await _request(methodType: 'GET', url: '/auth/me');
+    if (epoch != ApiService.sessionEpoch) return;
+    if (response is Map && response['data'] != null) {
+      final userJson =
+          extractUserJson(response['data'] as Map<String, dynamic>);
+      if (userJson != null) {
+        final user = UserModel.fromJson(userJson);
+        final wrote = await TokenStorage.saveUserCacheIf(
+          stillValid: () => epoch == ApiService.sessionEpoch,
+          userJson: user.toJsonString(),
+        );
+        if (!wrote || epoch != ApiService.sessionEpoch) return;
+        _currentUser = user;
+        notifyListeners();
+      }
     }
   }
 
   /// Backward compatible token reader
   Future<void> getAuthToken() async {
-    _accessToken = await TokenStorage.getAccessToken();
-    _refreshToken = await TokenStorage.getRefreshToken();
+    final epoch = ApiService.sessionEpoch;
+    final access = await TokenStorage.getAccessToken();
+    final refresh = await TokenStorage.getRefreshToken();
+    if (epoch != ApiService.sessionEpoch) return;
+    _accessToken = access;
+    _refreshToken = refresh;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _sessionEnded.close();
+    super.dispose();
   }
 
   static AuthProvider of(BuildContext context) =>

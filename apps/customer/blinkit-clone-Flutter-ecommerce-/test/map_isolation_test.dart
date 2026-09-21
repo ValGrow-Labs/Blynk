@@ -2,8 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Architecture guard (plan section 8.4): the map SDK is confined to ONE file,
-/// so swapping providers later touches that file and map_provider.dart only.
+/// Architecture guard (plan section 8.4): each map SDK is confined to ONE
+/// adapter file (google_map_view.dart, maplibre_map_view.dart), so swapping
+/// providers touches those files and map_provider.dart only.
 /// Runs from the package root (where `flutter test` runs).
 List<File> _dartFilesUnder(String dir) => Directory(dir)
     .listSync(recursive: true)
@@ -40,6 +41,24 @@ void main() {
     expect(importing.single, endsWith('lib/UI/Widgets/Organisms/maplibre_map_view.dart'));
   });
 
+  test('exactly one file under lib/ imports package:google_maps_flutter, and it is google_map_view.dart', () {
+    final importing = _dartFilesUnder('lib')
+        .where((f) => RegExp(r'''(import|export)\s+['"]package:google_maps_flutter[/'"]''').hasMatch(f.readAsStringSync()))
+        .map((f) => _norm(f.path))
+        .toList();
+
+    expect(importing, hasLength(1), reason: 'google_maps_flutter importers: $importing');
+    expect(importing.single, endsWith('lib/UI/Widgets/Organisms/google_map_view.dart'));
+  });
+
+  test('the two adapter files never import each other (Google and MapLibre are never built together)', () {
+    final google = File('lib/UI/Widgets/Organisms/google_map_view.dart').readAsStringSync();
+    final maplibre = File('lib/UI/Widgets/Organisms/maplibre_map_view.dart').readAsStringSync();
+    expect(google.contains('maplibre'), isFalse);
+    expect(maplibre.contains('google_map_view'), isFalse);
+    expect(maplibre.contains('google_maps_flutter'), isFalse);
+  });
+
   test('exactly one file under lib/ imports package:geolocator, and it is the location adapter', () {
     // Device-location types stay behind DeviceLocationSource, the same way the
     // map SDK stays behind map_provider.dart: the screen and every test depend
@@ -61,38 +80,54 @@ void main() {
     expect(offenders, isEmpty, reason: 'geolocator_* platform packages must not be imported: $offenders');
   });
 
-  test('no other map SDK is imported anywhere in lib/ (only maplibre_gl or maplibre_gl_* platform packages via the adapter)', () {
+  test('no map platform-interface package is imported directly anywhere in lib/', () {
     final offenders = _dartFilesUnder('lib')
-        .where((f) => f.readAsStringSync().contains('package:maplibre_gl_'))
+        .where((f) {
+          final text = f.readAsStringSync();
+          return text.contains('package:maplibre_gl_') || text.contains('package:google_maps_flutter_');
+        })
         .map((f) => _norm(f.path))
         .toList();
     expect(offenders, isEmpty, reason: 'platform-interface packages must not be imported directly: $offenders');
   });
 
   test('the abstraction and the tracking widget stay SDK-free', () {
-    for (final name in ['map_provider.dart', 'map_marker_logic.dart', 'map_tile_config.dart', 'order_tracking_map.dart']) {
+    for (final name in [
+      'map_provider.dart',
+      'map_provider_config.dart',
+      'map_marker_logic.dart',
+      'map_tile_config.dart',
+      'map_unavailable_card.dart',
+      'order_tracking_map.dart',
+    ]) {
       final text = File('lib/UI/Widgets/Organisms/$name').readAsStringSync();
-      expect(text.contains('maplibre_gl'), isFalse, reason: '$name must not mention maplibre_gl imports');
+      expect(text.contains('package:maplibre_gl'), isFalse, reason: '$name must not import maplibre_gl');
+      expect(text.contains('package:google_maps_flutter'), isFalse, reason: '$name must not import google_maps_flutter');
     }
   });
 
-  test('no Google Maps anywhere in lib/ or pubspec.yaml', () {
-    final files = <File>[..._dartFilesUnder('lib'), File('pubspec.yaml')];
-    final offenders = <String>[];
-    for (final f in files) {
-      final text = f.readAsStringSync();
-      for (final needle in ['google_maps_flutter', 'com.google.android.geo']) {
-        if (text.contains(needle)) offenders.add('${_norm(f.path)} mentions $needle');
-      }
-    }
+  test('no screen, provider or service in lib/ names a map SDK type outside the adapters', () {
+    final adapters = {
+      'lib/UI/Widgets/Organisms/google_map_view.dart',
+      'lib/UI/Widgets/Organisms/maplibre_map_view.dart',
+    };
+    final offenders = _dartFilesUnder('lib')
+        .where((f) => !adapters.contains(_norm(f.path)))
+        .where((f) => RegExp(r'(GoogleMapController|MapLibreMapController|BitmapDescriptor)').hasMatch(f.readAsStringSync()))
+        .map((f) => _norm(f.path))
+        .toList();
     expect(offenders, isEmpty);
   });
 
-  test('no Google Maps in the native projects, the manifest, the iOS runner or the lockfile', () {
-    // MapLibre needs no API key and no Google services. A Google Maps
-    // dependency sneaking back in would show up in one of these files (a
-    // maps API-key meta-data entry, a GMSServices call, a gradle dependency, a
-    // locked package) even if lib/ stayed clean.
+  test('both map SDKs are declared in pubspec.yaml (Google active, MapLibre dormant rollback)', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    expect(RegExp(r'^  google_maps_flutter:', multiLine: true).hasMatch(pubspec), isTrue);
+    expect(RegExp(r'^  maplibre_gl:', multiLine: true).hasMatch(pubspec), isTrue);
+  });
+
+  test('no Google Maps API key literal in the native projects, the manifest or the iOS runner', () {
+    // The Android SDK reads its key from the manifest at build time (G1b wires a
+    // placeholder); nothing may embed one. Scans the files a key would land in.
     final files = <File>[
       File('android/app/src/main/AndroidManifest.xml'),
       ..._filesUnder('android', (p) => p.endsWith('.gradle') || p.endsWith('.gradle.kts'), skipDirs: {'build', '.gradle'}),
@@ -100,7 +135,6 @@ void main() {
         final name = p.split('/').last;
         return name.endsWith('.plist') || name.startsWith('AppDelegate') || name.startsWith('GeneratedPluginRegistrant');
       }),
-      File('pubspec.lock'),
     ];
 
     // Guard against the guard silently scanning nothing.
@@ -111,14 +145,32 @@ void main() {
       'android/settings.gradle',
       'ios/Runner/Info.plist',
       'ios/Runner/AppDelegate.swift',
-      'pubspec.lock',
     ]));
 
+    final keyShape = RegExp(r'AIza[0-9A-Za-z_\-]{35}');
+    final offenders = [
+      for (final f in files)
+        if (f.existsSync() && keyShape.hasMatch(f.readAsStringSync())) _norm(f.path),
+    ];
+    expect(offenders, isEmpty, reason: 'a Google API key must never be committed: $offenders');
+  });
+
+  test('the backend has no Google Maps dependency or reference (it stays provider-independent)', () {
+    const needles = ['googleapis', '@googlemaps', 'maps.googleapis'];
+    final root = Directory('../../../backend/api');
+    // Guard against the guard silently scanning nothing.
+    expect(root.existsSync(), isTrue, reason: 'expected backend/api relative to the Customer app');
+    expect(File('../../../backend/api/package.json').existsSync(), isTrue);
+
+    final files = <File>[
+      File('../../../backend/api/package.json'),
+      ..._filesUnder('../../../backend/api/src', (p) => RegExp(r'\.(ts|js|json|sql)$').hasMatch(p)),
+    ];
+    expect(files.length, greaterThan(20));
     final offenders = <String>[];
     for (final f in files) {
-      if (!f.existsSync()) continue;
       final text = f.readAsStringSync();
-      for (final needle in ['google_maps_flutter', 'com.google.android.geo', 'GMSServices']) {
+      for (final needle in needles) {
         if (text.contains(needle)) offenders.add('${_norm(f.path)} mentions $needle');
       }
     }

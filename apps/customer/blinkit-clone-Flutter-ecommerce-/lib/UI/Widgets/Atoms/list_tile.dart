@@ -1,54 +1,41 @@
 import 'package:flutter/material.dart';
 
-import '../../../app_colors.dart';
+import '../../../design/tokens.dart';
 
-Widget customListTile(
-    {required IconData icon,
-    required String title,
-    bool? isColorFul = false,
-    Function? callback}) {
-  return InkWell(
-    splashColor: AppColors.greyWhiteColor,
-    onTap: () {
-      callback!();
-    },
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      margin: const EdgeInsets.symmetric(vertical: 1),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
+/// One account row: the whole row is a single 48 dp+ target, the trailing
+/// chevron is a plain icon (not a button of its own).
+Widget customListTile({
+  required IconData icon,
+  required String title,
+  required VoidCallback callback,
+}) {
+  return Semantics(
+    button: true,
+    label: title,
+    excludeSemantics: true,
+    onTap: callback,
+    child: InkWell(
+      onTap: callback,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: BlynkSpace.s8,
+            vertical: BlynkSpace.s8,
+          ),
+          child: Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.greyWhiteColor,
-                child: Icon(
-                  icon,
-                  color: isColorFul! ? Colors.blueAccent : Colors.black45,
-                  size: 15,
-                ),
-              ),
-              const SizedBox(
-                width: 15,
-              ),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 17,
-                ),
+              Icon(icon, color: BlynkColors.ink, size: BlynkIcons.md),
+              const SizedBox(width: BlynkSpace.s16),
+              Expanded(child: Text(title, style: BlynkText.heading)),
+              const Icon(
+                BlynkIcons.chevron,
+                color: BlynkColors.ink3,
+                size: BlynkIcons.md,
               ),
             ],
           ),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(
-              Icons.arrow_forward_ios,
-              size: 15,
-            ),
-          ),
-        ],
+        ),
       ),
     ),
   );

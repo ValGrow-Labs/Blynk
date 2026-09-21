@@ -1,18 +1,13 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'package:ecom/Infrastructure/HttpMethods/auth_response_parsing.dart';
 import 'package:ecom/Infrastructure/HttpMethods/token_storage.dart';
 import 'package:ecom/Services/Exceptions/api_exception.dart';
+import 'package:ecom/Services/app_config.dart';
 
-String getApiBaseUrl() {
-  final envUrl = dotenv.env['API_BASE_URL'];
-  if (envUrl != null && envUrl.trim().isNotEmpty) {
-    return envUrl.trim();
-  }
-  return 'http://localhost:4000/api/v1';
-}
+String getApiBaseUrl() => AppConfig.current().apiBaseUrl;
 
 var kdioBaseOptions = BaseOptions(
   baseUrl: getApiBaseUrl(),
@@ -22,6 +17,11 @@ var kdioBaseOptions = BaseOptions(
   contentType: Headers.jsonContentType,
   responseType: ResponseType.json,
 );
+
+class _RefreshOutcome {
+  const _RefreshOutcome({this.accessToken});
+  final String? accessToken;
+}
 
 class ApiService {
   static Dio? _instance;
@@ -33,6 +33,106 @@ class ApiService {
 
   static void resetDio() {
     _instance = null;
+  }
+
+  static final StreamController<void> _sessionRejected =
+      StreamController<void>.broadcast();
+
+  /// Fires when the server definitively rejected the stored refresh token
+  /// (the login is over, not just unreachable). The app root listens once and
+  /// signs the customer out; nothing else should.
+  static Stream<void> get sessionRejected => _sessionRejected.stream;
+
+  @visibleForTesting
+  static void reportSessionRejected() => _sessionRejected.add(null);
+
+  static int _sessionEpoch = 0;
+
+  /// Bumped every time a session ends (logout, forced end, a rejected refresh
+  /// token). A token refresh remembers the epoch it started in and throws its
+  /// result away if the epoch moved, so a slow refresh can never bring a
+  /// finished session back to life.
+  static int get sessionEpoch => _sessionEpoch;
+
+  static void invalidateSession() => _sessionEpoch++;
+
+  static Future<_RefreshOutcome>? _refreshInFlight;
+  static int _refreshInFlightEpoch = -1;
+
+  /// One refresh at a time per session: refresh tokens rotate, so two parallel
+  /// 401s refreshing with the same token would make the second one look
+  /// rejected. A refresh left over from an ended session is never joined.
+  static Future<_RefreshOutcome> _refreshTokens(String baseUrl) {
+    final epoch = _sessionEpoch;
+    if (_refreshInFlight != null && _refreshInFlightEpoch == epoch) {
+      return _refreshInFlight!;
+    }
+    late final Future<_RefreshOutcome> flight;
+    flight = _refreshOnce(baseUrl, epoch).whenComplete(() {
+      if (identical(_refreshInFlight, flight)) _refreshInFlight = null;
+    });
+    _refreshInFlight = flight;
+    _refreshInFlightEpoch = epoch;
+    return flight;
+  }
+
+  static Dio _plainDio(String baseUrl) => Dio(
+        BaseOptions(
+          baseUrl: baseUrl,
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 15),
+          contentType: Headers.jsonContentType,
+          responseType: ResponseType.json,
+        ),
+      );
+
+  static Future<_RefreshOutcome> _refreshOnce(String baseUrl, int epoch) async {
+    final refreshToken = await TokenStorage.getRefreshToken();
+    // No refresh token = a guest's request: nothing to end, nothing to renew.
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return const _RefreshOutcome();
+    }
+    // The read can straddle a logout + login: never spend the new customer's
+    // rotating token on the old customer's refresh.
+    if (epoch != _sessionEpoch) return const _RefreshOutcome();
+    try {
+      final response = await _plainDio(baseUrl)
+          .post('/auth/refresh', data: {'refresh_token': refreshToken});
+
+      final data = response.data is Map ? response.data['data'] : null;
+      final pair =
+          extractAuthTokens(data is Map<String, dynamic> ? data : const {});
+      if (response.statusCode == 200 && pair.isComplete) {
+        final wrote = await TokenStorage.saveTokensIf(
+          stillValid: () => epoch == _sessionEpoch,
+          accessToken: pair.accessToken!,
+          refreshToken: pair.refreshToken!,
+        );
+        if (wrote) return _RefreshOutcome(accessToken: pair.accessToken);
+        // The customer logged out while this was in flight. The server has
+        // already rotated the token, so revoke the new one; nothing is kept.
+        unawaited(_revokeQuietly(baseUrl, pair.refreshToken!));
+      }
+      return const _RefreshOutcome();
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if ((status == 401 || status == 403) && epoch == _sessionEpoch) {
+        _sessionEpoch++;
+        await TokenStorage.clearAll();
+        _sessionRejected.add(null);
+      }
+      // Offline, timeout or a 5xx: the session is unchanged.
+      return const _RefreshOutcome();
+    } catch (_) {
+      return const _RefreshOutcome();
+    }
+  }
+
+  static Future<void> _revokeQuietly(String baseUrl, String refreshToken) async {
+    try {
+      await _plainDio(baseUrl)
+          .post('/auth/logout', data: {'refresh_token': refreshToken});
+    } catch (_) {}
   }
 
   static Dio _createDio() {
@@ -68,54 +168,26 @@ class ApiService {
               path.contains('/auth/refresh') ||
               path.contains('/auth/logout');
 
-          // Handle 401 Unauthorized by attempting token refresh once
+          // A 401 on a normal request: refresh once and retry. Refreshes are
+          // shared (see _refreshTokens) and only a rejected refresh token ends
+          // the session - an offline or failing refresh keeps it.
           if (error.response?.statusCode == 401 &&
               !isAuthEndpoint &&
               requestOptions.extra['_retry'] != true) {
             requestOptions.extra['_retry'] = true;
 
-            try {
-              final refreshToken = await TokenStorage.getRefreshToken();
-              if (refreshToken != null && refreshToken.isNotEmpty) {
-                final refreshDio = Dio(
-                  BaseOptions(
-                    baseUrl: baseUrl,
-                    connectTimeout: const Duration(seconds: 15),
-                    receiveTimeout: const Duration(seconds: 15),
-                    contentType: Headers.jsonContentType,
-                    responseType: ResponseType.json,
-                  ),
-                );
-
-                final refreshResponse = await refreshDio.post(
-                  '/auth/refresh',
-                  data: {'refresh_token': refreshToken},
-                );
-
-                if (refreshResponse.statusCode == 200 &&
-                    refreshResponse.data != null) {
-                  final data = refreshResponse.data['data']
-                      as Map<String, dynamic>?;
-                  final pair = extractAuthTokens(data ?? const {});
-
-                  if (pair.isComplete) {
-                    await TokenStorage.saveTokens(
-                      accessToken: pair.accessToken!,
-                      refreshToken: pair.refreshToken!,
-                    );
-
-                    // Update headers and retry the original request
-                    requestOptions.headers['Authorization'] =
-                        'Bearer ${pair.accessToken}';
-
-                    final retryResponse = await dio.fetch(requestOptions);
-                    return handler.resolve(retryResponse);
-                  }
-                }
+            final epoch = _sessionEpoch;
+            final outcome = await _refreshTokens(baseUrl);
+            // A session that ended while waiting must not retry with anyone's
+            // token: the request just fails as unauthorised.
+            if (outcome.accessToken != null && epoch == _sessionEpoch) {
+              requestOptions.headers['Authorization'] =
+                  'Bearer ${outcome.accessToken}';
+              try {
+                return handler.resolve(await dio.fetch(requestOptions));
+              } on DioException catch (retryError) {
+                return handler.next(retryError);
               }
-            } catch (refreshError) {
-              // Token refresh failed -> clear local tokens to force fresh login
-              await TokenStorage.clearAll();
             }
           }
 
@@ -136,7 +208,7 @@ class ApiService {
       final statusCode = error.response?.statusCode ?? 500;
       final responseData = error.response?.data;
 
-      String message = 'An unexpected error occurred. Please try again.';
+      String message = _genericMessage;
       String? code;
 
       if (responseData is Map) {
@@ -157,56 +229,76 @@ class ApiService {
         case DioExceptionType.receiveTimeout:
           return ApiException(
             408,
-            'Connection timed out. Please check your internet connection.',
+            'That took too long. Try again.',
             code: 'TIMEOUT',
           );
         case DioExceptionType.connectionError:
           return ApiException(
             503,
-            'Unable to connect to the server. Please verify the server is running.',
+            "We couldn't reach Blynk. Check your connection and try again.",
             code: 'NETWORK_ERROR',
           );
         case DioExceptionType.badResponse:
           if (statusCode == 401) {
             return ApiException(
               401,
-              message.isNotEmpty && message != 'An unexpected error occurred. Please try again.'
+              message.isNotEmpty && message != _genericMessage
                   ? message
-                  : 'Session expired or unauthorized. Please log in again.',
+                  : 'Log in to continue.',
               code: code ?? 'UNAUTHORIZED',
             );
           } else if (statusCode == 403) {
             return ApiException(
               403,
-              message.isNotEmpty && message != 'An unexpected error occurred. Please try again.'
+              message.isNotEmpty && message != _genericMessage
                   ? message
-                  : 'Access forbidden.',
+                  : "This account can't do that.",
               code: code ?? 'FORBIDDEN',
             );
           } else if (statusCode == 404) {
             return ApiException(
               404,
-              message.isNotEmpty && message != 'An unexpected error occurred. Please try again.'
+              message.isNotEmpty && message != _genericMessage
                   ? message
-                  : 'Resource not found.',
+                  : "We couldn't find that.",
               code: code ?? 'NOT_FOUND',
             );
           } else if (statusCode == 429) {
             return ApiException(
               429,
-              'Too many attempts. Please wait a moment before trying again.',
+              'Too many tries. Wait a moment, then try again.',
               code: code ?? 'RATE_LIMITED',
             );
           }
-          return ApiException(statusCode, message, code: code);
+          return ApiException(statusCode, _safeMessage(statusCode, message), code: code);
         case DioExceptionType.cancel:
-          return ApiException(499, 'Request was cancelled', code: 'CANCELLED');
+          return ApiException(499, 'The request was cancelled.', code: 'CANCELLED');
         default:
-          return ApiException(statusCode, message, code: code);
+          return ApiException(statusCode, _safeMessage(statusCode, message), code: code);
       }
     }
 
-    return ApiException(500, error.toString());
+    // Whatever this was, its text is for developers: never carried in a message.
+    return ApiException(500, _genericMessage);
+  }
+
+  static const String _genericMessage = 'Something went wrong. Try again.';
+
+  /// A backend failure (5xx) says nothing a customer can act on, so its body
+  /// text is replaced; a 4xx refusal keeps the backend's own message.
+  static String _safeMessage(int statusCode, String message) => statusCode >= 500
+      ? 'Something went wrong on our side. Try again in a moment.'
+      : message;
+
+  /// Told about every finished request: null on a response, the mapped
+  /// [ApiException] on a failure. The app's connectivity hint listens here, so
+  /// nothing about the connection is guessed from anything else.
+  static void Function(ApiException? error)? networkObserver;
+
+  static void _observe(ApiException? error) {
+    try {
+      networkObserver?.call(error);
+    } catch (_) {}
   }
 
   static Future<dynamic> requestMethods({
@@ -277,9 +369,12 @@ class ApiService {
           );
       }
 
+      _observe(null);
       return response.data;
     } catch (e) {
-      throw handleError(e);
+      final mapped = handleError(e);
+      _observe(mapped);
+      throw mapped;
     }
   }
 }

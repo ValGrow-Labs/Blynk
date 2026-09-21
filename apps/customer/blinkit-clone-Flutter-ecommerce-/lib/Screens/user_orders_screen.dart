@@ -6,8 +6,13 @@ import 'package:ecom/app_design.dart';
 import '../Models/order_format.dart';
 import '../Models/order_model.dart';
 import '../Models/order_status_labels.dart';
+import '../Services/Providers/auth.provider.dart';
 import '../Services/Providers/order.provider.dart';
+import '../Services/store_info.dart';
+import '../UI/Widgets/Atoms/app_state_views.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../UI/Widgets/Atoms/order_status_chip.dart';
+import '../app_responsive.dart';
 
 /// How close to the end of the list (in pixels) a scroll has to get before
 /// the next page is requested.
@@ -21,13 +26,32 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver {
+  bool? _wasAuthenticated;
+
+  // Orders are an account endpoint: a browsing guest never triggers the
+  // request (and so never sees a 401), and gets a log-in prompt instead.
+  bool get _isAuthenticated => context.read<AuthProvider>().isAuthenticated;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<OrderProvider>().loadOrders();
+      if (mounted && _isAuthenticated) context.read<OrderProvider>().refreshOrders(force: true);
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Signed in while this tab is already showing: load their orders now.
+    final signedIn = context.watch<AuthProvider>().isAuthenticated;
+    if (signedIn && _wasAuthenticated == false) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<OrderProvider>().refreshOrders(force: true);
+      });
+    }
+    _wasAuthenticated = signedIn;
   }
 
   @override
@@ -42,7 +66,9 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
     // on, a new one arrives) - coming back to the foreground is the moment
     // to ask again, same as the order detail screen. Always refetches page
     // 1, which is fine: that is also what pull-to-refresh does.
-    if (state == AppLifecycleState.resumed) context.read<OrderProvider>().loadOrders();
+    if (state == AppLifecycleState.resumed && _isAuthenticated) {
+      context.read<OrderProvider>().loadOrders();
+    }
   }
 
   @override
@@ -50,18 +76,28 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
     return Scaffold(
       backgroundColor: AppColors.greyWhiteColor,
       appBar: AppBar(
-        leadingWidth: 25,
         automaticallyImplyLeading: true,
         title: const Text("Your Orders"),
       ),
-      body: Consumer<OrderProvider>(
+      body: !context.watch<AuthProvider>().isAuthenticated
+          ? AppStateView.empty(
+              title: 'Log in to see your orders',
+              message: 'Your past and current orders appear here.',
+              actionLabel: 'Log in',
+              onAction: () => Navigator.of(context).pushNamed('/login'),
+            )
+          : ContentFrame(
+        maxWidth: 720,
+        gutter: false,
+        child: Consumer<OrderProvider>(
         builder: (context, orderProvider, _) {
           final orders = orderProvider.orders;
           // Only the very first load (nothing on screen yet) shows a
           // full-screen spinner - a pull-to-refresh with orders already
           // shown keeps the list visible instead of replacing it.
           final isInitialLoading = orderProvider.isLoadingOrders && orders.isEmpty;
-          final hasError = !isInitialLoading && orderProvider.ordersError != null && orders.isEmpty;
+          final failure = orderProvider.ordersFailure;
+          final hasError = !isInitialLoading && failure != null && orders.isEmpty;
           final isEmpty = !isInitialLoading && !hasError && orders.isEmpty;
           final showsList = !isInitialLoading && !hasError && !isEmpty;
 
@@ -69,8 +105,7 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
           // silent: the list stays (it is real, just possibly stale) and
           // the failure is said out loud above it, as the first list item -
           // same pattern as order_summary_screen's _RefreshFailedNotice.
-          final showsRefreshFailedNotice =
-              showsList && orderProvider.ordersError != null;
+          final showsRefreshFailedNotice = showsList && failure != null;
           final noticeOffset = showsRefreshFailedNotice ? 1 : 0;
 
           final itemCount = showsList ? orders.length + 1 + noticeOffset : 1;
@@ -93,19 +128,31 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                 itemCount: itemCount,
                 itemBuilder: (context, index) {
                   if (isInitialLoading) {
-                    return const _CenteredState(child: CircularProgressIndicator());
+                    return const PullableState(
+                      child: AppStateView.loading('Loading your orders'),
+                    );
                   }
                   if (hasError) {
-                    return _ErrorState(
-                      message: orderProvider.ordersError!,
+                    return FailureState(
+                      failure: failure,
+                      title: "Couldn't load your orders.",
+                      retryKey: const Key('orders-retry'),
                       onRetry: orderProvider.loadOrders,
                     );
                   }
                   if (isEmpty) {
-                    return const _EmptyState();
+                    return const PullableState(
+                      child: AppStateView.empty(
+                        title: "You haven't placed any orders yet.",
+                      ),
+                    );
                   }
                   if (showsRefreshFailedNotice && index == 0) {
-                    return const _RefreshFailedNotice();
+                    return RefreshFailedNotice(
+                      key: const Key('orders-refresh-failed'),
+                      message: "Couldn't refresh your orders. Pull down to try again.",
+                      offline: failure.isOffline,
+                    );
                   }
                   final listIndex = index - noticeOffset;
                   if (listIndex == orders.length) {
@@ -118,144 +165,6 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
           );
         },
       ),
-    );
-  }
-}
-
-/// A state (loading/error/empty) is still a single item inside the
-/// scrollable ListView, kept tall enough that a downward drag/fling always
-/// reaches the RefreshIndicator's trigger distance - so pull-to-refresh
-/// works from every state, not just when orders are on screen.
-class _CenteredState extends StatelessWidget {
-  const _CenteredState({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height * 0.72),
-      child: Center(child: child),
-    );
-  }
-}
-
-/// Shown above the rows when a refetch fails but orders are already on
-/// screen - quiet, not alarming (the list below it is still real), and it
-/// points at the gesture that is already there rather than adding a second
-/// retry affordance. Mirrors order_summary_screen's `_RefreshFailedNotice`.
-class _RefreshFailedNotice extends StatelessWidget {
-  const _RefreshFailedNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-      child: Container(
-        key: const Key('orders-refresh-failed'),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: AppRadius.cardBorder,
-          border: Border.all(color: AppSurfaces.border),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 18, color: AppTextColors.problem),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                "Couldn't refresh your orders. Pull down to try again.",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTextColors.primary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return _CenteredState(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-              child: const Center(
-                child: Icon(Icons.error_outline, size: 32, color: AppTextColors.secondary),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const Text(
-              "Couldn't load your orders.",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontWeight: FontWeight.w700, color: AppTextColors.primary),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTextColors.onBackground),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            ElevatedButton(
-              key: const Key('orders-retry'),
-              onPressed: onRetry,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryYellowColor,
-                foregroundColor: AppTextColors.onYellow,
-              ),
-              child: const Text('Try again'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return _CenteredState(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-              child: const Center(
-                child: Icon(Icons.receipt_long_outlined, size: 32, color: AppTextColors.secondary),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const Text(
-              "You haven't placed any orders yet.",
-              style: TextStyle(color: AppTextColors.onBackground),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -281,14 +190,22 @@ class _ListFooter extends StatelessWidget {
       );
     }
     if (provider.loadMoreError != null) {
-      return InkWell(
+      return Semantics(
+        button: true,
+        label: 'Retry loading more orders',
+        excludeSemantics: true,
         onTap: provider.loadMoreOrders,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.lg, horizontal: AppSpacing.lg),
-          child: Text(
-            "Couldn't load more orders. Tap to retry.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTextColors.onBackground, fontSize: 12),
+        child: InkWell(
+          onTap: provider.loadMoreOrders,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg, horizontal: AppSpacing.lg),
+            child: const Text(
+              "Couldn't load more orders. Tap to retry.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppTextColors.onBackground, fontSize: 12),
+            ),
           ),
         ),
       );
@@ -310,7 +227,7 @@ class _OrderRow extends StatelessWidget {
     final namesLine = remaining > 0 ? '$shownNames +$remaining more' : shownNames;
 
     final itemQty = order.items.fold<int>(0, (sum, i) => sum + i.quantity);
-    final paymentLabel = order.paymentMethod == 'COD' ? 'Cash on delivery' : order.paymentMethod;
+    final paymentLabel = order.paymentMethod == 'COD' ? StoreInfo.paymentMethodLabel : order.paymentMethod;
     final total = formatLkr(order.totalAmount);
     final statusLabel = orderStatusLabel(order.status);
 
@@ -335,7 +252,7 @@ class _OrderRow extends StatelessWidget {
           child: InkWell(
             onTap: () => Navigator.of(context).pushNamed('/order', arguments: order.id),
             child: Container(
-              constraints: const BoxConstraints(minHeight: 44),
+              constraints: const BoxConstraints(minHeight: 48),
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 border: Border.all(color: AppSurfaces.border),

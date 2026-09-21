@@ -8,9 +8,9 @@ import '../../../app_colors.dart';
 import '../../../app_design.dart';
 import 'map_provider.dart';
 
-/// The OSM/ODbL credit every map must show (docs/06-deployment/
+/// The OSM/ODbL credit a MapLibre map must show (docs/06-deployment/
 /// map-tile-hosting-setup.md section 4). Drawn by Blynk's own widget tree so it
-/// exists whatever the map style says and survives a style or provider swap.
+/// exists whatever the map style says; shown only when [mapNeedsOsmAttribution].
 const String mapAttributionText = '© OpenStreetMap contributors';
 
 const double _mapHeight = 220;
@@ -96,7 +96,10 @@ class OrderTrackingMap extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     map,
-                    const Positioned(left: AppSpacing.sm, bottom: AppSpacing.sm, child: _AttributionOverlay()),
+                    // Only over MapLibre's OSM tiles. Google draws its own logo
+                    // and copyright in that corner: never cover it.
+                    if (mapNeedsOsmAttribution)
+                      const Positioned(left: AppSpacing.sm, bottom: AppSpacing.sm, child: _AttributionOverlay()),
                     // Hairline frame above the map; ignores touches.
                     Positioned.fill(
                       child: IgnorePointer(

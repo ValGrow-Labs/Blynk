@@ -3,29 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:ecom/Screens/Auth/login_screen.dart';
 import 'package:ecom/Screens/Auth/otp_verification_screen.dart';
 import 'package:ecom/Screens/app_about_screen.dart';
-import 'package:ecom/Screens/cart_gift_screen.dart';
 import 'package:ecom/Screens/categories_screen.dart';
 import 'package:ecom/Screens/checkout_screen.dart';
 import 'package:ecom/Screens/customer_shell.dart';
-import 'package:ecom/Screens/error_screen.dart';
-import 'package:ecom/Screens/help_screen.dart';
+import 'package:ecom/Screens/not_found_screen.dart';
 import 'package:ecom/Screens/search_screen.dart';
+import 'package:ecom/Screens/session_gate.dart';
 import 'package:ecom/Screens/product_details_screen.dart';
 import 'package:ecom/Models/product_model.dart';
 import 'package:ecom/Screens/order_confirmation_screen.dart';
 import 'package:ecom/Screens/order_summary_screen.dart';
-import 'package:ecom/Screens/pdf_view_screen.dart';
 import 'package:ecom/Screens/products_screen.dart';
-import 'package:ecom/Screens/profile_screen.dart';
 import 'package:ecom/Screens/user_address_screen.dart';
 import 'package:ecom/Screens/user_cart_screen.dart';
-import 'package:ecom/Screens/user_orders_screen.dart';
-import 'package:ecom/Screens/coupons_screeen.dart';
 
 class AppRouter {
   static Route<dynamic>? generateRoute(RouteSettings settings) {
     switch (settings.name) {
+      // The start route decides local-first between the shop and the login
+      // screen; '/login' is the login screen itself (a guest logging in later,
+      // or a session that ended).
       case '/':
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const SessionGate(),
+        );
+      case '/login':
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => const LoginScreen(),
@@ -38,12 +41,14 @@ class AppRouter {
           ),
         );
       // '/home' is the persistent four-tab customer shell (Shop / Orders /
-      // Help / Profile), not a bare Home page - every existing
-      // pushNamedAndRemoveUntil('/home', ...) call lands on the Shop tab.
+      // Help / Profile), not a bare Home page - it lands on the Shop tab
+      // unless the tab index is passed as the argument. Orders, Help and
+      // Profile are tabs only: CustomerShell.selectTab opens them.
       case '/home':
+        final tab = settings.arguments;
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const CustomerShell(),
+          builder: (_) => CustomerShell(initialTab: tab is int ? tab : 0),
         );
       case '/categories':
         return MaterialPageRoute(
@@ -51,46 +56,38 @@ class AppRouter {
           builder: (_) => const CategoriesScreen(),
         );
       case '/search':
+        final searchArg = settings.arguments;
+        if (searchArg != null && searchArg is! String) return _notFound(settings);
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => SearchScreen(
-            initialCategorySlug: settings.arguments as String?,
+            initialCategorySlug: searchArg as String?,
           ),
         );
       // Accepts the tapped ProductModel (renders instantly, then refreshes)
-      // or a bare product id.
+      // or a bare product id. Neither, or an empty id, is not-found at once
+      // instead of a skeleton that never resolves.
       case '/product':
         final args = settings.arguments;
         final initial = args is ProductModel ? args : null;
+        final productId = initial?.id ?? (args is String ? args : '');
+        if (productId.trim().isEmpty) return _notFound(settings);
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => ProductDetailsScreen(
-            productId: initial?.id ?? (args is String ? args : ''),
+            productId: productId,
             initialProduct: initial,
           ),
         );
-      case '/help':
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const HelpScreen(),
-        );
       case '/products':
+        // No argument means "all products"; any other type is not-found.
+        final slug = settings.arguments;
+        if (slug != null && slug is! String) return _notFound(settings);
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => ProductsScreen(
-            categorySlug: (settings.arguments as String?) ?? '',
+            categorySlug: (slug as String?) ?? '',
           ),
-        );
-      case '/coupons':
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const CouponsSelectionScreen(),
-        );
-
-      case "/cart/gift":
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const CartGiftScreen(),
         );
       case "/cart":
         return MaterialPageRoute(
@@ -102,33 +99,17 @@ class AppRouter {
           settings: settings,
           builder: (_) => const CheckoutScreen(),
         );
-      case "/orders":
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const OrdersScreen(),
-        );
       case "/order":
+        final orderId = settings.arguments;
+        if (orderId is! String || orderId.trim().isEmpty) return _notFound(settings);
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => OrderSummaryScreen(
-            orderId: (settings.arguments as String?) ?? '',
-          ),
-        );
-      case "/order/invoice":
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const ViewOrderInvoiceScreen(),
+          builder: (_) => OrderSummaryScreen(orderId: orderId),
         );
       case "/order/confirm":
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => const OrderConfirmationScreen(),
-        );
-
-      case '/profile':
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const ProfileScreen(),
         );
       case '/user/address':
         return MaterialPageRoute(
@@ -141,68 +122,12 @@ class AppRouter {
           builder: (_) => const AppAboutScreen(),
         );
       default:
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const ErrorScreem(),
-        );
+        return _notFound(settings);
     }
   }
-}
 
-enum AnimationDirection {
-  leftToRight,
-  rightToLeft,
-  center,
-}
-
-class ScalePageRoute extends PageRouteBuilder {
-  final WidgetBuilder builder;
-  final AnimationDirection animationDirection;
-
-  ScalePageRoute({
-    required this.builder,
-    this.animationDirection = AnimationDirection.center,
-  }) : super(
-          transitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (BuildContext context, Animation<double> animation,
-              Animation<double> secondaryAnimation) {
-            return builder(context);
-          },
-          transitionsBuilder: (BuildContext context,
-              Animation<double> animation,
-              Animation<double> secondaryAnimation,
-              Widget child) {
-            switch (animationDirection) {
-              case AnimationDirection.leftToRight:
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(-1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                );
-              case AnimationDirection.rightToLeft:
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                );
-              case AnimationDirection.center:
-                return ScaleTransition(
-                  scale: Tween<double>(
-                    begin: 0.0,
-                    end: 1.0,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.fastOutSlowIn,
-                    ),
-                  ),
-                  child: child,
-                );
-            }
-          },
-        );
+  static Route<dynamic> _notFound(RouteSettings settings) => MaterialPageRoute(
+        settings: settings,
+        builder: (_) => const NotFoundScreen(),
+      );
 }

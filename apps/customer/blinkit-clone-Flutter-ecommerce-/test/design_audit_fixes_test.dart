@@ -11,6 +11,7 @@ import 'package:ecom/Screens/live_location_picker_screen.dart';
 import 'package:ecom/Services/Location/device_location_source.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_provider.dart';
+import 'package:ecom/UI/Widgets/Organisms/map_provider_config.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_tile_config.dart' show kMapStyleAsset;
 import 'package:ecom/app_colors.dart';
 import 'package:ecom/app_design.dart';
@@ -96,6 +97,13 @@ Future<void> _awaitReal(WidgetTester tester, Finder finder) async {
     await tester.pump();
   }
   await tester.pumpAndSettle();
+}
+
+/// Google is the default map provider now; these tests assert the MapLibre
+/// adapter's "Map unavailable" state (no tile config in tests), so they pin it.
+void _useMapLibreAdapter() {
+  MapProviderConfig.debugOverride = MapProviderKind.maplibre;
+  addTearDown(() => MapProviderConfig.debugOverride = null);
 }
 
 void _phone(WidgetTester tester, {double width = 360, double height = 800}) {
@@ -268,6 +276,7 @@ void main() {
   group('picker copy, icons and hierarchy (M3, M6, M8)', () {
     Future<void> reachReady(WidgetTester tester, {bool fakeMap = true}) async {
       _phone(tester, height: 900);
+      if (!fakeMap) _useMapLibreAdapter(); // this path asserts the MapLibre adapter's unavailable state
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.appTHeme,
@@ -370,7 +379,7 @@ void main() {
       expect(coordinates.style!.color, AppTextColors.secondary);
       // Both strings are still there.
       expect(find.text('6.438200, 80.027400'), findsOneWidget);
-      expect(find.text('DELIVERY LOCATION'), findsOneWidget);
+      expect(find.text('Delivery location'), findsOneWidget);
     });
   });
 
@@ -378,16 +387,17 @@ void main() {
     testWidgets('is a white bordered card, visibly distinct from the order page and from the old tile grey',
         (tester) async {
       _phone(tester);
+      _useMapLibreAdapter(); // the tile-config failure that shows this card is MapLibre-specific
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
           home: Scaffold(
             backgroundColor: AppColors.greyWhiteColor,
             body: SizedBox(
               height: 220,
               child: TrackingMapView(
-                initialCenter: GeoPoint(6.4382, 80.0274),
+                initialCenter: const GeoPoint(6.4382, 80.0274),
                 initialZoom: 14,
-                markers: {},
+                markers: const {},
               ),
             ),
           ),

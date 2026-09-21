@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../Atoms/app_skeleton.dart';
 import '../Atoms/category_widget.dart';
+import '../Atoms/failure_states.dart';
 import '../../../app_design.dart';
 import '../../../app_responsive.dart';
 import '../../../Services/Providers/product.provider.dart';
@@ -35,11 +36,11 @@ class _HomeScreenCateogoryWidgetState extends State<HomeScreenCateogoryWidget> {
         ? 8
         : (responsive.isTablet ? 6 : 4);
 
-    final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+    final gridDelegate = CategoryTileGridDelegate(
       crossAxisCount: crossAxisCount,
       mainAxisSpacing: AppSpacing.md,
       crossAxisSpacing: AppSpacing.sm,
-      childAspectRatio: 0.72,
+      labelHeight: CategoryTileGridDelegate.labelHeightFor(context),
     );
 
     return Consumer<ProductProvider>(
@@ -57,20 +58,15 @@ class _HomeScreenCateogoryWidgetState extends State<HomeScreenCateogoryWidget> {
           );
         }
 
-        if (productProvider.categoriesError != null) {
+        final failure = productProvider.categoriesFailure;
+        if (failure != null) {
           return SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: AppSpacing.xxl,
-                horizontal: AppSpacing.lg,
-              ),
-              child: Center(
-                child: Text(
-                  "We couldn't load categories just now. Pull down to retry.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-              ),
+            child: FailureState(
+              failure: failure,
+              title: "We couldn't load categories",
+              retryKey: const Key('categories-retry'),
+              scrollable: false,
+              onRetry: () => productProvider.loadCategories(force: true),
             ),
           );
         }

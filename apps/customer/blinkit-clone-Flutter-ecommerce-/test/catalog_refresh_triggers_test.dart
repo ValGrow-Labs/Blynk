@@ -8,6 +8,7 @@ import 'package:ecom/Screens/home_screen.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
 import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
+import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
 import 'package:ecom/app_theme.dart';
 
@@ -78,6 +79,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => CartProvider()),
           ChangeNotifierProvider(create: (_) => AddressProvider()),
           ChangeNotifierProvider(create: (_) => AuthProvider()),
+          // The shell reads the orders in memory for its Orders badge.
+          ChangeNotifierProvider(create: (_) => OrderProvider()),
         ],
         child: MaterialApp(theme: AppTheme.appTHeme, home: child),
       );

@@ -7,44 +7,74 @@ import 'package:provider/single_child_widget.dart';
 import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
+import 'package:ecom/Services/Providers/connectivity_hint.dart';
+import 'package:ecom/Services/app_config.dart';
+import 'package:ecom/Services/global_error_handling.dart';
+import 'package:ecom/Screens/config_problem_screen.dart';
 import 'package:ecom/Services/Providers/location.provider.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
 import 'package:ecom/app_theme.dart';
 import 'package:ecom/route_generator.dart';
+import 'package:ecom/Screens/session_gate.dart';
 
-// Shared so lib/UI/Widgets/Atoms/app_toast.dart can show a SnackBar on
-// platforms fluttertoast doesn't support, without needing a BuildContext.
+// Shared so lib/UI/Widgets/Atoms/app_toast.dart can show a SnackBar
+// without needing a BuildContext.
 final rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
+// Lets the session-end listener (above the navigator) send the customer to
+// the login screen without a BuildContext under the navigator.
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Before anything can throw: uncaught errors are logged, and a release build
+  // shows a plain fallback instead of the framework's error box.
+  GlobalErrorHandling.install(navigatorKey: rootNavigatorKey);
 
   // Load environment variables (.env file)
   try {
     await dotenv.load(fileName: ".env");
   } catch (_) {
-    // If .env is not found or fails to load, fallback defaults in ApiService are used
+    // No .env (e.g. a release build configured with --dart-define): AppConfig
+    // treats the values as unset and applies its own rules.
   }
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.white,
-      statusBarIconBrightness: Brightness.dark,
-    ),
-  );
+  final config = AppConfig.current();
+  // A release build with no usable server address must not start (and must
+  // never quietly talk to localhost).
+  if (config.validate() == null) {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
 
-  runApp(
-    MultiProvider(
-      providers: buildAppProviders(),
-      child: const MainApp(),
-    ),
+  runApp(buildRootWidget(config));
+}
+
+/// What the app shows first: the "not configured" screen when [config] is
+/// unusable (release only), otherwise the real app. A function so a test can
+/// check the gate without running [main].
+Widget buildRootWidget(AppConfig config) {
+  final problem = config.validate();
+  if (problem != null) return ConfigErrorApp(problem: problem);
+  return MultiProvider(
+    providers: buildAppProviders(),
+    child: const MainApp(),
   );
 }
 
 /// The app's provider tree. A function (not inline in [main]) so a test can
 /// check what is registered without running the app.
 List<SingleChildWidget> buildAppProviders() => [
+      // Learns "offline" from the app's own failed requests (no plugin).
+      ChangeNotifierProvider<ConnectivityHint>(
+        create: (_) => ConnectivityHint()..attach(),
+      ),
       ChangeNotifierProvider<AuthProvider>(
         create: (_) => AuthProvider()..restoreSession(),
       ),
@@ -77,6 +107,12 @@ class MainApp extends StatelessWidget {
       title: 'Blynk',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
+      navigatorKey: rootNavigatorKey,
+      builder: (context, child) => SessionEndListener(
+        navigatorKey: rootNavigatorKey,
+        messengerKey: rootScaffoldMessengerKey,
+        child: child ?? const SizedBox.shrink(),
+      ),
       onGenerateRoute: AppRouter.generateRoute,
       initialRoute: '/',
       theme: AppTheme.appTHeme,

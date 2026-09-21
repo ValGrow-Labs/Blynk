@@ -5,6 +5,7 @@ import '../Services/Providers/product.provider.dart';
 import '../UI/Widgets/Atoms/app_skeleton.dart';
 import '../UI/Widgets/Atoms/app_state_views.dart';
 import '../UI/Widgets/Atoms/category_widget.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../app_design.dart';
 import '../app_responsive.dart';
 
@@ -44,23 +45,24 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           child: Consumer<ProductProvider>(
             builder: (context, productProvider, _) {
               if (productProvider.isLoadingCategories) {
-                return GridView.builder(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  gridDelegate: _delegate(crossAxisCount),
-                  itemCount: 12,
-                  itemBuilder: (_, __) => const CategoryTileSkeleton(),
+                // One shared pulse for all twelve tiles.
+                return SkeletonScope(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    gridDelegate: _delegate(context, crossAxisCount),
+                    itemCount: 12,
+                    itemBuilder: (_, __) => const CategoryTileSkeleton(),
+                  ),
                 );
               }
 
-              if (productProvider.categoriesError != null) {
-                return AppStateView(
-                  icon: Icons.wifi_off_rounded,
+              final failure = productProvider.categoriesFailure;
+              if (failure != null) {
+                return FailureState(
+                  failure: failure,
                   title: "We couldn't load categories",
-                  message:
-                      'Check your connection and try again - your cart is safe.',
-                  actionLabel: 'Try Again',
-                  onAction: () =>
-                      productProvider.loadCategories(force: true),
+                  scrollable: false,
+                  onRetry: () => productProvider.loadCategories(force: true),
                 );
               }
 
@@ -82,7 +84,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  gridDelegate: _delegate(crossAxisCount),
+                  gridDelegate: _delegate(context, crossAxisCount),
                   itemCount: categories.length,
                   itemBuilder: (context, index) =>
                       CategoryWidget(category: categories[index]),
@@ -95,12 +97,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  SliverGridDelegate _delegate(int crossAxisCount) {
-    return SliverGridDelegateWithFixedCrossAxisCount(
+  SliverGridDelegate _delegate(BuildContext context, int crossAxisCount) {
+    return CategoryTileGridDelegate(
       crossAxisCount: crossAxisCount,
       mainAxisSpacing: AppSpacing.lg,
       crossAxisSpacing: AppSpacing.md,
-      childAspectRatio: 0.78,
+      labelHeight: CategoryTileGridDelegate.labelHeightFor(context),
     );
   }
 }

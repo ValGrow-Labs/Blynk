@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import 'package:ecom/app_colors.dart';
 import '../Models/order_model.dart';
-import '../Services/Exceptions/api_exception.dart';
+import '../Services/app_errors.dart';
 import '../Services/Providers/location.provider.dart';
 import '../Services/Providers/order.provider.dart';
+import '../UI/Widgets/Atoms/app_state_views.dart';
 import '../UI/Widgets/Atoms/card_order_details.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../UI/Widgets/Organisms/map_provider.dart';
 import '../UI/Widgets/Organisms/order_bill_card.dart';
 import '../UI/Widgets/Organisms/order_cancel_section.dart';
@@ -15,6 +17,7 @@ import '../UI/Widgets/Organisms/order_summary_screen_product_details_card.dart';
 import '../UI/Widgets/Organisms/order_timeline.dart';
 import '../UI/Widgets/Organisms/order_tracking_map.dart';
 import '../app_design.dart';
+import '../app_responsive.dart';
 
 /// The backend's `delivery.assignment_status` once the rider has collected the
 /// order and is on the way (the value the API sends: exact, upper-case).
@@ -57,7 +60,7 @@ class OrderSummaryScreen extends StatefulWidget {
 
 class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBindingObserver {
   OrderModel? _order;
-  ApiException? _error;
+  CustomerError? _error;
   bool _loading = true;
 
   // Bumped by every _load(). A refetch can be triggered from three places
@@ -198,21 +201,14 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
         _loading = false;
       });
       _syncWatch(order);
-    } on ApiException catch (e) {
+    } catch (e) {
       if (!mounted || gen != _loadGeneration) return;
       setState(() {
-        _error = e;
+        _error = AppErrors.from(e);
         _loading = false;
       });
       // The order on screen is unchanged (stale but real); re-establish the
       // watch for it if a background trip stopped it.
-      _syncWatch(_order);
-    } catch (e) {
-      if (!mounted || gen != _loadGeneration) return;
-      setState(() {
-        _error = ApiException(500, e.toString());
-        _loading = false;
-      });
       _syncWatch(_order);
     }
   }
@@ -230,7 +226,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
       ),
       // Pull-to-refresh works from every state, including the error and
       // not-found ones - a scrollable list is always underneath.
-      body: RefreshIndicator(
+      body: ContentFrame(
+        maxWidth: 720,
+        gutter: false,
+        child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -243,19 +242,35 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
           children: order == null
               ? [
                   if (_loading)
-                    const _CenteredState(child: CircularProgressIndicator())
+                    const PullableState(
+                      child: AppStateView.loading('Loading your order'),
+                    )
                   else
                     // fetchOrder either returns an order or throws, so with
                     // no order and no load running there is always an error
                     // to show.
-                    _ErrorState(
-                      error: error ?? ApiException(500, 'Order was not returned by the server.'),
-                      onRetry: _load,
-                    ),
+                    _failureState(error ?? AppErrors.server),
                 ]
               : _sections(order, error),
         ),
       ),
+      ),
+    );
+  }
+
+  Widget _failureState(CustomerError failure) {
+    // A 404/400 is the backend's final answer about this id: retrying it
+    // would only ask the same question again, so there is no retry button.
+    if (failure.isNotFound || failure.kind == CustomerErrorKind.validation) {
+      return const PullableState(
+        child: AppStateView.notFound(title: 'This order could not be found.'),
+      );
+    }
+    return FailureState(
+      failure: failure,
+      title: "Couldn't load this order.",
+      retryKey: const Key('order-retry'),
+      onRetry: _load,
     );
   }
 
@@ -267,10 +282,14 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
   /// failed would leave the customer reading old state as if it were
   /// current, which matters most right after a cancel timeout, where the
   /// message promised "Checking your order...".
-  List<Widget> _sections(OrderModel order, ApiException? refreshError) {
+  List<Widget> _sections(OrderModel order, CustomerError? refreshError) {
     return [
       if (refreshError != null) ...[
-        const _RefreshFailedNotice(),
+        RefreshFailedNotice(
+          key: const Key('order-refresh-failed'),
+          message: "Couldn't refresh this order. Pull down to try again.",
+          offline: refreshError.isOffline,
+        ),
         const SizedBox(height: AppSpacing.md),
       ],
       // 1. Status, directly on the page background rather than in a card.
@@ -312,118 +331,5 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
         ),
       ],
     ];
-  }
-}
-
-/// A state (loading/error) is still a single item inside the scrollable
-/// ListView, tall enough that a downward drag always reaches the
-/// RefreshIndicator's trigger distance.
-class _CenteredState extends StatelessWidget {
-  const _CenteredState({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height * 0.72),
-      child: Center(child: child),
-    );
-  }
-}
-
-/// Shown above an order that is already on screen when a refetch failed.
-/// Quiet, not alarming (the order below it is still real), and it offers the
-/// gesture that is already there rather than a button that would retry on
-/// its own - no timers, no auto-retry.
-class _RefreshFailedNotice extends StatelessWidget {
-  const _RefreshFailedNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const Key('order-refresh-failed'),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      // Deliberately not a card: a tighter radius and a muted border, so it
-      // reads as a strip above the order rather than as a fifth data card.
-      // White (not AppSurfaces.tile) because the page behind it is
-      // #EDF2F8 - a tile fill there would be 1.01:1, i.e. no body at all.
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.fieldBorder,
-        color: Colors.white,
-        border: Border.all(color: AppTextColors.muted),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.cloud_off_outlined, size: 18, color: AppTextColors.problem),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              "Couldn't refresh this order. Pull down to try again.",
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppTextColors.primary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.error, required this.onRetry});
-
-  final ApiException error;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    // A 404/400 is the backend's final answer about this id: retrying it
-    // would only ask the same question again, so there is no retry button.
-    final notFound = error.statusCode == 404 || error.statusCode == 400;
-
-    return _CenteredState(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              notFound ? Icons.receipt_long_outlined : Icons.error_outline,
-              size: 48,
-              color: AppTextColors.muted,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              notFound ? 'This order could not be found.' : "Couldn't load this order.",
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w700, color: AppTextColors.primary),
-            ),
-            if (!notFound) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                error.message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTextColors.secondary),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              ElevatedButton(
-                key: const Key('order-retry'),
-                onPressed: onRetry,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryYellowColor,
-                  foregroundColor: AppTextColors.onYellow,
-                  minimumSize: const Size(0, 48),
-                ),
-                child: const Text('Try again'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -25,6 +25,7 @@ import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/Models/order_model.dart';
 import 'package:ecom/Screens/add_edit_address_screen.dart';
 import 'package:ecom/Screens/checkout_screen.dart';
+import 'package:ecom/Screens/customer_shell.dart';
 import 'package:ecom/Screens/search_screen.dart';
 import 'package:ecom/Screens/product_details_screen.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
@@ -254,7 +255,7 @@ void main() {
       expect(find.byType(SearchScreen), findsNothing);
       expect(find.text('1 item'), findsOneWidget);
 
-      await _tap(tester, find.text('View Cart'));
+      await _tap(tester, find.text('View cart'));
       await _settle(tester, maxPumps: 15);
       expect(find.text('Your Cart'), findsOneWidget);
       expect(find.text('1 item'), findsWidgets);
@@ -399,12 +400,15 @@ void main() {
               'after a real cancellation the screen must re-fetch and stop offering Cancel');
 
       // ================= 10. Orders list shows the real order =================
-      rootNavigator.pushNamed('/orders');
+      // Orders is a tab of the shell now, not a pushed route.
+      CustomerShell.selectTab(tester.element(find.byType(Scaffold).first), 1);
       await _settle(tester); // real GET /orders
-      expect(find.textContaining(placed.orderNumber), findsOneWidget);
-      expect(find.textContaining('Cancelled'), findsOneWidget,
+      // Every tab stays mounted (IndexedStack has no Offstage): hitTestable()
+      // proves the Orders tab is the one on screen.
+      expect(find.textContaining(placed.orderNumber).hitTestable(), findsOneWidget);
+      expect(find.textContaining('Cancelled').hitTestable(), findsOneWidget,
           reason: 'orders list should reflect the real, backend-confirmed cancelled status');
-      rootNavigator.pop();
+      CustomerShell.selectTab(tester.element(find.byType(Scaffold).first), 0);
       await _settle(tester, maxPumps: 10);
 
       // ================= 11. Real logout =================

@@ -27,9 +27,11 @@ class AddNewAddressCard extends StatelessWidget {
               color: AppColors.primaryGreenColor,
             ),
             SizedBox(width: 8),
-            Text(
-              'Add new address',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                'Add new address',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             )
           ],
         ),

@@ -6,14 +6,17 @@ import 'package:provider/provider.dart';
 import '../Models/product_model.dart';
 import '../Services/Providers/cart.provider.dart';
 import '../Services/Providers/product.provider.dart';
+import '../Services/app_errors.dart';
 import '../UI/Widgets/Atoms/add_to_cart_button.dart';
 import '../UI/Widgets/Atoms/app_skeleton.dart';
 import '../UI/Widgets/Atoms/app_state_views.dart';
 import '../UI/Widgets/Atoms/card_product.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../UI/Widgets/Organisms/bottom_cart_container.dart';
 import '../app_colors.dart';
 import '../app_design.dart';
-import '../constants.dart';
+import '../design/tokens.dart';
+import '../UI/Widgets/Atoms/money_text.dart';
 
 /// Full product page, opened from any ProductCard (Home, Categories,
 /// Search). The tapped product renders immediately, then the page asks
@@ -78,13 +81,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
     } else if (product == null) {
       body = failure == ProductDetailFailure.network
-          ? AppStateView(
-              icon: Icons.wifi_off_rounded,
+          ? FailureState(
+              failure: provider.productDetailError(widget.productId) ?? AppErrors.unknown,
               title: "Couldn't load this product",
-              message: 'Check your connection and try again.',
-              actionLabel: 'Try Again',
-              onAction: _load,
-              accent: AppTextColors.secondary,
+              scrollable: false,
+              onRetry: _load,
             )
           : _DetailsSkeleton(wide: wide);
     } else {
@@ -119,9 +120,8 @@ class _DetailsBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final content = wide
-            ? _wideLayout(constraints)
-            : _narrowLayout(constraints);
+        final content =
+            wide ? _wideLayout(constraints) : _narrowLayout(constraints);
 
         return Stack(
           children: [
@@ -290,13 +290,8 @@ class _ProductSummary extends StatelessWidget {
       children: [
         if (product.categoryName.isNotEmpty) ...[
           Text(
-            product.categoryName.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-              color: AppTextColors.secondary,
-            ),
+            product.categoryName,
+            style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
           ),
           const SizedBox(height: AppSpacing.xs + 2),
         ],
@@ -328,8 +323,8 @@ class _ProductSummary extends StatelessWidget {
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.sm,
           children: [
-            Text(
-              _price(product),
+            MoneyText(
+              product.sellingPrice,
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
@@ -343,9 +338,6 @@ class _ProductSummary extends StatelessWidget {
     );
   }
 }
-
-String _price(ProductModel product) =>
-    '$appCurrencySybmbol ${product.sellingPrice.toStringAsFixed(0)}';
 
 class _UnavailablePill extends StatelessWidget {
   const _UnavailablePill();
@@ -565,8 +557,8 @@ class _BottomCtaBar extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _price(product),
+                      MoneyText(
+                        product.sellingPrice,
                         maxLines: 1,
                         style: const TextStyle(
                           fontSize: 18,
@@ -672,54 +664,57 @@ class _DetailsSkeleton extends StatelessWidget {
 
     return Semantics(
       label: 'Loading product',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (!wide) {
+      // One shared pulse for every block below.
+      child: SkeletonScope(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (!wide) {
+              final size = math.min(
+                constraints.maxWidth - AppSpacing.lg * 2,
+                constraints.maxHeight * 0.48,
+              );
+              return ListView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  AppSkeleton(height: size, radius: AppRadius.sheet),
+                  const SizedBox(height: AppSpacing.xl),
+                  info,
+                ],
+              );
+            }
+            final width =
+                math.min(constraints.maxWidth, 1120.0) - AppSpacing.xxxl * 2;
             final size = math.min(
-              constraints.maxWidth - AppSpacing.lg * 2,
-              constraints.maxHeight * 0.48,
+              (width - 48) * 0.45,
+              constraints.maxHeight - AppSpacing.xxl * 2 - AppSpacing.lg,
             );
-            return ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                AppSkeleton(height: size, radius: AppRadius.sheet),
-                const SizedBox(height: AppSpacing.xl),
-                info,
-              ],
-            );
-          }
-          final width = math.min(constraints.maxWidth, 1120.0) -
-              AppSpacing.xxxl * 2;
-          final size = math.min(
-            (width - 48) * 0.45,
-            constraints.maxHeight - AppSpacing.xxl * 2 - AppSpacing.lg,
-          );
-          return Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xxxl,
-              vertical: AppSpacing.xxl,
-            ),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: width,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppSkeleton(
-                      width: size,
-                      height: size,
-                      radius: AppRadius.sheet,
-                    ),
-                    const SizedBox(width: 48),
-                    const Expanded(child: info),
-                  ],
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xxxl,
+                vertical: AppSpacing.xxl,
+              ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: width,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppSkeleton(
+                        width: size,
+                        height: size,
+                        radius: AppRadius.sheet,
+                      ),
+                      const SizedBox(width: 48),
+                      const Expanded(child: info),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

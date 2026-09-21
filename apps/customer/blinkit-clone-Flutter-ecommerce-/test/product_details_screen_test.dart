@@ -143,7 +143,8 @@ void main() {
       expect(find.byType(AppSkeleton), findsNothing);
       expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
       expect(find.text('1 L · Tetra Pack'), findsOneWidget);
-      expect(find.text('DAIRY & EGGS'), findsOneWidget);
+      expect(find.text('Dairy & Eggs'), findsWidgets);
+      expect(find.text('DAIRY & EGGS'), findsNothing, reason: 'no all-caps eyebrow');
       // Once in the summary, once in the pinned phone CTA bar.
       expect(find.text('Rs. 540'), findsNWidgets(2));
       expect(find.text('Add to Cart'), findsOneWidget);
@@ -207,7 +208,7 @@ void main() {
   });
 
   group('failure states', () {
-    testWidgets('network failure: friendly error, Try Again recovers',
+    testWidgets('network failure: friendly error, Try again recovers',
         (tester) async {
       catalog.onDetail = (_) async =>
           throw ApiException(500, 'connect ECONNREFUSED 127.0.0.1:5432');
@@ -220,7 +221,7 @@ void main() {
       expect(find.text('Add to Cart'), findsNothing);
 
       catalog.onDetail = null;
-      await tester.tap(find.text('Try Again'));
+      await tester.tap(find.text('Try again'));
       await settle(tester);
       expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
       expect(catalog.detailCalls, hasLength(2));
@@ -273,14 +274,14 @@ void main() {
       expect(find.text('1 in cart'), findsOneWidget);
       // Global floating cart reflects it.
       expect(find.text('1 item'), findsOneWidget);
-      expect(find.text('View Cart'), findsOneWidget);
+      expect(find.text('View cart'), findsOneWidget);
 
       await tester.tap(find.bySemanticsLabel('Add one more Kotmale Fresh Milk 1L'));
       await settle(tester);
       expect(cart.quantityOf(_milkId), 2);
       expect(find.text('2 in cart'), findsOneWidget);
       expect(find.text('2 items'), findsOneWidget);
-      expect(find.text('Rs. 1080'), findsOneWidget);
+      expect(find.text('Rs. 1,080'), findsOneWidget);
 
       await tester.tap(find.bySemanticsLabel('Remove one Kotmale Fresh Milk 1L'));
       await settle(tester);
@@ -307,13 +308,13 @@ void main() {
       expect(find.text('3 in cart'), findsOneWidget);
     });
 
-    testWidgets('View Cart on the floating bar opens the cart', (tester) async {
+    testWidgets('View cart on the floating bar opens the cart', (tester) async {
       await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
       await settle(tester);
       await tester.tap(find.text('Add to Cart'));
       await settle(tester);
 
-      await tester.tap(find.text('View Cart'));
+      await tester.tap(find.text('View cart'));
       await settle(tester);
       expect(find.text('route:/cart'), findsOneWidget);
     });

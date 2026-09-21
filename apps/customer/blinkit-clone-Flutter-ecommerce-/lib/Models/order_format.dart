@@ -1,4 +1,5 @@
 // Small local formatting helpers - no `intl` dependency (Global Constraints).
+import '../Services/store_info.dart';
 import 'order_model.dart';
 import 'order_status_labels.dart';
 
@@ -16,9 +17,12 @@ const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /// rounded-to-cents integer, so a value like 999.999 (which displays as
 /// 1000.00) is correctly treated as whole rather than showing spurious
 /// cents from the pre-rounding fractional part.
-String formatLkr(double amount) {
+///
+/// [alwaysShowCents] keeps the two decimals on a whole amount ('Rs. 1,955.00')
+/// for right-aligned bill columns; it never changes the digits.
+String formatLkr(double amount, {bool alwaysShowCents = false}) {
   final cents = (amount * 100).round();
-  final whole = cents % 100 == 0;
+  final whole = cents % 100 == 0 && !alwaysShowCents;
   final wholePart = (cents ~/ 100).toString();
   final withCommas = wholePart.replaceAllMapped(
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
@@ -105,5 +109,5 @@ String paymentLine(OrderModel o) {
   final failedToCollect =
       o.status == OrderStatus.failed || o.status == OrderStatus.customerUnavailable;
   if (failedToCollect) return 'Not paid';
-  return 'Cash on delivery — pay ${formatLkr(o.totalAmount)} to the rider';
+  return '${StoreInfo.paymentMethodLabel} — pay ${formatLkr(o.totalAmount)} to the rider';
 }

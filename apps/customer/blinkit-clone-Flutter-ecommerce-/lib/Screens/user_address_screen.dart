@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../UI/Widgets/Atoms/card_add_address.dart';
 import '../UI/Widgets/Atoms/card_address_screen.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../Services/Providers/address.provider.dart';
+import '../app_responsive.dart';
 
 class UserAddressScreen extends StatefulWidget {
   const UserAddressScreen({super.key});
@@ -29,7 +31,10 @@ class _UserAddressScreenState extends State<UserAddressScreen> {
       appBar: AppBar(
         title: const Text('My Addresses'),
       ),
-      body: Consumer<AddressProvider>(
+      body: ContentFrame(
+        maxWidth: 720,
+        gutter: false,
+        child: Consumer<AddressProvider>(
         builder: (context, addressProvider, _) {
           return RefreshIndicator(
             onRefresh: addressProvider.loadAddresses,
@@ -42,15 +47,13 @@ class _UserAddressScreenState extends State<UserAddressScreen> {
                     padding: EdgeInsets.symmetric(vertical: 32.0),
                     child: Center(child: CircularProgressIndicator()),
                   )
-                else if (addressProvider.errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32.0),
-                    child: Center(
-                      child: Text(
-                        'Could not load your addresses. Pull to refresh.',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ),
+                else if (addressProvider.failure != null)
+                  FailureState(
+                    failure: addressProvider.failure!,
+                    title: "We couldn't load your addresses",
+                    retryKey: const Key('addresses-retry'),
+                    scrollable: false,
+                    onRetry: addressProvider.loadAddresses,
                   )
                 else if (addressProvider.addresses.isEmpty)
                   Padding(
@@ -70,6 +73,7 @@ class _UserAddressScreenState extends State<UserAddressScreen> {
             ),
           );
         },
+      ),
       ),
     );
   }

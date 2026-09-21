@@ -3,9 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../../Services/Providers/cart.provider.dart';
 import '../../../app_design.dart';
-import '../../../constants.dart';
+import '../../../Services/store_info.dart';
+import '../Atoms/money_text.dart';
 
-/// Order Summary: subtotal from CartProvider plus the Rs. 70 delivery fee.
+/// Order Summary: subtotal from CartProvider plus the flat delivery fee.
 ///
 /// These are the prices the customer saw while shopping. The backend
 /// re-prices the order and computes the real total when it's placed (see
@@ -22,7 +23,7 @@ class CartPriceDetailWidget extends StatelessWidget {
     final cart = context.watch<CartProvider>();
     final subtotal = cart.subtotal;
     final itemCount = cart.itemCount;
-    final total = subtotal + kDeliveryFeeEstimate;
+    final total = subtotal + StoreInfo.flatDeliveryFee;
 
     return Container(
       decoration: appCardDecoration(),
@@ -44,12 +45,12 @@ class CartPriceDetailWidget extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           _SummaryRow(
             label: 'Subtotal ($itemCount ${itemCount == 1 ? 'item' : 'items'})',
-            value: _rs(subtotal),
+            amount: subtotal,
           ),
           const SizedBox(height: AppSpacing.sm),
-          _SummaryRow(
+          const _SummaryRow(
             label: 'Delivery Fee',
-            value: _rs(kDeliveryFeeEstimate),
+            amount: StoreInfo.flatDeliveryFee,
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -69,8 +70,8 @@ class CartPriceDetailWidget extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                _rs(total),
+              MoneyText(
+                total,
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -81,7 +82,7 @@ class CartPriceDetailWidget extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           const Text(
-            'Cash on Delivery · final amount is confirmed when you place the order.',
+            '${StoreInfo.paymentMethodLabel} · final amount is confirmed when you place the order.',
             style: TextStyle(fontSize: 12, color: AppTextColors.secondary),
           ),
           if (footer != null) ...[
@@ -94,13 +95,11 @@ class CartPriceDetailWidget extends StatelessWidget {
   }
 }
 
-String _rs(double amount) => '$appCurrencySybmbol ${amount.toStringAsFixed(0)}';
-
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.label, required this.value});
+  const _SummaryRow({required this.label, required this.amount});
 
   final String label;
-  final String value;
+  final double amount;
 
   @override
   Widget build(BuildContext context) {
@@ -112,8 +111,8 @@ class _SummaryRow extends StatelessWidget {
             style: const TextStyle(fontSize: 14, color: AppTextColors.secondary),
           ),
         ),
-        Text(
-          value,
+        MoneyText(
+          amount,
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,

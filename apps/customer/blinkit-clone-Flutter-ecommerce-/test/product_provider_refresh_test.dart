@@ -244,7 +244,7 @@ void main() {
       await products.refreshCatalog(force: true);
 
       expect(products.productsFor('dairy-eggs').single.sellingPrice, 540);
-      expect(products.productsError, isNull);
+      expect(products.productsErrorFor('dairy-eggs'), isNull);
       expect(products.categoriesError, isNull);
       expect(products.categories, isNotEmpty);
     });

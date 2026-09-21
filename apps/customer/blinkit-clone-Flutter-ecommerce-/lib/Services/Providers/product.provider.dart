@@ -5,6 +5,7 @@ import 'package:ecom/Models/category_model.dart';
 import 'package:ecom/Models/product_model.dart';
 import 'package:ecom/Models/promotion_model.dart';
 import 'package:ecom/Services/Exceptions/api_exception.dart';
+import 'package:ecom/Services/app_errors.dart';
 
 /// GET against the catalog API. Defaults to the app's single ApiService;
 /// injectable only so tests can replay captured real backend JSON.
@@ -39,18 +40,22 @@ class ProductProvider extends ChangeNotifier {
 
   List<CategoryModel> _categories = [];
   bool _isLoadingCategories = false;
-  String? _categoriesError;
+  CustomerError? _categoriesFailure;
 
   // Products are cached per category slug (or '' for "all") so switching
   // between an already-loaded category/tab doesn't refetch every time.
   final Map<String, List<ProductModel>> _productsByCategory = {};
   final Set<String> _loadingKeys = {};
-  String? _productsError;
+  // Keyed like _productsByCategory, so a failure in one category can never
+  // show over another category's data. Set only by a load that had nothing
+  // to show (a failed refresh keeps the last good list) and cleared by the
+  // next successful load of that same key.
+  final Map<String, CustomerError> _productsFailures = {};
 
   List<ProductModel> _searchResults = [];
   bool _isSearching = false;
   bool _isLoadingMoreSearch = false;
-  String? _searchError;
+  CustomerError? _searchFailure;
   String _lastQuery = '';
   String? _searchCategorySlug;
   int _searchTotal = 0;
@@ -62,13 +67,20 @@ class ProductProvider extends ChangeNotifier {
 
   List<CategoryModel> get categories => _categories;
   bool get isLoadingCategories => _isLoadingCategories;
-  String? get categoriesError => _categoriesError;
+  String? get categoriesError => _categoriesFailure?.message;
+  CustomerError? get categoriesFailure => _categoriesFailure;
 
-  String? get productsError => _productsError;
+  /// The customer-facing failure of the last empty-handed load of one
+  /// category ('' is "all products"), or null.
+  CustomerError? productsFailureFor(String categorySlug) =>
+      _productsFailures[categorySlug];
+  String? productsErrorFor(String categorySlug) =>
+      _productsFailures[categorySlug]?.message;
   List<ProductModel> get searchResults => _searchResults;
   bool get isSearching => _isSearching;
   bool get isLoadingMoreSearch => _isLoadingMoreSearch;
-  String? get searchError => _searchError;
+  String? get searchError => _searchFailure?.message;
+  CustomerError? get searchFailure => _searchFailure;
   String get lastQuery => _lastQuery;
   String? get searchCategorySlug => _searchCategorySlug;
 
@@ -121,10 +133,12 @@ class ProductProvider extends ChangeNotifier {
   final Map<String, ProductModel> _productDetails = {};
   final Set<String> _loadingDetailIds = {};
   final Map<String, ProductDetailFailure> _detailFailures = {};
+  final Map<String, CustomerError> _detailErrors = {};
 
   ProductModel? productDetail(String id) => _productDetails[id];
   bool isLoadingProductDetail(String id) => _loadingDetailIds.contains(id);
   ProductDetailFailure? productDetailFailure(String id) => _detailFailures[id];
+  CustomerError? productDetailError(String id) => _detailErrors[id];
 
   List<ProductModel> productsFor(String categorySlug) =>
       _productsByCategory[categorySlug] ?? const [];
@@ -140,7 +154,7 @@ class ProductProvider extends ChangeNotifier {
     final isFirstLoad = _categories.isEmpty;
     if (isFirstLoad) {
       _isLoadingCategories = true;
-      _categoriesError = null;
+      _categoriesFailure = null;
       notifyListeners();
     }
 
@@ -152,13 +166,11 @@ class ProductProvider extends ChangeNotifier {
       _categories = rawCategories
           .map((c) => CategoryModel.fromJson(c as Map<String, dynamic>))
           .toList();
-      _categoriesError = null;
+      _categoriesFailure = null;
     } catch (e) {
       // A failed refresh keeps the last good list rather than replacing it
       // with an error; only a first load has nothing better to show.
-      if (isFirstLoad) {
-        _categoriesError = e is ApiException ? e.message : e.toString();
-      }
+      if (isFirstLoad) _categoriesFailure = AppErrors.from(e);
     } finally {
       _isLoadingCategories = false;
       notifyListeners();
@@ -175,7 +187,7 @@ class ProductProvider extends ChangeNotifier {
     // Same rule as categories: only a first load shows the skeleton rail.
     if (!hasData) {
       _loadingKeys.add(key);
-      _productsError = null;
+      _productsFailures.remove(key);
       notifyListeners();
     }
 
@@ -191,10 +203,9 @@ class ProductProvider extends ChangeNotifier {
         (data ?? const {}).cast<String, dynamic>(),
       );
       _productsByCategory[key] = page.products;
+      _productsFailures.remove(key);
     } catch (e) {
-      if (!hasData) {
-        _productsError = e is ApiException ? e.message : e.toString();
-      }
+      if (!hasData) _productsFailures[key] = AppErrors.from(e);
     } finally {
       _loadingKeys.remove(key);
       notifyListeners();
@@ -260,6 +271,7 @@ class ProductProvider extends ChangeNotifier {
 
     _loadingDetailIds.add(id);
     _detailFailures.remove(id);
+    _detailErrors.remove(id);
     notifyListeners();
 
     try {
@@ -274,6 +286,7 @@ class ProductProvider extends ChangeNotifier {
       // The backend answers 404 for deleted/deactivated products; that is a
       // different message to the customer than a dropped connection.
       final notFound = e is ApiException && e.statusCode == 404;
+      _detailErrors[id] = AppErrors.from(e);
       _detailFailures[id] =
           notFound ? ProductDetailFailure.notFound : ProductDetailFailure.network;
       if (notFound) _syncListsWith(id, null);
@@ -307,7 +320,7 @@ class ProductProvider extends ChangeNotifier {
     _lastQuery = trimmed;
     _searchCategorySlug = categorySlug;
     _searchResults = [];
-    _searchError = null;
+    _searchFailure = null;
     _searchTotal = 0;
     _searchPage = 1;
     _searchTotalPages = 1;
@@ -331,7 +344,7 @@ class ProductProvider extends ChangeNotifier {
       _searchTotalPages = page.totalPages;
     } catch (e) {
       if (generation != _searchGeneration) return;
-      _searchError = e is ApiException ? e.message : e.toString();
+      _searchFailure = AppErrors.from(e);
     } finally {
       if (generation == _searchGeneration) {
         _isSearching = false;
@@ -380,7 +393,7 @@ class ProductProvider extends ChangeNotifier {
     _lastQuery = '';
     _searchCategorySlug = null;
     _searchResults = [];
-    _searchError = null;
+    _searchFailure = null;
     _searchTotal = 0;
     _searchPage = 1;
     _searchTotalPages = 1;

@@ -127,7 +127,7 @@ class _OrderCancelSectionState extends State<OrderCancelSection> {
                 onPressed: () => Navigator.of(sheetContext).pop(true),
                 style: TextButton.styleFrom(
                   foregroundColor: AppTextColors.problem,
-                  side: const BorderSide(color: AppSurfaces.border),
+                  side: const BorderSide(color: AppTextColors.problem),
                   minimumSize: const Size.fromHeight(48),
                   shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonBorder),
                 ),

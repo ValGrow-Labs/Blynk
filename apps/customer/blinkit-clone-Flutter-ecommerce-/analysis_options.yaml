@@ -8,3 +8,9 @@ analyzer:
     - macos/**
     - linux/**
 include: package:flutter_lints/flutter.yaml
+
+# Dart 3.12 language version (required by google_maps_flutter_android) makes this lint
+# suggest private named parameters, which would rename constructor arguments.
+linter:
+  rules:
+    prefer_initializing_formals: false

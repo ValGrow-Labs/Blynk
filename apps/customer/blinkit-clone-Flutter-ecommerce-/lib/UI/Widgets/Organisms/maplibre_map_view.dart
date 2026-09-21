@@ -33,6 +33,7 @@ import 'package:ecom/app_design.dart';
 import 'map_marker_logic.dart';
 import 'map_provider.dart';
 import 'map_tile_config.dart';
+import 'map_unavailable_card.dart';
 import 'order_tracking_map.dart' show mapAttributionText;
 
 /// Padding (logical px) around the two markers when the camera fits them.
@@ -250,7 +251,7 @@ class _TrackingMapBodyState extends State<_TrackingMapBody> {
 
   @override
   Widget build(BuildContext context) {
-    if (_styleFailed) return const _MapUnavailable();
+    if (_styleFailed) return const MapUnavailableCard();
     final style = _style;
     if (style == null) return const ColoredBox(color: AppSurfaces.tile);
 
@@ -282,38 +283,6 @@ class _TrackingMapBodyState extends State<_TrackingMapBody> {
       gestureRecognizers: {
         Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
       },
-    );
-  }
-}
-
-/// Shown when the style or tile URL cannot be prepared: an honest label, not a
-/// fake map. Sits under the attribution overlay drawn by the caller.
-class _MapUnavailable extends StatelessWidget {
-  const _MapUnavailable();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const Key('map-unavailable'),
-      // A white, hairline-bordered surface like the app's other cards: the old
-      // tile grey was 1.00:1 against the order page, so the box disappeared.
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppSurfaces.border),
-      ),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.map_outlined, color: AppTextColors.onBackground, size: 28),
-          SizedBox(height: AppSpacing.xs),
-          Text(
-            'Map unavailable',
-            style: TextStyle(color: AppTextColors.onBackground, fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -414,7 +383,7 @@ class _PickerMapBodyState extends State<_PickerMapBody> {
     final style = _style;
     final Widget map;
     if (_styleFailed) {
-      map = const _MapUnavailable();
+      map = const MapUnavailableCard();
     } else if (style == null) {
       map = const ColoredBox(color: AppSurfaces.tile);
     } else {

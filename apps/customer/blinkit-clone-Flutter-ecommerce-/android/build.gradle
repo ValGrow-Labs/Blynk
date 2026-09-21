@@ -1,16 +1,3 @@
-buildscript {
-    ext.kotlin_version = '1.7.10'
-    repositories {
-        google()
-        mavenCentral()
-    }
-
-    dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.0'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-    }
-}
-
 allprojects {
     repositories {
         google()
@@ -18,14 +5,45 @@ allprojects {
     }
 }
 
-rootProject.buildDir = '../build'
+def newBuildDir = rootProject.layout.buildDirectory.dir("../../build").get()
+rootProject.layout.buildDirectory.value(newBuildDir)
+
 subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
+    def newSubprojectBuildDir = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
-    project.evaluationDependsOn(':app')
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register("clean", Delete) {
-    delete rootProject.buildDir
+    delete rootProject.layout.buildDirectory
+}
+
+// Some Flutter plugins still hard-code an old compileSdk in their own
+// android/build.gradle (flutter_native_splash 31; flutter_secure_storage,
+// fluttertoast and share_plus 33). The AndroidX libraries on the app's
+// classpath (fragment 1.7.1, window 1.2.0, core 1.13.1, lifecycle 2.7.0, ...)
+// require compileSdk >= 34, so checkDebugAarMetadata fails for those modules.
+// Raise (never lower) every Android library module to the app's compileSdk.
+// This only changes which SDK stubs the library is compiled against; it does
+// not change targetSdk/minSdk or runtime behavior.
+subprojects { subproject ->
+    def raiseCompileSdk = {
+        if (subproject.plugins.hasPlugin("com.android.library")) {
+            def app = rootProject.findProject(":app")
+            def appCompileSdk = app?.extensions?.findByName("android")?.compileSdk
+            def target = appCompileSdk ?: 36
+            def current = subproject.android.compileSdk
+            if (current == null || current < target) {
+                subproject.android.compileSdk = target
+            }
+        }
+    }
+    // evaluationDependsOn(":app") above can evaluate a module early.
+    if (subproject.state.executed) {
+        raiseCompileSdk()
+    } else {
+        subproject.afterEvaluate { raiseCompileSdk() }
+    }
 }

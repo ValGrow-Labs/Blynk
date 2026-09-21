@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:ecom/app_colors.dart';
 import '../Models/category_model.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../UI/Widgets/Organisms/bottom_cart_container.dart';
 import '../UI/Widgets/Organisms/products_screen_grid.dart';
 import '../UI/Widgets/Organisms/products_screen_sub_category_list.dart';
@@ -61,12 +62,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
         final products = productProvider.productsFor(_activeSlug);
         final isLoading = productProvider.isLoadingProducts(_activeSlug);
+        // Per category: only this category's own failed first load shows here.
+        final failure = productProvider.productsFailureFor(_activeSlug);
 
         return Scaffold(
           backgroundColor: AppColors.greyWhiteColor,
           appBar: AppBar(
-            leadingWidth: 25,
-            automaticallyImplyLeading: true,
+                automaticallyImplyLeading: true,
             title: Text(title),
             actions: [
               IconButton(
@@ -109,15 +111,20 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     flex: 4,
                     child: Container(
                       margin: const EdgeInsets.symmetric(vertical: 10),
-                      child: productProvider.productsError != null
-                          ? Center(
-                              child: Text(
-                                'Something went wrong loading products.',
-                                style: TextStyle(color: Colors.grey.shade600),
-                              ),
-                            )
-                          : isLoading
-                              ? const Center(child: CircularProgressIndicator())
+                      child: isLoading
+                          ? buildProductsSkeletonGrid(context)
+                          : (failure != null && products.isEmpty)
+                              ? FailureState(
+                                  failure: failure,
+                                  title: "We couldn't load products",
+                                  retryKey: const Key('products-retry'),
+                                  scrollable: false,
+                                  onRetry: () => productProvider.loadProducts(
+                                    categorySlug:
+                                        _activeSlug.isEmpty ? null : _activeSlug,
+                                    force: true,
+                                  ),
+                                )
                               : buildProductsGrid(context, products),
                     ),
                   ),

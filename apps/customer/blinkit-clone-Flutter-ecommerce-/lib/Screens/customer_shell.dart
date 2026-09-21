@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../Services/Providers/cart.provider.dart';
+import '../Models/order_model.dart';
+import '../Services/Providers/auth.provider.dart';
+import '../Services/Providers/order.provider.dart';
 import '../Services/Providers/product.provider.dart';
-import '../app_colors.dart';
-import '../app_design.dart';
+import '../UI/Widgets/Organisms/adaptive_scaffold.dart';
+import '../UI/Widgets/Organisms/cart_bar.dart';
+import '../design/tokens.dart';
 import 'help_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
@@ -19,6 +22,10 @@ import 'user_orders_screen.dart';
 /// the foreground both ask ProductProvider to refresh, so edits made in the
 /// Admin app reach a customer who already has the app open.
 ///
+/// Navigation is an [AdaptiveScaffold] (bottom bar, rail or extended rail by
+/// width) and the one cart bar lives here, above the four tabs. Back on
+/// Orders, Help or Profile returns to Shop; back on Shop leaves the app.
+///
 /// Detail screens (product list, cart, order detail, address form) are still
 /// pushed on top of this shell as full routes, which is why they keep their
 /// own back buttons.
@@ -32,13 +39,18 @@ class CustomerShell extends StatefulWidget {
   @visibleForTesting
   final List<Widget>? tabs;
 
-  // Lets a pushed route (e.g. the empty cart) send the customer back to the
-  // Shop tab of the shell that's already underneath it.
-  static final _ShopTabRequests _tabRequests = _ShopTabRequests();
+  // Lets a pushed route (e.g. the empty cart) or another tab send the
+  // customer to a tab of the shell that's already underneath it.
+  static final _TabRequests _tabRequests = _TabRequests();
 
   /// Returns to the existing shell's Shop tab, or starts a fresh shell if
   /// this navigation stack doesn't have one (e.g. a deep-linked route).
-  static void openShop(BuildContext context) {
+  static void openShop(BuildContext context) => selectTab(context, 0);
+
+  /// Shows tab [index] (0 Shop, 1 Orders, 2 Help, 3 Profile) of the existing
+  /// shell, closing anything pushed above it; starts a shell on that tab if
+  /// this navigation stack doesn't have one.
+  static void selectTab(BuildContext context, int index) {
     final navigator = Navigator.of(context);
     var hasShell = false;
     navigator.popUntil((route) {
@@ -46,9 +58,9 @@ class CustomerShell extends StatefulWidget {
       return route.settings.name == '/home' || route.isFirst;
     });
     if (hasShell) {
-      _tabRequests.request();
+      _tabRequests.request(index);
     } else {
-      navigator.pushNamedAndRemoveUntil('/home', (_) => false);
+      navigator.pushNamedAndRemoveUntil('/home', (_) => false, arguments: index);
     }
   }
 
@@ -56,8 +68,13 @@ class CustomerShell extends StatefulWidget {
   State<CustomerShell> createState() => _CustomerShellState();
 }
 
-class _ShopTabRequests extends ChangeNotifier {
-  void request() => notifyListeners();
+class _TabRequests extends ChangeNotifier {
+  int index = 0;
+
+  void request(int tab) {
+    index = tab;
+    notifyListeners();
+  }
 }
 
 class _CustomerShellState extends State<CustomerShell>
@@ -87,13 +104,22 @@ class _CustomerShellState extends State<CustomerShell>
   // moment ago, so window focus flicker doesn't turn into polling.
   void _refreshCatalog() => context.read<ProductProvider>().refreshCatalog();
 
+  // Orders change on the server (a new order, a status move) while another tab
+  // is showing: selecting the tab asks again, unless a load just happened. A
+  // guest has no orders, so no request is made for them.
+  void _refreshOrders() {
+    if (!context.read<AuthProvider>().isAuthenticated) return;
+    context.read<OrderProvider>().refreshOrders();
+  }
+
   void _selectTab(int index) {
     if (index == 0 && _index != 0) _refreshCatalog();
+    if (index == 1 && _index != 1) _refreshOrders();
     setState(() => _index = index);
   }
 
   void _onTabRequest() {
-    if (mounted) _selectTab(0);
+    if (mounted) _selectTab(CustomerShell._tabRequests.index);
   }
 
   static const _tabs = [
@@ -103,173 +129,53 @@ class _CustomerShellState extends State<CustomerShell>
     ProfileScreen(),
   ];
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _index, children: widget.tabs ?? _tabs),
-      bottomNavigationBar: _BlynkBottomNav(
-        index: _index,
-        onChanged: _selectTab,
-      ),
-    );
-  }
-}
-
-class _BlynkBottomNav extends StatelessWidget {
-  const _BlynkBottomNav({required this.index, required this.onChanged});
-
-  final int index;
-  final ValueChanged<int> onChanged;
+  // Delivered, cancelled and failed orders are finished; anything else
+  // (including a problem that needs the customer) is still open.
+  static bool _isOpen(OrderModel o) =>
+      o.status != OrderStatus.delivered &&
+      o.status != OrderStatus.cancelled &&
+      o.status != OrderStatus.failed &&
+      o.status != OrderStatus.unknown;
 
   @override
   Widget build(BuildContext context) {
-    final cartCount = context.watch<CartProvider>().itemCount;
+    // Only the orders already in memory: the badge never triggers a fetch.
+    final hasOpenOrder = context.select<OrderProvider, bool>((p) => p.orders.any(_isOpen));
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppSurfaces.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-          child: Row(
-            children: [
-              _NavItem(
-                icon: Icons.storefront_outlined,
-                activeIcon: Icons.storefront,
-                label: 'Shop',
-                isActive: index == 0,
-                onTap: () => onChanged(0),
-                badgeCount: cartCount,
-              ),
-              _NavItem(
-                icon: Icons.receipt_long_outlined,
-                activeIcon: Icons.receipt_long,
-                label: 'Orders',
-                isActive: index == 1,
-                onTap: () => onChanged(1),
-              ),
-              _NavItem(
-                icon: Icons.help_outline_rounded,
-                activeIcon: Icons.help_rounded,
-                label: 'Help',
-                isActive: index == 2,
-                onTap: () => onChanged(2),
-              ),
-              _NavItem(
-                icon: Icons.person_outline_rounded,
-                activeIcon: Icons.person_rounded,
-                label: 'Profile',
-                isActive: index == 3,
-                onTap: () => onChanged(3),
-              ),
-            ],
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _selectTab(0);
+      },
+      child: AdaptiveScaffold(
+        selectedIndex: _index,
+        onSelected: _selectTab,
+        destinations: [
+          const AdaptiveDestination(
+            icon: BlynkIcons.shop,
+            selectedIcon: BlynkIcons.shopSelected,
+            label: 'Shop',
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
-
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-  final int badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: isActive,
-        label: label,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.buttonBorder,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.xs + 1,
-                  ),
-                  decoration: BoxDecoration(
-                    // Blynk Yellow marks the active destination.
-                    color: isActive
-                        ? AppColors.primaryYellowColor
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(
-                        isActive ? activeIcon : icon,
-                        size: 21,
-                        color: isActive
-                            ? AppTextColors.onYellow
-                            : AppTextColors.secondary,
-                      ),
-                      if (badgeCount > 0)
-                        Positioned(
-                          right: -6,
-                          top: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryGreenColor,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.chip),
-                            ),
-                            child: Text(
-                              '$badgeCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                    color: isActive
-                        ? AppTextColors.primary
-                        : AppTextColors.secondary,
-                  ),
-                ),
-              ],
-            ),
+          AdaptiveDestination(
+            icon: BlynkIcons.orders,
+            selectedIcon: BlynkIcons.ordersSelected,
+            label: 'Orders',
+            hasBadge: hasOpenOrder,
+            badgeDescription: 'order in progress',
           ),
-        ),
+          const AdaptiveDestination(
+            icon: BlynkIcons.help,
+            selectedIcon: BlynkIcons.helpSelected,
+            label: 'Help',
+          ),
+          const AdaptiveDestination(
+            icon: BlynkIcons.profile,
+            selectedIcon: BlynkIcons.profileSelected,
+            label: 'Profile',
+          ),
+        ],
+        body: IndexedStack(index: _index, children: widget.tabs ?? _tabs),
+        cartBar: const CartBar(),
       ),
     );
   }

@@ -31,8 +31,8 @@ void main() {
     expect(find.bySemanticsLabel('Blynk'), findsOneWidget);
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('Next'), findsOneWidget);
-    expect(find.text('Your Groceries'), findsOneWidget);
-    expect(find.text('Delivered Fast'), findsOneWidget);
+    expect(find.text('Your groceries,'), findsOneWidget);
+    expect(find.text('delivered.'), findsOneWidget);
 
     // Tap Next to navigate to Slide 2 (final slide, with a looping Lottie
     // hero - pumpAndSettle() never returns against a repeat:true animation,
@@ -42,9 +42,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.text('Fast Delivery'), findsOneWidget);
-    expect(find.text('To Your Door'), findsOneWidget);
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('Order any time,'), findsOneWidget);
+    expect(find.text('pay on delivery.'), findsOneWidget);
+    expect(find.text('Get started'), findsOneWidget);
   });
 }
 

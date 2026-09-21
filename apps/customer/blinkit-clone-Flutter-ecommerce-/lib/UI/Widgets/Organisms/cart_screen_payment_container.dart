@@ -2,10 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_toast.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app_colors.dart';
+import '../../../app_design.dart' show appButtonTextScale, kStackButtonsAboveTextScale;
+import '../../../design/tokens.dart';
+import '../Atoms/blynk_button.dart';
 import '../../../Services/Providers/address.provider.dart';
 import '../../../Services/Providers/cart.provider.dart';
 import '../../../Services/Providers/order.provider.dart';
+import '../../../Services/app_errors.dart';
+import '../../../Services/store_info.dart';
+
+/// The toast for a failed place-order. A timeout is worded as "we could not
+/// confirm" because the order may well have been placed: the customer is sent
+/// to Orders to check rather than told it failed (copy only - nothing here
+/// retries or de-duplicates).
+String placeOrderFailureMessage(CustomerError failure) => failure.isTimeout
+    ? "We couldn't confirm your order. Check Orders before trying again."
+    : failure.message;
 
 class CartScreenPaymentContainer extends StatelessWidget {
   const CartScreenPaymentContainer({
@@ -36,9 +48,7 @@ class CartScreenPaymentContainer extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        showAppToast(
-          msg: orderProvider.placeOrderError ?? 'Could not place your order. Please try again.',
-        );
+        showAppToast(msg: placeOrderFailureMessage(AppErrors.from(e)));
       }
     }
   }
@@ -47,62 +57,54 @@ class CartScreenPaymentContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPlacingOrder = context.watch<OrderProvider>().isPlacingOrder;
     final isCartEmpty = context.watch<CartProvider>().isEmpty;
+    final stack = appButtonTextScale(context) > kStackButtonsAboveTextScale;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      color: Colors.white,
-      width: double.infinity,
-      height: 70,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Row(
+    const method = Row(
+      children: [
+        Icon(Icons.payments_outlined, color: BlynkColors.ink2),
+        SizedBox(width: BlynkSpace.s16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.payment,
-                color: Colors.orangeAccent,
-              ),
-              SizedBox(
-                width: 15,
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "Payment Method",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  // Phase 1 is Cash on Delivery only - the payments module
-                  // is a deliberate stub server-side, so no other method is
-                  // offered here.
-                  Text(
-                    "Cash on Delivery",
-                    style: TextStyle(fontWeight: FontWeight.w300),
-                  ),
-                ],
-              )
+              Text('Payment method', style: BlynkText.label),
+              // Phase 1 is Cash on Delivery only - the payments module
+              // is a deliberate stub server-side, so no other method is
+              // offered here.
+              Text(StoreInfo.paymentMethodLabel, style: BlynkText.body),
             ],
           ),
-          ElevatedButton(
-            onPressed: (isPlacingOrder || isCartEmpty) ? null : () => _placeOrder(context),
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.primaryGreenColor,
-              foregroundColor: AppColors.greyWhiteColor,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 25,
-              ),
+        ),
+      ],
+    );
+    final place = BlynkButton.primary(
+      label: 'Place order',
+      loading: isPlacingOrder,
+      expand: stack,
+      // While placing, `loading` swallows taps, so the button keeps its look.
+      onPressed: isCartEmpty ? null : () => _placeOrder(context),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: BlynkSpace.s8, vertical: BlynkSpace.s8),
+      color: BlynkColors.paper,
+      width: double.infinity,
+      // A floor, not a fixed height: a large text size must be able to grow the row.
+      constraints: const BoxConstraints(minHeight: 70),
+      child: stack
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [method, const SizedBox(height: BlynkSpace.s8), place],
+            )
+          : Row(
+              children: [
+                const Expanded(child: method),
+                const SizedBox(width: BlynkSpace.s8),
+                place,
+              ],
             ),
-            child: isPlacingOrder
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text("Place Order"),
-          )
-        ],
-      ),
     );
   }
 }

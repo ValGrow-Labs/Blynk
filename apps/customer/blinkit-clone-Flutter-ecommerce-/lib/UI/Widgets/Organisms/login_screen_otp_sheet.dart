@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ecom/Services/Validation/app_validators.dart';
-import 'package:ecom/UI/Widgets/Atoms/app_toast.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app_colors.dart';
 import '../../../constants.dart';
+import '../../../design/tokens.dart';
 import '../../../Services/Providers/auth.provider.dart';
-import '../Atoms/custom_button.dart';
-import '../Atoms/custom_text_field.dart';
+import '../../../Services/app_errors.dart';
+import '../Atoms/blynk_button.dart';
+import '../Atoms/blynk_text_field.dart';
 
 class LoginwithMobileWidget extends StatefulWidget {
   const LoginwithMobileWidget({
@@ -23,6 +23,10 @@ class _LoginwithMobileWidgetState extends State<LoginwithMobileWidget> {
   late TextEditingController _textEditingController;
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+
+  // Shown inline under the field: a SnackBar on the root messenger would sit
+  // behind this modal sheet and its scrim.
+  String? _errorText;
 
   @override
   void initState() {
@@ -41,17 +45,14 @@ class _LoginwithMobileWidgetState extends State<LoginwithMobileWidget> {
 
     final input = _textEditingController.text.trim();
     if (AppValidators.phone(input) != null) {
-      showAppToast(
-        msg: "Enter a valid Sri Lankan mobile number",
-        backgroundColor: Colors.redAccent,
-        textColor: Colors.white,
-      );
+      setState(() => _errorText = "Enter a valid Sri Lankan mobile number");
       return;
     }
 
     final formattedPhone = formatToE164(input);
 
     setState(() {
+      _errorText = null;
       _isLoading = true;
     });
 
@@ -75,14 +76,8 @@ class _LoginwithMobileWidgetState extends State<LoginwithMobileWidget> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
+        _errorText = AppErrors.from(e).message;
       });
-
-      final message = e.toString().replaceAll('Exception: ', '');
-      showAppToast(
-        msg: message,
-        backgroundColor: Colors.redAccent,
-        textColor: Colors.white,
-      );
     }
   }
 
@@ -96,11 +91,8 @@ class _LoginwithMobileWidgetState extends State<LoginwithMobileWidget> {
           vertical: 16,
         ),
         decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(18.0),
-            topRight: Radius.circular(18.0),
-          ),
+          color: BlynkColors.paper,
+          borderRadius: BlynkRadius.lgTop,
         ),
         child: Center(
           child: Form(
@@ -109,84 +101,62 @@ class _LoginwithMobileWidgetState extends State<LoginwithMobileWidget> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Log in or Sign up',
+                  'Log in or sign up',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: BlynkText.title,
                 ),
                 const SizedBox(
                   height: 10,
                 ),
-                customTextField(
-                  isPhoneNumberField: true,
-                  textEditingController: _textEditingController,
-                  prefix: "+94  ",
+                BlynkTextField(
+                  label: 'Mobile number',
+                  controller: _textEditingController,
+                  prefix: const Text('+94', style: BlynkText.label),
                   maxLength: 16,
                   hintText: "07XXXXXXXX",
+                  keyboardType: TextInputType.phone,
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                  autofocus: true,
+                  errorText: _errorText,
+                  onChanged: (_) {
+                    if (_errorText != null) setState(() => _errorText = null);
+                  },
                   // One phone rule for the whole app, matching the
                   // backend's normalizeSriLankanPhone.
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9 +()-]')),
                   ],
-                  validator: AppValidators.phone,
                 ),
                 const SizedBox(
                   height: 10,
                 ),
-                _isLoading
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8.0),
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryGreenColor,
-                          ),
-                        ),
-                      )
-                    : customTextButton(
-                        context,
-                        callback: () async {
-                          await _authorizeWithPhoneNumber(context);
-                        },
-                        title: "Continue",
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 110,
-                          vertical: 8,
-                        ),
-                        color: AppColors.primaryGreenColor,
-                      ),
+                BlynkButton.primary(
+                  label: 'Continue',
+                  expand: true,
+                  loading: _isLoading,
+                  onPressed: () => _authorizeWithPhoneNumber(context),
+                ),
                 const SizedBox(
                   height: 6,
                 ),
                 Center(
-                  child: TextButton(
+                  child: BlynkButton.tertiary(
+                    label: 'Skip for now',
                     onPressed: () {
                       Navigator.of(context).pushNamedAndRemoveUntil(
                         '/home',
                         (route) => false,
                       );
                     },
-                    child: const Text(
-                      'Skip for now',
-                      style: TextStyle(
-                        color: AppColors.primaryGreenColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(
                   height: 6,
                 ),
-                const Text(
+                Text(
                   'By continuing, you agree to our terms of service and privacy policy',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
+                  style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
                 )
               ],
             ),

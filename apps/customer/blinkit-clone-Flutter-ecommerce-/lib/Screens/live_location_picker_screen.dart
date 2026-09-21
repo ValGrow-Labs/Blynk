@@ -5,6 +5,7 @@ import '../Services/Location/geolocator_location_source.dart';
 import '../UI/Widgets/Organisms/map_provider.dart';
 import '../app_colors.dart';
 import '../app_design.dart';
+import '../design/tokens.dart';
 
 /// "Use my current location" for the address form (plan section 12): explains
 /// why the customer's location is wanted, only then asks the OS, reads one
@@ -428,14 +429,9 @@ class _Ready extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'DELIVERY LOCATION',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                    color: AppTextColors.secondary,
-                  ),
+                Text(
+                  'Delivery location',
+                  style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 // The instruction is what the customer acts on, so it leads;

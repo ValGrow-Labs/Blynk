@@ -14,6 +14,7 @@ import 'package:ecom/Services/Providers/cart.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_skeleton.dart';
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/tokens.dart';
 
 // Captured verbatim from the running backend (GET /api/v1/catalog/...).
 const _realCategories =
@@ -57,8 +58,8 @@ void main() {
     cart = CartProvider();
   });
 
-  Future<void> pumpSearch(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(400, 900);
+  Future<void> pumpSearch(WidgetTester tester, {double textScale = 1, double width = 400}) async {
+    tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -70,6 +71,10 @@ void main() {
         ],
         child: MaterialApp(
           theme: AppTheme.appTHeme,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          ),
           home: const SearchScreen(),
           onGenerateRoute: (settings) {
             lastRoute = settings;
@@ -100,8 +105,8 @@ void main() {
     await pumpSearch(tester);
 
     expect(find.text('Search'), findsOneWidget);
-    expect(find.text('RECENT SEARCHES'), findsNothing);
-    expect(find.text('BROWSE CATEGORIES'), findsOneWidget);
+    expect(find.text('Recent searches'), findsNothing);
+    expect(find.text('Browse categories'), findsOneWidget);
     expect(find.text('Dairy & Eggs'), findsOneWidget);
     expect(find.byTooltip('Clear search'), findsNothing);
   });
@@ -148,7 +153,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Kotmale Fresh Milk 1L'), findsNothing);
-    expect(find.text('BROWSE CATEGORIES'), findsOneWidget);
+    expect(find.text('Browse categories'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
     expect(products.lastQuery, isEmpty);
   });
@@ -159,8 +164,9 @@ void main() {
     await typeQuery(tester, 'zzqx');
     await passDebounce(tester);
 
-    expect(find.text('Sorry!'), findsOneWidget);
-    expect(find.textContaining('We couldn\'t find anything for "zzqx"'), findsOneWidget);
+    expect(find.text('No results for "zzqx"'), findsOneWidget);
+    expect(find.text('Check the spelling or browse categories.'), findsOneWidget);
+    expect(find.text('Sorry!'), findsNothing);
 
     await tester.tap(find.text('Browse Categories'));
     await tester.pump();
@@ -187,7 +193,7 @@ void main() {
     expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
   });
 
-  testWidgets('a failed search shows a friendly error and Try Again recovers',
+  testWidgets('a failed search shows a friendly error and Try again recovers',
       (tester) async {
     catalog.onSearch = (_) async =>
         throw ApiException(500, 'relation "products" does not exist');
@@ -200,7 +206,7 @@ void main() {
     expect(find.textContaining('relation'), findsNothing);
 
     catalog.onSearch = (_) async => jsonDecode(_realMilkSearch);
-    await tester.tap(find.text('Try Again'));
+    await tester.tap(find.text('Try again'));
     await tester.pump();
     await tester.pump();
 
@@ -224,9 +230,9 @@ void main() {
     expect(catalog.searchCalls.last['category_slug'], 'biscuits-snacks');
     expect(find.textContaining('in Biscuits & Snacks'), findsOneWidget);
 
-    // Scrolling to the last chip unbuilt "All" at the start of the lazily
-    // built row - scroll back before tapping it.
-    await tester.drag(find.byType(ChoiceChip).first, const Offset(600, 0));
+    // The row is one scroll view sized to its chips (so a large text size can
+    // grow it); "All" is scrolled off the left edge - scroll back before tapping it.
+    await tester.drag(chip, const Offset(600, 0));
     await tester.pump();
     final allChip = find.widgetWithText(ChoiceChip, 'All');
     await tester.tap(allChip);
@@ -249,7 +255,7 @@ void main() {
     // A fresh visit to the screen shows it.
     await tester.pumpWidget(const SizedBox());
     await pumpSearch(tester);
-    expect(find.text('RECENT SEARCHES'), findsOneWidget);
+    expect(find.text('Recent searches'), findsOneWidget);
     expect(find.text('milk'), findsOneWidget);
 
     await tester.tap(find.text('milk'));
@@ -262,7 +268,7 @@ void main() {
     await tester.tap(find.text('Clear'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('RECENT SEARCHES'), findsNothing);
+    expect(find.text('Recent searches'), findsNothing);
     expect(await RecentSearchesStorage.load(), isEmpty);
   });
 
@@ -298,9 +304,88 @@ void main() {
     expect(cart.lines.single.product.name, 'Kotmale Fresh Milk 1L');
     // The floating cart bar reflects the same state.
     expect(find.text('1 item'), findsOneWidget);
-    expect(find.text('View Cart'), findsOneWidget);
+    expect(find.text('View cart'), findsOneWidget);
     // The card's ADD has become a stepper.
     expect(find.text('ADD'), findsNothing);
     expect(find.bySemanticsLabel('Add one more Kotmale Fresh Milk 1L'), findsOneWidget);
+  });
+
+  group('filter chips (audit fix)', () {
+    testWidgets('selected is an ink fill with a paper label; the outline is lineStrong (3:1)', (tester) async {
+      await pumpSearch(tester);
+      await typeQuery(tester, 'milk');
+      await passDebounce(tester);
+
+      final all = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'All'));
+      expect(all.selected, isTrue);
+      expect(all.selectedColor, BlynkColors.ink);
+      expect(all.labelStyle?.color, BlynkColors.paper);
+      final dairy = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Dairy & Eggs'));
+      expect(dairy.selected, isFalse);
+      expect(dairy.labelStyle?.color, BlynkColors.ink);
+      for (final chip in [all, dairy]) {
+        expect(chip.side?.color, BlynkColors.lineStrong);
+        // Never yellow: yellow is only the forward action.
+        expect(chip.selectedColor, isNot(BlynkColors.signal));
+      }
+      expect(all.labelStyle?.fontSize, BlynkText.label.fontSize);
+    });
+
+    testWidgets('the bar is a floor, not a fixed height, and chips are 48 dp targets', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpSearch(tester);
+      await typeQuery(tester, 'milk');
+      await passDebounce(tester);
+      expect(tester.getSize(find.widgetWithText(ChoiceChip, 'All')).height, greaterThanOrEqualTo(48));
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
+
+    for (final scale in [1.0, 1.3, 2.0]) {
+      testWidgets('no overflow at ${scale}x on a 320 dp phone; the bar grows with the text', (tester) async {
+        await pumpSearch(tester, textScale: scale, width: 320);
+        await typeQuery(tester, 'milk');
+        await passDebounce(tester);
+        expect(tester.takeException(), isNull);
+        final bar = find.ancestor(of: find.widgetWithText(ChoiceChip, 'All'), matching: find.byType(SingleChildScrollView));
+        final chip = tester.getRect(find.widgetWithText(ChoiceChip, 'All'));
+        expect(tester.getRect(bar.first).height, greaterThanOrEqualTo(chip.height));
+        expect(tester.getRect(bar.first).height, greaterThanOrEqualTo(52));
+      });
+    }
+  });
+
+  group('empty result copy (audit fix)', () {
+    testWidgets('names the query, no "Sorry", no exclamation mark', (tester) async {
+      await pumpSearch(tester);
+      await typeQuery(tester, 'zzqx');
+      await passDebounce(tester);
+      expect(find.textContaining('Sorry'), findsNothing);
+      expect(find.textContaining('!'), findsNothing);
+      expect(find.text('No results for "zzqx"'), findsOneWidget);
+    });
+
+    testWidgets('a category scope is part of the title', (tester) async {
+      await pumpSearch(tester);
+      await typeQuery(tester, 'milk');
+      await passDebounce(tester);
+      final chip = find.widgetWithText(ChoiceChip, 'Biscuits & Snacks');
+      await tester.ensureVisible(chip);
+      await tester.pump();
+      await tester.tap(chip);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('No results for "milk" in Biscuits & Snacks'), findsOneWidget);
+    });
+  });
+
+  testWidgets('section titles are sentence case at the caption size (no all-caps eyebrow)', (tester) async {
+    await pumpSearch(tester);
+    final title = tester.widget<Text>(find.text('Browse categories'));
+    expect(title.style?.fontSize, BlynkText.caption.fontSize);
+    expect(title.style?.letterSpacing, isNull);
+    expect(title.style?.color, BlynkColors.ink2);
+    expect(find.text('BROWSE CATEGORIES'), findsNothing);
   });
 }

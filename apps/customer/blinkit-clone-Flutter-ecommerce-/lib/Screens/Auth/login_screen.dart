@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
+import 'package:ecom/Services/store_info.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
 import 'package:ecom/UI/Widgets/Atoms/blynk_logo.dart';
 import 'package:ecom/UI/Widgets/Organisms/login_screen_otp_sheet.dart';
-import 'package:ecom/app_colors.dart';
+import 'package:ecom/app_responsive.dart';
+import 'package:ecom/design/tokens.dart';
 
 class OnboardingSlideData {
   final String assetPath;
@@ -43,19 +46,18 @@ class _LoginScreenState extends State<LoginScreen> {
       assetPath: 'Assets/Images/onboarding_groceries.png',
       isLottie: false,
       aspectRatio: 452 / 516,
-      titleLine1: 'Your Groceries',
-      titleLine2: 'Delivered Fast',
-      description:
-          'Fresh groceries and everyday essentials\ndelivered to your doorstep in Dharga Town.',
+      titleLine1: 'Your groceries,',
+      titleLine2: 'delivered.',
+      description: 'Order groceries from our local store\nin ${StoreInfo.hubName}.',
     ),
     OnboardingSlideData(
       assetPath: 'Assets/cart_packing.json',
       isLottie: true,
       aspectRatio: 1.0,
-      titleLine1: 'Fast Delivery',
-      titleLine2: 'To Your Door',
+      titleLine1: 'Order any time,',
+      titleLine2: 'pay on delivery.',
       description:
-          'Order anytime and get your groceries delivered\nduring our delivery window.',
+          'Deliveries go out ${StoreInfo.deliveryHoursLabel}.\nYou pay in cash when your order arrives.',
     ),
   ];
 
@@ -97,8 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final screenWidth = mediaQuery.size.width;
     final screenHeight = mediaQuery.size.height;
 
-    final isDesktop = screenWidth >= 1024;
-    final isTablet = screenWidth >= 600 && screenWidth < 1024;
+    final isDesktop = screenWidth >= AppBreakpoints.desktop;
+    final isTablet = screenWidth >= AppBreakpoints.tablet && screenWidth < AppBreakpoints.desktop;
     final isCompact = screenHeight < 700;
 
     // Resnap the carousel to the current logical page when crossing a
@@ -139,47 +141,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final isLastSlide = _currentPage == _slides.length - 1;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: BlynkColors.paper,
       body: Stack(
         children: [
-          // Ambient Organic Pastel Yellow Glow (Top-Right)
-          Positioned(
-            top: -60,
-            right: -40,
-            child: Container(
-              width: isDesktop ? 340 : 220,
-              height: isDesktop ? 340 : 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFFFF6D6),
-                    const Color(0xFFFFF6D6).withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Ambient Organic Pastel Yellow Glow (Bottom-Left)
-          Positioned(
-            bottom: -70,
-            left: -50,
-            child: Container(
-              width: isDesktop ? 360 : 240,
-              height: isDesktop ? 360 : 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFFFF8D6),
-                    const Color(0xFFFFF8D6).withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           SafeArea(
             child: Column(
               children: [
@@ -192,49 +156,43 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Blynk Logo + Tagline (FittedBox keeps this from
-                      // overflowing when the header is squeezed narrow)
+                      // FittedBox keeps the logo from overflowing when the
+                      // header is squeezed narrow.
                       Flexible(
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              BlynkLogo(height: isDesktop ? 36 : 30),
-                              const SizedBox(height: 4),
-                              Text(
-                                'FRESHER. FASTER. NEARER.',
-                                style: TextStyle(
-                                  fontSize: isDesktop ? 10.5 : 8.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF374151),
-                                  letterSpacing: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
+                          child: BlynkLogo(height: isDesktop ? 36 : 30),
                         ),
                       ),
                       const Spacer(),
                       // Skip Action Button
                       TextButton(
                         onPressed: () {
-                          Navigator.of(context).pushReplacementNamed('/home');
+                          // Opened over the shop by a guest choosing to log in:
+                          // Skip goes back to it. As the first screen there is
+                          // nothing underneath, so it opens the shop.
+                          final navigator = Navigator.of(context);
+                          if (navigator.canPop()) {
+                            navigator.pop();
+                          } else {
+                            navigator.pushReplacementNamed('/home');
+                          }
                         },
+                        // A 48 dp target: the wide invisible padding is the
+                        // point (it was 30 dp tall with shrinkWrap).
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                            horizontal: 12,
+                            vertical: 8,
                           ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: const Size(48, 48),
+                          tapTargetSize: MaterialTapTargetSize.padded,
                         ),
                         child: Text(
                           'Skip',
                           style: TextStyle(
-                            color: AppColors.primaryGreenColor,
+                            color: BlynkColors.ink,
                             fontSize: isDesktop ? 18 : 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -324,24 +282,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                             child: Lottie.asset(
                                               slide.assetPath,
                                               fit: BoxFit.contain,
-                                              repeat: true,
+                                              // Reduced motion: no endless loop.
+                                              repeat: !MediaQuery.disableAnimationsOf(context),
                                             ),
                                           )
                                         : Container(
                                             width: cardWidth,
                                             height: cardHeight,
                                             decoration: BoxDecoration(
-                                              color: Colors.white,
+                                              color: BlynkColors.paper,
                                               borderRadius:
                                                   BorderRadius.circular(32.0),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.04),
-                                                  blurRadius: 20,
-                                                  offset: const Offset(0, 8),
-                                                ),
-                                              ],
+                                              border: Border.all(
+                                                  color: BlynkColors.line),
                                             ),
                                             child: ClipRRect(
                                               borderRadius:
@@ -360,37 +313,33 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             SizedBox(height: isCompact ? 12 : 18),
 
-                            // 4. Page Indicator Dots (Dynamic & Interactive)
-                            Row(
-                              children: List.generate(_slides.length, (index) {
-                                final isActive = index == _currentPage;
-                                return GestureDetector(
-                                  onTap: () {
-                                    _pageController.animateToPage(
-                                      index,
-                                      duration:
-                                          const Duration(milliseconds: 350),
-                                      curve: Curves.easeInOut,
-                                    );
-                                  },
-                                  child: Container(
+                            // 4. Page indicator: decoration, not controls. Swiping
+                            // (or Next) is how pages change, so the group is one
+                            // labelled node instead of tiny tappable dots.
+                            Semantics(
+                              label: 'Page ${_currentPage + 1} of ${_slides.length}',
+                              excludeSemantics: true,
+                              child: Row(
+                                children: List.generate(_slides.length, (index) {
+                                  final isActive = index == _currentPage;
+                                  return Container(
                                     margin: const EdgeInsets.only(right: 6.0),
                                     width: isActive ? 24 : 7,
                                     height: 7,
                                     decoration: BoxDecoration(
                                       color: isActive
-                                          ? AppColors.primaryYellowColor
-                                          : const Color(0xFFE5E7EB),
+                                          ? BlynkColors.ink
+                                          : BlynkColors.lineStrong,
                                       borderRadius: BorderRadius.circular(3.5),
                                     ),
-                                  ),
-                                );
-                              }),
+                                  );
+                                }),
+                              ),
                             ),
 
                             SizedBox(height: isCompact ? 12 : 18),
 
-                            // 5. Dynamic Headline & Accent Underline
+                            // 5. Dynamic Headline
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 250),
                               child: Column(
@@ -401,35 +350,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                     _slides[_currentPage].titleLine1,
                                     style: TextStyle(
                                       fontSize: isDesktop ? 36 : 32,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF111827),
+                                      fontWeight: FontWeight.w800,
+                                      color: BlynkColors.ink,
                                       letterSpacing: -0.5,
                                       height: 1.15,
                                     ),
                                   ),
-                                  Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      Text(
-                                        _slides[_currentPage].titleLine2,
-                                        style: TextStyle(
-                                          fontSize: isDesktop ? 36 : 32,
-                                          fontWeight: FontWeight.w900,
-                                          color: AppColors.primaryGreenColor,
-                                          letterSpacing: -0.5,
-                                          height: 1.15,
-                                        ),
-                                      ),
-                                      Positioned(
-                                        left: 0,
-                                        right: 0,
-                                        bottom: -3,
-                                        child: CustomPaint(
-                                          size: const Size(double.infinity, 7),
-                                          painter: _CurvedUnderlinePainter(),
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    _slides[_currentPage].titleLine2,
+                                    style: TextStyle(
+                                      fontSize: isDesktop ? 36 : 32,
+                                      fontWeight: FontWeight.w800,
+                                      color: BlynkColors.ink,
+                                      letterSpacing: -0.5,
+                                      height: 1.15,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -446,7 +381,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 style: TextStyle(
                                   fontSize: isDesktop ? 16.5 : 15.0,
                                   fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF6B7280),
+                                  color: BlynkColors.ink2,
                                   height: 1.4,
                                 ),
                               ),
@@ -458,39 +393,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                ElevatedButton(
+                                BlynkButton.primary(
+                                  label: isLastSlide ? 'Get started' : 'Next',
                                   onPressed: _onNextPressed,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primaryYellowColor,
-                                    foregroundColor: const Color(0xFF111827),
-                                    elevation: 0,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: isDesktop ? 30 : 26,
-                                      vertical: isDesktop ? 15 : 13,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(28.0),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        isLastSlide ? 'Get Started' : 'Next',
-                                        style: TextStyle(
-                                          fontSize: isDesktop ? 18 : 17,
-                                          fontWeight: FontWeight.w800,
-                                          color: const Color(0xFF111827),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Icon(
-                                        Icons.arrow_forward_rounded,
-                                        size: 20,
-                                        color: Color(0xFF111827),
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               ],
                             ),
@@ -512,29 +417,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
-class _CurvedUnderlinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.primaryYellowColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    path.moveTo(0, size.height * 0.4);
-    path.quadraticBezierTo(
-      size.width * 0.5,
-      size.height * 1.1,
-      size.width * 0.95,
-      size.height * 0.2,
-    );
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-

@@ -1,37 +1,18 @@
-import 'package:flutter/foundation.dart' show kIsWeb, TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
 import '../../../main.dart' show rootScaffoldMessengerKey;
+import 'snackbar_helper.dart';
 
-// fluttertoast (see its pubspec) only ships android/ and ios/ platform
-// implementations - calling it on Windows/macOS/Linux/Web throws
-// MissingPluginException and the user sees nothing at all, not even a
-// generic error. This routes those platforms through a real SnackBar
-// instead so an error/success message is never silently lost.
-bool get _supportsNativeToast =>
-    !kIsWeb &&
-    (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS);
-
+/// Shows a short message from anywhere (no BuildContext needed) as an in-app
+/// SnackBar on every platform.
+///
+/// [backgroundColor] and [textColor] are accepted so existing call sites keep
+/// compiling, but they are ignored: the snackbar is always ink on paper and
+/// the words carry the meaning. T3 removes them with the call-site cleanup.
 void showAppToast({
   required String msg,
   Color? backgroundColor,
   Color? textColor,
 }) {
-  if (_supportsNativeToast) {
-    Fluttertoast.showToast(
-      msg: msg,
-      backgroundColor: backgroundColor,
-      textColor: textColor,
-    );
-    return;
-  }
-
-  rootScaffoldMessengerKey.currentState?.showSnackBar(
-    SnackBar(
-      content: Text(msg, style: TextStyle(color: textColor ?? Colors.white)),
-      backgroundColor: backgroundColor ?? Colors.black87,
-    ),
-  );
+  showBlynkSnackBar(messengerKey: rootScaffoldMessengerKey, message: msg);
 }

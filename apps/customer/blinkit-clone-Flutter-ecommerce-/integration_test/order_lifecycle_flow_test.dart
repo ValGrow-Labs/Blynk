@@ -35,6 +35,7 @@ import 'package:provider/provider.dart';
 import 'package:ecom/main.dart' as app;
 import 'package:ecom/Screens/add_edit_address_screen.dart';
 import 'package:ecom/Screens/checkout_screen.dart';
+import 'package:ecom/Screens/customer_shell.dart';
 import 'package:ecom/Screens/order_summary_screen.dart';
 import 'package:ecom/Screens/user_orders_screen.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
@@ -639,7 +640,7 @@ void main() {
         await _settle(tester, maxPumps: 6);
         expect(cart.itemCount, 1, reason: 'tapping ADD must put one real product in the cart');
 
-        await _tap(tester, find.text('View Cart'));
+        await _tap(tester, find.text('View cart'));
         await _settle(tester, maxPumps: 12);
         expect(find.text('Your Cart'), findsOneWidget);
 
@@ -820,15 +821,25 @@ void main() {
       // A7 - the orders list agrees
       navigator.pop();
       await _settle(tester, maxPumps: 8);
-      navigator.pushNamed('/orders');
+      // Orders is a tab of the shell now, not a pushed route.
+      CustomerShell.selectTab(tester.element(find.byType(Scaffold).first), 1);
       await _settle(tester, maxPumps: 16); // real GET /orders
+      // IndexedStack keeps every tab mounted (it does not use Offstage), so
+      // "it exists" proves nothing: hitTestable() proves the Orders tab is the
+      // one on screen, and the freshly loaded row is what is being looked at.
       final listScreen = find.byType(OrdersScreen);
-      expect(listScreen, findsOneWidget);
-      expect(find.descendant(of: listScreen, matching: find.text(orderA.orderNumber)),
+      expect(listScreen.hitTestable(), findsOneWidget,
+          reason: 'the Orders tab must be the selected, visible tab');
+      expect(
+          find
+              .descendant(of: listScreen, matching: find.text(orderA.orderNumber))
+              .hitTestable(),
           findsOneWidget);
-      expect(find.descendant(of: listScreen, matching: find.text('Delivered')), findsOneWidget,
+      expect(
+          find.descendant(of: listScreen, matching: find.text('Delivered')).hitTestable(),
+          findsOneWidget,
           reason: 'the orders list must show the same status the detail does');
-      navigator.pop();
+      CustomerShell.selectTab(tester.element(find.byType(Scaffold).first), 0);
       await _settle(tester, maxPumps: 8);
 
       // ================================================================

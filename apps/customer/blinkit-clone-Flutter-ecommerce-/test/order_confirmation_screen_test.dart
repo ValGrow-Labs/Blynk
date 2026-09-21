@@ -6,6 +6,8 @@ import 'package:ecom/Models/order_format.dart';
 import 'package:ecom/Models/order_model.dart';
 import 'package:ecom/Screens/order_confirmation_screen.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
+import 'package:ecom/design/tokens.dart';
+import 'package:lottie/lottie.dart';
 
 import 'fixtures/order_fixtures.dart';
 
@@ -38,9 +40,7 @@ void main() {
           ),
         ),
       );
-      // The Lottie hero (Assets/cart_packing.json) repeats forever, so
-      // pumpAndSettle() never returns - pump a few bounded ticks instead
-      // (same pattern as widget_test.dart's looping-Lottie slide).
+      // A few bounded ticks (the hero used to be a looping Lottie; it is a static check mark now).
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
@@ -131,6 +131,29 @@ void main() {
         find.text('Scheduled — delivery ${formatScheduled(DateTime.parse(iso))}'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('the hero is a static check mark: no Lottie, no looping animation', (tester) async {
+      final order = OrderModel.fromJson(orderJson(id: 'o1', number: 'BL-20260919-0001', detail: false));
+      await pumpScreen(tester, order);
+      expect(find.byType(Lottie), findsNothing);
+      final check = tester.widget<Icon>(find.byIcon(BlynkIcons.check));
+      expect(check.color, BlynkColors.positive);
+      expect(tester.hasRunningAnimations, isFalse);
+      // Now it settles, because nothing loops.
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('the scheduled pill outline is lineStrong, not the 1.2:1 hairline', (tester) async {
+      const iso = '2026-09-20T08:00:00.000Z';
+      final order = OrderModel.fromJson(
+        orderJson(id: 'o1', number: 'BL-20260919-0001', scheduledFor: iso, detail: false),
+      );
+      await pumpScreen(tester, order);
+      final pill = tester.widget<Container>(
+        find.ancestor(of: find.byKey(const Key('confirmation-schedule')), matching: find.byType(Container)).first,
+      );
+      expect(((pill.decoration! as BoxDecoration).border! as Border).top.color, BlynkColors.lineStrong);
     });
   });
 }

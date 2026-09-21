@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../Screens/customer_shell.dart';
-import '../../../app_colors.dart';
+import '../../../design/tokens.dart';
 import '../../../app_design.dart';
 
 /// Shown wherever the cart is empty (Cart and Checkout). Browse Groceries
@@ -26,8 +26,8 @@ class EmptyCartView extends StatelessWidget {
                 child: Container(
                   width: 112,
                   height: 112,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryYellowColor.withValues(alpha: 0.28),
+                  decoration: const BoxDecoration(
+                    color: BlynkColors.well,
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
@@ -62,9 +62,9 @@ class EmptyCartView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.xxl),
+              // No fixed height: the button's 48 dp floor grows with a large text size.
               SizedBox(
                 width: double.infinity,
-                height: 52,
                 child: ElevatedButton(
                   onPressed: () => CustomerShell.openShop(context),
                   child: const Text('Browse Groceries'),

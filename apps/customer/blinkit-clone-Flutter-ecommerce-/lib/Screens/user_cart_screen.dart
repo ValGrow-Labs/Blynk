@@ -3,10 +3,14 @@ import 'package:provider/provider.dart';
 
 import '../Services/Providers/cart.provider.dart';
 import '../UI/Widgets/Atoms/card_product_cart_screen.dart';
+import '../UI/Widgets/Atoms/connectivity_banner.dart';
 import '../UI/Widgets/Organisms/card_cart_prices_detail.dart';
 import '../UI/Widgets/Organisms/empty_cart_view.dart';
 import '../app_design.dart';
-import '../constants.dart';
+import '../design/tokens.dart';
+import '../Models/order_format.dart';
+import '../Services/store_info.dart';
+import '../UI/Widgets/Atoms/money_text.dart';
 
 /// The cart: real CartProvider lines, an order summary and one action,
 /// Proceed to Checkout. The global floating cart bar is deliberately not
@@ -32,13 +36,21 @@ class CartScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: isEmpty
-            ? const EmptyCartView(key: ValueKey('empty'))
-            : (wide
-                ? const _WideCart(key: ValueKey('wide'))
-                : const _NarrowCart(key: ValueKey('narrow'))),
+      body: Column(
+        children: [
+          // The cart is saved on the device, so it stays usable offline.
+          ConnectivityBanner(hasContent: !isEmpty),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: isEmpty
+                  ? const EmptyCartView(key: ValueKey('empty'))
+                  : (wide
+                      ? const _WideCart(key: ValueKey('wide'))
+                      : const _NarrowCart(key: ValueKey('narrow'))),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar:
           isEmpty || wide ? null : const _CheckoutBar(),
@@ -174,12 +186,10 @@ class _WideCart extends StatelessWidget {
                   AppSpacing.xxl,
                 ),
                 child: CartPriceDetailWidget(
-                  footer: SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: () => CartScreen.proceedToCheckout(context),
-                      child: const Text('Proceed to Checkout'),
-                    ),
+                  // No fixed height: the button's 48 dp floor grows with a large text size.
+                  footer: ElevatedButton(
+                    onPressed: () => CartScreen.proceedToCheckout(context),
+                    child: const Text('Proceed to Checkout'),
                   ),
                 ),
               ),
@@ -197,7 +207,7 @@ class _CheckoutBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtotal = context.select<CartProvider, double>((c) => c.subtotal);
-    final total = subtotal + kDeliveryFeeEstimate;
+    final total = subtotal + StoreInfo.flatDeliveryFee;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -216,41 +226,33 @@ class _CheckoutBar extends StatelessWidget {
           child: Row(
             children: [
               Semantics(
-                label: 'Total $appCurrencySybmbol ${total.toStringAsFixed(0)}',
+                label: 'Total ${formatLkr(total)}',
                 excludeSemantics: true,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '$appCurrencySybmbol ${total.toStringAsFixed(0)}',
+                    MoneyText(
+                      total,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: AppTextColors.primary,
                       ),
                     ),
-                    const Text(
-                      'TOTAL',
-                      style: TextStyle(
-                        fontSize: 11,
-                        letterSpacing: 0.6,
-                        fontWeight: FontWeight.w700,
-                        color: AppTextColors.secondary,
-                      ),
+                    Text(
+                      'Total',
+                      style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: AppSpacing.lg),
               Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () => CartScreen.proceedToCheckout(context),
-                    child: const FittedBox(
-                      child: Text('Proceed to Checkout'),
-                    ),
+                child: ElevatedButton(
+                  onPressed: () => CartScreen.proceedToCheckout(context),
+                  child: const FittedBox(
+                    child: Text('Proceed to Checkout'),
                   ),
                 ),
               ),

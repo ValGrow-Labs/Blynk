@@ -1,13 +1,14 @@
-import 'dart:async';
-
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:provider/provider.dart';
 
 import '../../../Models/promotion_model.dart';
 import '../../../Services/Providers/product.provider.dart';
-import '../../../app_colors.dart';
 import '../../../app_design.dart';
 import '../../../app_responsive.dart';
+import '../../../design/tokens.dart' show BlynkColors, BlynkMotion;
+import '../Atoms/blynk_button.dart';
 
 /// Home's promotional hero.
 ///
@@ -24,50 +25,73 @@ class HomeScreenCarousel extends StatefulWidget {
 }
 
 class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
-  static const _autoAdvance = Duration(seconds: 6);
-  static const _transition = Duration(milliseconds: 520);
-
+  // Nothing moves by itself (WCAG 2.2.2). Slides change by drag (any pointer,
+  // see _dragDevices), by the Left/Right arrow keys while the carousel has
+  // keyboard focus, or by the screen reader's increase/decrease actions.
   late final PageController _pageController;
-  Timer? _autoScrollTimer;
   int _currentPage = 0;
   int _slideCount = 0;
+  final FocusNode _focusNode = FocusNode(debugLabel: 'promotions carousel');
+  bool _keyboardHighlight = false;
+
+  // Flutter leaves mouse (and trackpad) out of the default drag devices, which
+  // would make the carousel unusable with a mouse on desktop and web.
+  static const _dragDevices = {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.trackpad,
+  };
+
+  static const _shortcuts = <ShortcutActivator, Intent>{
+    SingleActivator(LogicalKeyboardKey.arrowLeft): _StepIntent(-1),
+    SingleActivator(LogicalKeyboardKey.arrowRight): _StepIntent(1),
+  };
+
+  bool _canStep(int delta) {
+    final target = _currentPage + delta;
+    return target >= 0 && target < _slideCount;
+  }
+
+  void _step(int delta) {
+    if (!_canStep(delta) || !_pageController.hasClients) return;
+    final target = _currentPage + delta;
+    final duration = BlynkMotion.resolve(context, BlynkMotion.base);
+    if (duration == Duration.zero) {
+      _pageController.jumpToPage(target);
+    } else {
+      _pageController.animateToPage(
+        target,
+        duration: duration,
+        curve: BlynkMotion.easeOut,
+      );
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    // The ring marks the carousel itself; a focused slide button has its own.
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ProductProvider>().loadPromotions();
-    });
-    _startAutoScroll();
-  }
-
-  void _startAutoScroll() {
-    _autoScrollTimer?.cancel();
-    _autoScrollTimer = Timer.periodic(_autoAdvance, (_) {
-      if (!mounted || !_pageController.hasClients || _slideCount < 2) return;
-      // Not while Home is buried under a pushed route.
-      if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
-      _pageController.animateToPage(
-        (_currentPage + 1) % _slideCount,
-        duration: _transition,
-        curve: Curves.easeInOutCubic,
-      );
     });
   }
 
   @override
   void dispose() {
-    _autoScrollTimer?.cancel();
     _pageController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final promotions = context.watch<ProductProvider>().promotions;
-    _slideCount = promotions.length;
 
     // Nothing active, still loading, or the request failed: Home carries on
     // without a carousel instead of showing placeholder campaigns.
@@ -80,50 +104,138 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
     }
 
     final metrics = _HeroMetrics.of(Responsive.of(context));
+    _slideCount = promotions.length;
+    final multiple = promotions.length > 1;
+
+    Widget pager = SizedBox(
+      height: metrics.height,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: _dragDevices,
+          scrollbars: false,
+        ),
+        child: PageView.builder(
+          controller: _pageController,
+          itemCount: promotions.length,
+          onPageChanged: (index) => setState(() => _currentPage = index),
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: metrics.sideMargin,
+                vertical: AppSpacing.xs,
+              ),
+              child: _PromoSlide(
+                promotion: promotions[index],
+                isActive: index == _currentPage,
+                metrics: metrics,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    if (multiple) {
+      pager = Semantics(
+        container: true,
+        label: 'Promotion ${_currentPage + 1} of ${promotions.length}',
+        // Screen readers move between promotions with their adjust gesture.
+        onIncrease: _canStep(1) ? () => _step(1) : null,
+        onDecrease: _canStep(-1) ? () => _step(-1) : null,
+        onScrollLeft: _canStep(1) ? () => _step(1) : null,
+        onScrollRight: _canStep(-1) ? () => _step(-1) : null,
+        child: FocusableActionDetector(
+          shortcuts: _shortcuts,
+          actions: {_StepIntent: _StepAction(this)},
+          focusNode: _focusNode,
+          onShowFocusHighlight: (show) => setState(() => _keyboardHighlight = show),
+          // Sits above the slides so the ring is visible on any background.
+          child: Stack(
+            children: [
+              pager,
+              if (_keyboardHighlight && _focusNode.hasPrimaryFocus)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: _FocusRing(margin: metrics.sideMargin),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return SliverToBoxAdapter(
       child: Column(
         children: [
-          SizedBox(
-            height: metrics.height,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: promotions.length,
-              onPageChanged: (index) {
-                setState(() => _currentPage = index);
-                _startAutoScroll();
-              },
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: metrics.sideMargin,
-                    vertical: AppSpacing.xs,
-                  ),
-                  child: _PromoSlide(
-                    promotion: promotions[index],
-                    isActive: index == _currentPage,
-                    metrics: metrics,
-                  ),
-                );
-              },
-            ),
-          ),
-          if (promotions.length > 1) ...[
+          pager,
+          if (multiple) ...[
             const SizedBox(height: AppSpacing.md),
             _SlideIndicator(
+              key: const ValueKey('promo-pager'),
               count: promotions.length,
               current: _currentPage.clamp(0, promotions.length - 1),
-              onTap: (index) {
-                _pageController.animateToPage(
-                  index,
-                  duration: _transition,
-                  curve: Curves.easeInOutCubic,
-                );
-                _startAutoScroll();
-              },
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _StepIntent extends Intent {
+  const _StepIntent(this.delta);
+
+  final int delta;
+}
+
+/// Disabled at either end, so the arrow key falls through (and does nothing)
+/// instead of being swallowed.
+class _StepAction extends Action<_StepIntent> {
+  _StepAction(this._state);
+
+  final _HomeScreenCarouselState _state;
+
+  @override
+  bool isEnabled(_StepIntent intent, [BuildContext? context]) =>
+      _state._canStep(intent.delta);
+
+  @override
+  Object? invoke(_StepIntent intent) {
+    _state._step(intent.delta);
+    return null;
+  }
+}
+
+/// Keyboard focus indication: a 2 dp ink ring with a 2 dp paper ring inside
+/// it, so it holds 3:1 against the page (ink) and against any slide colour or
+/// photo (paper against ink).
+class _FocusRing extends StatelessWidget {
+  const _FocusRing({required this.margin});
+
+  final double margin;
+
+  static const double _radius = AppRadius.sheet + 4;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: const ValueKey('carousel-focus-ring'),
+      padding: EdgeInsets.symmetric(horizontal: margin, vertical: AppSpacing.xs),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(_radius),
+          border: Border.all(color: BlynkColors.ink, width: 2),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_radius - 2),
+              border: Border.all(color: BlynkColors.paper, width: 2),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -140,7 +252,6 @@ class _HeroMetrics {
     required this.subtitleSize,
     required this.showSubtitle,
     required this.titleMaxLines,
-    required this.ctaHeight,
     required this.contentFlex,
     required this.visualFlex,
   });
@@ -152,7 +263,6 @@ class _HeroMetrics {
   final double subtitleSize;
   final bool showSubtitle;
   final int titleMaxLines;
-  final double ctaHeight;
   final int contentFlex;
   final int visualFlex;
 
@@ -165,10 +275,9 @@ class _HeroMetrics {
         sideMargin: AppSpacing.md,
         padding: AppSpacing.md + 2,
         titleSize: 16,
-        subtitleSize: 11,
+        subtitleSize: 12,
         showSubtitle: false,
         titleMaxLines: 3,
-        ctaHeight: 34,
         contentFlex: 8,
         visualFlex: 5,
       );
@@ -179,10 +288,9 @@ class _HeroMetrics {
         sideMargin: AppSpacing.lg,
         padding: AppSpacing.lg,
         titleSize: 19,
-        subtitleSize: 11.5,
+        subtitleSize: 12,
         showSubtitle: false,
         titleMaxLines: 3,
-        ctaHeight: 36,
         contentFlex: 7,
         visualFlex: 5,
       );
@@ -196,7 +304,6 @@ class _HeroMetrics {
         subtitleSize: 12,
         showSubtitle: true,
         titleMaxLines: 2,
-        ctaHeight: 38,
         contentFlex: 6,
         visualFlex: 5,
       );
@@ -210,7 +317,6 @@ class _HeroMetrics {
         subtitleSize: 13,
         showSubtitle: true,
         titleMaxLines: 2,
-        ctaHeight: 42,
         contentFlex: 6,
         visualFlex: 5,
       );
@@ -224,7 +330,6 @@ class _HeroMetrics {
         subtitleSize: 14,
         showSubtitle: true,
         titleMaxLines: 2,
-        ctaHeight: 46,
         contentFlex: 5,
         visualFlex: 6,
       );
@@ -237,7 +342,6 @@ class _HeroMetrics {
       subtitleSize: 15,
       showSubtitle: true,
       titleMaxLines: 2,
-      ctaHeight: 50,
       contentFlex: 5,
       visualFlex: 6,
     );
@@ -457,7 +561,7 @@ class _SlideContent extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: metrics.titleSize,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
               height: 1.05,
               letterSpacing: -0.6,
               color: titleColor,
@@ -486,24 +590,11 @@ class _SlideContent extends StatelessWidget {
           _Entrance(
             isActive: isActive,
             delayMs: 130,
-            child: SizedBox(
-              height: metrics.ctaHeight,
-              child: ElevatedButton(
-                onPressed: onCta,
-                style: appPrimaryButtonStyle(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: metrics.ctaHeight * 0.62,
-                  ),
-                ),
-                child: Text(
-                  promotion.ctaLabel!,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: metrics.ctaHeight * 0.33,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+            // 44 dp visual, 48 dp target, one type size at every width.
+            child: BlynkButton.primary(
+              label: promotion.ctaLabel!,
+              compact: true,
+              onPressed: onCta,
             ),
           ),
         ],
@@ -572,7 +663,8 @@ class _Entrance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = Duration(milliseconds: 360 + delayMs);
+    final duration = BlynkMotion.resolve(context, Duration(milliseconds: 360 + delayMs));
+    final fade = BlynkMotion.resolve(context, Duration(milliseconds: 260 + delayMs));
 
     return AnimatedSlide(
       offset: isActive ? Offset.zero : Offset(offsetX, 0.24),
@@ -584,7 +676,7 @@ class _Entrance extends StatelessWidget {
         curve: Curves.easeOutCubic,
         child: AnimatedOpacity(
           opacity: isActive ? 1 : 0,
-          duration: Duration(milliseconds: 260 + delayMs),
+          duration: fade,
           child: child,
         ),
       ),
@@ -593,23 +685,22 @@ class _Entrance extends StatelessWidget {
 }
 
 /// A connected track of pills; the active one is Blynk Green, which holds
-/// contrast against the white feed. Tapping one jumps to that promotion.
+/// contrast against the white feed. It is a status readout, not a control:
+/// one labelled node, no tappable dots (swipe moves between promotions).
 class _SlideIndicator extends StatelessWidget {
   const _SlideIndicator({
+    super.key,
     required this.count,
     required this.current,
-    required this.onTap,
   });
 
   final int count;
   final int current;
-  final ValueChanged<int> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Promotion ${current + 1} of $count',
-      excludeSemantics: true,
+    // Decoration only: the carousel group above carries the spoken label.
+    return ExcludeSemantics(
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
@@ -623,22 +714,16 @@ class _SlideIndicator extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: List.generate(count, (index) {
             final isActive = index == current;
-            return GestureDetector(
-              onTap: () => onTap(index),
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  width: isActive ? 22 : 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppColors.primaryGreenColor
-                        : AppSurfaces.border,
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  ),
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: AnimatedContainer(
+                duration: BlynkMotion.resolve(context, const Duration(milliseconds: 280)),
+                curve: Curves.easeOutCubic,
+                width: isActive ? 22 : 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: isActive ? BlynkColors.ink : BlynkColors.lineStrong,
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
                 ),
               ),
             );

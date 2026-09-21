@@ -3,9 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../../Services/Providers/cart.provider.dart';
 import '../../../app_design.dart';
-import '../../../constants.dart';
+import '../../../Models/order_format.dart';
 import 'add_to_cart_button.dart';
 import 'card_product.dart';
+import 'money_text.dart';
 
 /// One cart line. Everything shown comes from the [CartLine] held by
 /// CartProvider; quantity changes go through the shared [AddToCartButton]
@@ -95,7 +96,9 @@ class CartProductCard extends StatelessWidget {
           final price = _LinePrice(line: line, alignEnd: wide);
           final stepper = interactive
               ? AddToCartButton(product: product, compact: false)
-              : const SizedBox(height: 40, width: 100);
+              // Same footprint as the live stepper (48 dp tall) so the fade-out
+              // copy doesn't shift while it leaves.
+              : const SizedBox(height: 48, width: 124);
           final remove = _RemoveButton(line: line, enabled: interactive);
 
           if (wide) {
@@ -131,12 +134,16 @@ class CartProductCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        Expanded(child: price),
-                        const SizedBox(width: AppSpacing.sm),
-                        stepper,
-                      ],
+                    // Wrap: at a large text size the stepper drops below the
+                    // price instead of squeezing it.
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.sm,
+                        children: [price, stepper],
+                      ),
                     ),
                   ],
                 ),
@@ -148,8 +155,6 @@ class CartProductCard extends StatelessWidget {
     );
   }
 }
-
-String _rs(double amount) => '$appCurrencySybmbol ${amount.toStringAsFixed(0)}';
 
 class _LinePrice extends StatelessWidget {
   const _LinePrice({required this.line, required this.alignEnd});
@@ -164,8 +169,8 @@ class _LinePrice extends StatelessWidget {
           alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          _rs(line.lineTotal),
+        MoneyText(
+          line.lineTotal,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -176,7 +181,7 @@ class _LinePrice extends StatelessWidget {
         ),
         if (line.quantity > 1)
           Text(
-            '${line.quantity} × ${_rs(line.product.sellingPrice)}',
+            '${line.quantity} × ${formatLkr(line.product.sellingPrice)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -205,9 +210,9 @@ class _RemoveButton extends StatelessWidget {
       icon: const Icon(Icons.delete_outline_rounded, size: 20),
       color: AppTextColors.secondary,
       disabledColor: AppTextColors.muted,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      // A 48 x 48 hit target (it sat at 40 x 40 with compact density).
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
     );
   }
 }

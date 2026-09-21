@@ -130,9 +130,9 @@ void main() {
       expect(cart.quantityOf('b0000001-0000-0000-0000-000000000001'), 2);
       expect(find.text('2 × Rs. 540'), findsOneWidget);
       // Line total and the summary's subtotal.
-      expect(find.text('Rs. 1080'), findsNWidgets(2));
+      expect(find.text('Rs. 1,080'), findsNWidgets(2));
       expect(find.text('Subtotal (2 items)'), findsOneWidget);
-      expect(find.text('Rs. 1150'), findsNWidgets(2)); // 1080 + 70
+      expect(find.text('Rs. 1,150'), findsNWidgets(2)); // 1080 + 70
 
       await tester.tap(minus('Kotmale Fresh Milk 1L'));
       await settle(tester);
@@ -201,7 +201,7 @@ void main() {
             of: find.byType(CartProductCard),
             matching: find.byWidgetPredicate(
               (w) =>
-                  w is Container &&
+                  w is DecoratedBox &&
                   w.decoration is BoxDecoration &&
                   (w.decoration as BoxDecoration).color == color,
             ),
@@ -313,8 +313,8 @@ void main() {
 
       expect(find.byType(CheckoutScreen), findsOneWidget);
       // The verified checkout pieces are still the ones doing the work.
-      expect(find.text('Place Order'), findsOneWidget);
-      expect(find.text('Cash on Delivery'), findsOneWidget);
+      expect(find.text('Place order'), findsOneWidget);
+      expect(find.text('Cash on delivery'), findsOneWidget);
       expect(
         find.descendant(
           of: find.byType(CheckoutScreen),
@@ -333,7 +333,7 @@ void main() {
       );
 
       expect(find.text('Your cart is empty'), findsOneWidget);
-      expect(find.text('Place Order'), findsNothing);
+      expect(find.text('Place order'), findsNothing);
     });
   });
 
@@ -371,7 +371,7 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Proceed to Checkout'), findsOneWidget);
         // 540 + 1610 + 70
-        expect(find.textContaining('Rs. 2220'), findsWidgets);
+        expect(find.textContaining('Rs. 2,220'), findsWidgets);
 
         await tester.tap(plus('Kotmale Fresh Milk 1L'));
         await settle(tester);

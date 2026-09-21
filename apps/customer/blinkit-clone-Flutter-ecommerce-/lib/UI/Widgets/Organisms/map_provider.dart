@@ -1,12 +1,15 @@
 import 'package:flutter/widgets.dart';
 
+import 'google_map_view.dart';
+import 'map_provider_config.dart';
 import 'maplibre_map_view.dart';
 
 /// Provider-neutral map contracts (plan section 8.4). This file names no map
-/// SDK: only the adapter file (maplibre_map_view.dart) may import one, so
-/// swapping the map provider later means changing that file and the two
-/// factory redirects below, nothing else. Every other file, including
-/// OrderTrackingMap, depends on this file alone.
+/// SDK: only the adapter files (google_map_view.dart, maplibre_map_view.dart)
+/// may import one, so swapping the map provider later means changing those
+/// files and the two factories below, nothing else. Every other file,
+/// including OrderTrackingMap, depends on this file alone. The factories pick
+/// ONE adapter at runtime (map_provider_config.dart) and never build both.
 
 /// A latitude/longitude pair in degrees. Value-equal so a marker set can be
 /// compared and diffed.
@@ -26,6 +29,11 @@ class GeoPoint {
   @override
   String toString() => 'GeoPoint($latitude, $longitude)';
 }
+
+/// Whether the active map draws OpenStreetMap-derived tiles, so Blynk must draw
+/// the OSM credit itself. False for Google, which draws its own logo and
+/// copyright that nothing may cover (plan sections 11.5, 12).
+bool get mapNeedsOsmAttribution => MapProviderConfig.kind == MapProviderKind.maplibre;
 
 enum MapMarkerTone { destination, riderLive, riderStale }
 
@@ -59,18 +67,27 @@ typedef TrackingMapBuilder = TrackingMapView Function({
 });
 
 /// A read-only map showing a fixed set of markers - the live delivery-tracking
-/// map. The concrete widget returned is MapLibreTrackingMapView; callers never
-/// reference that class directly.
+/// map. The concrete widget returned is GoogleTrackingMapView (or
+/// MapLibreTrackingMapView on rollback); callers never reference those classes
+/// directly.
 ///
 /// [markers] may change between builds: implementations move / retone /
 /// remove the markers whose [MapMarkerSpec.id] persists, appears or vanishes.
 abstract class TrackingMapView extends StatelessWidget {
-  const factory TrackingMapView({
+  factory TrackingMapView({
     Key? key,
     required GeoPoint initialCenter,
     required double initialZoom,
     required Set<MapMarkerSpec> markers,
-  }) = MapLibreTrackingMapView;
+  }) {
+    switch (MapProviderConfig.kind) {
+      case MapProviderKind.google:
+        return GoogleTrackingMapView(key: key, initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
+      case MapProviderKind.maplibre:
+        return MapLibreTrackingMapView(
+            key: key, initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
+    }
+  }
 
   const TrackingMapView.constructor({super.key});
 
@@ -94,18 +111,28 @@ typedef LocationPickerMapBuilder = LocationPickerMapView Function({
 /// when it settles. When the map itself cannot be shown the implementation
 /// shows an honest "Map unavailable" state (no pin) and never reports a
 /// position: the caller keeps the last one it knew. The concrete widget
-/// returned is MapLibreLocationPickerView.
+/// returned is GoogleLocationPickerView (or MapLibreLocationPickerView on
+/// rollback).
 ///
 /// When it falls back to "Map unavailable" the implementation also dispatches a
 /// [PickerMapUnavailableNotification] up the tree, so the screen can stop
 /// telling the customer to "move the map" (the position it holds is then the
 /// device fix, not something the customer chose).
 abstract class LocationPickerMapView extends StatelessWidget {
-  const factory LocationPickerMapView({
+  factory LocationPickerMapView({
     Key? key,
     required GeoPoint initialPosition,
     required ValueChanged<GeoPoint> onPositionChanged,
-  }) = MapLibreLocationPickerView;
+  }) {
+    switch (MapProviderConfig.kind) {
+      case MapProviderKind.google:
+        return GoogleLocationPickerView(
+            key: key, initialPosition: initialPosition, onPositionChanged: onPositionChanged);
+      case MapProviderKind.maplibre:
+        return MapLibreLocationPickerView(
+            key: key, initialPosition: initialPosition, onPositionChanged: onPositionChanged);
+    }
+  }
 
   const LocationPickerMapView.constructor({super.key});
 }

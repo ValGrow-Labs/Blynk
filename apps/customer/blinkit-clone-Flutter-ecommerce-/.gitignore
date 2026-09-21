@@ -45,3 +45,6 @@ app.*.map.json
 
 # Add Env File
 .env
+
+# Production build configuration (owner-supplied values; the .example.json is committed)
+/env/production.json

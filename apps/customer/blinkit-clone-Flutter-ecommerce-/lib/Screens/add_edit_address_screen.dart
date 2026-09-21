@@ -7,9 +7,11 @@ import 'package:provider/provider.dart';
 import '../Models/address_model.dart';
 import '../Services/Location/device_location_source.dart';
 import '../Services/Providers/address.provider.dart';
+import '../Services/store_info.dart';
 import '../UI/Widgets/Organisms/map_provider.dart';
 import '../app_colors.dart';
 import '../app_design.dart';
+import '../design/tokens.dart';
 import 'live_location_picker_screen.dart';
 
 // The backend's createAddressSchema requires explicit numeric latitude and
@@ -86,7 +88,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _phoneController = TextEditingController(text: e?.recipientPhone ?? '');
     _line1Controller = TextEditingController(text: e?.addressLine1 ?? '');
     _line2Controller = TextEditingController(text: e?.addressLine2 ?? '');
-    _cityController = TextEditingController(text: e?.city ?? 'Dharga Town');
+    _cityController = TextEditingController(text: e?.city ?? StoreInfo.hubName);
     _postalController = TextEditingController(text: e?.postalCode ?? '');
     _latController =
         TextEditingController(text: (e?.latitude ?? 6.4382).toString());
@@ -235,7 +237,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     ],
                   ),
                 ],
-                const _SectionLabel('CONTACT'),
+                const _SectionLabel('Contact'),
                 _FormSection(
                   children: [
                     _AddressField(
@@ -261,7 +263,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     ),
                   ],
                 ),
-                const _SectionLabel('DELIVERY ADDRESS'),
+                const _SectionLabel('Delivery address'),
                 _FormSection(
                   children: [
                     _AddressField(
@@ -300,7 +302,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     ),
                   ],
                 ),
-                const _SectionLabel('LOCATION'),
+                const _SectionLabel('Location'),
                 _FormSection(
                   children: [
                     // Says what the numbers are for and nothing more - it
@@ -370,7 +372,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     ),
                   ],
                 ),
-                const _SectionLabel('DELIVERY NOTES'),
+                const _SectionLabel('Delivery notes'),
                 _FormSection(
                   children: [
                     _AddressField(
@@ -494,7 +496,7 @@ class _LabelChip extends StatelessWidget {
               border: Border.all(
                 color: isSelected
                     ? AppColors.primaryYellowColor
-                    : AppSurfaces.border,
+                    : BlynkColors.lineStrong,
               ),
             ),
             child: Row(
@@ -545,12 +547,7 @@ class _SectionLabel extends StatelessWidget {
         header: true,
         child: Text(
           text,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1,
-            color: AppTextColors.secondary,
-          ),
+          style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
         ),
       ),
     );

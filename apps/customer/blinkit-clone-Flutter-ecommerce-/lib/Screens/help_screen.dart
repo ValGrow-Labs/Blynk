@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../app_colors.dart';
 import '../app_design.dart';
+import '../design/tokens.dart';
 import '../app_responsive.dart';
+import '../Models/order_format.dart';
+import '../Services/store_info.dart';
 
 /// Customer help. Everything here is static, factual Blynk service
 /// information (delivery area, hours, fee, payment method, cancellation
@@ -14,43 +16,41 @@ import '../app_responsive.dart';
 class HelpScreen extends StatelessWidget {
   const HelpScreen({super.key});
 
-  static const List<_Faq> _faqs = [
-    _Faq(
+  static final List<_Faq> _faqs = [
+    const _Faq(
       question: 'Where do you deliver?',
       answer:
-          'We deliver within 4 km of our Dharga Town hub. If your address '
-          'falls outside that range, checkout will let you know before your '
-          'order is placed.',
+          'We deliver within ${StoreInfo.serviceRadiusKm} km of our '
+          '${StoreInfo.hubName} hub. If your address falls outside that '
+          'range, checkout will let you know before your order is placed.',
     ),
-    _Faq(
+    const _Faq(
       question: 'What are your delivery hours?',
       answer:
           'You can place an order any time, day or night. Deliveries go out '
-          'between 8:00 AM and 9:00 PM.',
+          '${StoreInfo.deliveryHoursLabel}.',
     ),
     _Faq(
       question: 'How much is delivery?',
-      answer: 'Delivery is a flat Rs. 70 per order.',
+      answer: 'Delivery is a flat ${formatLkr(StoreInfo.flatDeliveryFee)} per order.',
     ),
-    _Faq(
+    const _Faq(
       question: 'How can I pay?',
       answer:
-          'Cash on Delivery. Pay the rider when your groceries arrive - no '
-          'card or online payment needed.',
+          '${StoreInfo.paymentMethodLabel}. Pay the rider when your groceries '
+          'arrive - no card or online payment needed.',
     ),
-    _Faq(
+    const _Faq(
       question: 'Can I cancel my order?',
       answer:
           'Yes, while your order is still Placed or Packed. Once it is out '
           'for delivery we can no longer cancel it. Open the order from '
           'Orders to cancel.',
     ),
-    _Faq(
+    const _Faq(
       question: 'Something was missing or wrong',
       answer:
-          'Open the order from the Orders tab and check the item list first. '
-          'If something still looks wrong, contact us on the number below '
-          'with your order number ready.',
+          'Open the order from the Orders tab and check the item list first.',
     ),
   ];
 
@@ -70,7 +70,7 @@ class HelpScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryYellowColor.withValues(alpha: 0.25),
+                  color: BlynkColors.well,
                   borderRadius: AppRadius.cardBorder,
                 ),
                 child: const Row(
@@ -113,7 +113,7 @@ class HelpScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Still need help?',
+                      'Our store',
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
@@ -122,8 +122,7 @@ class HelpScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     const Text(
-                      'Reach the Blynk team during delivery hours '
-                      '(8:00 AM - 9:00 PM) and keep your order number handy.',
+                      'Deliveries go out ${StoreInfo.deliveryHoursLabel}.',
                       style: TextStyle(
                         fontSize: 13,
                         height: 1.4,
@@ -136,11 +135,11 @@ class HelpScreen extends StatelessWidget {
                         const Icon(
                           Icons.place_outlined,
                           size: 18,
-                          color: AppColors.primaryGreenColor,
+                          color: BlynkColors.ink2,
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
-                          'Dharga Town, Sri Lanka',
+                          '${StoreInfo.hubName}, ${StoreInfo.country}',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade700,
@@ -179,7 +178,7 @@ class _FaqTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
         borderRadius: AppRadius.cardBorder,
-        boxShadow: AppElevation.card,
+        border: Border.all(color: BlynkColors.line),
       ),
       child: Material(
         color: Colors.white,
@@ -197,7 +196,7 @@ class _FaqTile extends StatelessWidget {
                 color: AppTextColors.primary,
               ),
             ),
-            iconColor: AppColors.primaryGreenColor,
+            iconColor: BlynkColors.ink2,
             childrenPadding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
               0,

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SliverConstraints, SliverGridLayout;
 
 import '../../../Models/category_model.dart';
-import '../../../app_colors.dart';
 import '../../../app_design.dart';
+import '../../../design/tokens.dart';
 
 /// A single category tile. Used both in Home's compact category rail and in
 /// the full Categories screen, so the two can never drift out of sync.
@@ -38,13 +39,10 @@ class CategoryWidget extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.primaryYellowColor.withValues(alpha: 0.35)
-                    : AppSurfaces.tile,
+                color: BlynkColors.well,
                 borderRadius: AppRadius.cardBorder,
-                border: isActive
-                    ? Border.all(color: AppColors.primaryYellowColor, width: 2)
-                    : null,
+                // Selected is a 2 dp ink border, never a yellow wash.
+                border: isActive ? Border.all(color: BlynkColors.ink, width: 2) : null,
               ),
               padding: const EdgeInsets.all(AppSpacing.sm),
               alignment: Alignment.center,
@@ -66,12 +64,9 @@ class CategoryWidget extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.15,
-              fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-              color: AppTextColors.primary,
-            ),
+            style: isActive
+                ? BlynkText.caption.copyWith(fontWeight: FontWeight.w800)
+                : BlynkText.caption,
           ),
         ],
       ),
@@ -88,8 +83,56 @@ class _CategoryFallbackIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Icon(
       Icons.local_grocery_store_outlined,
-      color: AppTextColors.muted,
+      color: BlynkColors.ink2,
       size: 26,
     );
   }
+}
+
+/// Grid layout for [CategoryWidget] tiles. The tile height is derived from
+/// the tile width plus the two-line label at the current text scale (the same
+/// pattern as `ProductCard.heightFor`), so a large system font grows the
+/// tiles instead of overflowing a fixed aspect ratio.
+class CategoryTileGridDelegate extends SliverGridDelegate {
+  const CategoryTileGridDelegate({
+    required this.crossAxisCount,
+    required this.mainAxisSpacing,
+    required this.crossAxisSpacing,
+    required this.labelHeight,
+    this.imageRatio = 0.9,
+  });
+
+  final int crossAxisCount;
+  final double mainAxisSpacing;
+  final double crossAxisSpacing;
+
+  /// Height of the two-line label, from [labelHeightFor].
+  final double labelHeight;
+
+  /// Image area height as a fraction of the tile width.
+  final double imageRatio;
+
+  /// Two lines of [BlynkText.caption] (16 dp line height) at the current scale.
+  static double labelHeightFor(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(12) * (16 / 12) * 2;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final usable = constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1);
+    final tileWidth = usable / crossAxisCount;
+    return SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: crossAxisCount,
+      mainAxisSpacing: mainAxisSpacing,
+      crossAxisSpacing: crossAxisSpacing,
+      mainAxisExtent: tileWidth * imageRatio + AppSpacing.sm + labelHeight,
+    ).getLayout(constraints);
+  }
+
+  @override
+  bool shouldRelayout(CategoryTileGridDelegate old) =>
+      old.crossAxisCount != crossAxisCount ||
+      old.mainAxisSpacing != mainAxisSpacing ||
+      old.crossAxisSpacing != crossAxisSpacing ||
+      old.labelHeight != labelHeight ||
+      old.imageRatio != imageRatio;
 }

@@ -1,12 +1,14 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:ecom/Services/Providers/auth.provider.dart';
-import 'package:ecom/constants.dart';
+import 'package:ecom/design/tokens.dart';
 import '../UI/Widgets/Atoms/list_tile.dart';
-import '../UI/Widgets/Organisms/cupertino_logout_dialog.dart';
+import '../UI/Widgets/Atoms/blynk_button.dart';
+import '../UI/Widgets/Organisms/logout_dialog.dart';
+import 'customer_shell.dart';
+import '../app_responsive.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -15,11 +17,13 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leadingWidth: 25,
         automaticallyImplyLeading: true,
         title: const Text('Profile'),
       ),
-      body: Container(
+      body: ContentFrame(
+        maxWidth: 720,
+        gutter: false,
+        child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
@@ -36,77 +40,40 @@ class ProfileScreen extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      displayName,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text(displayName, style: BlynkText.title),
                     if (displayPhone.isNotEmpty)
                       Text(
                         displayPhone,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w300,
-                        ),
+                        style: BlynkText.body.copyWith(color: BlynkColors.ink2),
                       ),
                   ],
                 );
               },
             ),
-            Container(
-              decoration: const BoxDecoration(
-                color: Color.fromARGB(255, 216, 237, 255),
-                borderRadius: BorderRadius.all(Radius.circular(10)),
+            const SizedBox(height: BlynkSpace.s24),
+            // A guest browses freely; logging in is one clear step, not a wall.
+            if (!context.select<AuthProvider, bool>((a) => a.isAuthenticated)) ...[
+              BlynkButton.primary(
+                label: 'Log in',
+                expand: true,
+                onPressed: () => Navigator.of(context).pushNamed('/login'),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
-              margin: const EdgeInsets.symmetric(vertical: 15),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  buildIconWithLabel(assetName: kSvgIcons[0], title: 'Wallet'),
-                  buildIconWithLabel(assetName: kSvgIcons[1], title: 'Support'),
-                  buildIconWithLabel(
-                      assetName: kSvgIcons[2], title: 'Payments'),
-                ],
-              ),
-            ),
-
-            // User Information
-            const Text(
-              'YOUR INFORMATION',
-              style: TextStyle(
-                color: Colors.grey,
-                fontWeight: FontWeight.w400,
-              ),
+              const SizedBox(height: BlynkSpace.s16),
+            ],
+            customListTile(
+              icon: BlynkIcons.orders,
+              title: 'Your orders',
+              callback: () => CustomerShell.selectTab(context, 1),
             ),
             customListTile(
-              icon: Icons.inventory_2_outlined,
-              title: 'Your Orders',
-              callback: () {
-                Navigator.of(context).pushNamed('/orders');
-              },
-            ),
-            customListTile(
-              icon: Icons.inventory_2_outlined,
-              title: 'Address Book',
+              icon: BlynkIcons.addressBook,
+              title: 'Address book',
               callback: () {
                 Navigator.of(context).pushNamed('/user/address');
               },
             ),
-            const SizedBox(
-              height: 10,
-            ),
-            const Text(
-              'OTHERS',
-              style: TextStyle(
-                color: Colors.grey,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
             customListTile(
-              icon: Icons.share,
+              icon: BlynkIcons.share,
               title: 'Share the app',
               callback: () {
                 Share.share(
@@ -116,46 +83,22 @@ class ProfileScreen extends StatelessWidget {
               },
             ),
             customListTile(
-              icon: Icons.info_outline,
-              title: 'About Us',
+              icon: BlynkIcons.info,
+              title: 'About us',
               callback: () {
                 Navigator.of(context).pushNamed('/app/about');
               },
             ),
-            customListTile(
-              icon: Icons.logout,
-              title: 'Log out',
-              callback: () {
-                showCupertinoDialog(
-                  context: context,
-                  builder: ((context1) => const CupertinoLogoutDialog()),
-                );
-              },
-            ),
+            if (context.select<AuthProvider, bool>((a) => a.isAuthenticated))
+              customListTile(
+                icon: BlynkIcons.logout,
+                title: 'Log out',
+                callback: () => showLogoutDialog(context),
+              ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget buildIconWithLabel({required dynamic assetName, required String? title}) {
-    return Column(
-      children: [
-        SizedBox(
-          height: 30,
-          child: Image.network(assetName),
-        ),
-        const SizedBox(
-          height: 10,
-        ),
-        Text(
-          title!,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w300,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

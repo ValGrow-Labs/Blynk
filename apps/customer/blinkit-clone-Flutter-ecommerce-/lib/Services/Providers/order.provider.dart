@@ -4,6 +4,7 @@ import 'package:ecom/Infrastructure/HttpMethods/requesting_methods.dart';
 import 'package:ecom/Models/order_model.dart';
 import 'package:ecom/Services/Exceptions/api_exception.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
+import 'package:ecom/Services/app_errors.dart';
 
 /// A request against the orders API. Defaults to the app's single
 /// ApiService; injectable only so tests can replay captured real backend
@@ -49,21 +50,30 @@ class CancelOutcome {
 }
 
 class OrderProvider extends ChangeNotifier {
-  OrderProvider({OrderRequest? request}) : _request = request ?? _apiRequest;
+  OrderProvider({OrderRequest? request, DateTime Function()? clock})
+      : _request = request ?? _apiRequest,
+        _clock = clock ?? DateTime.now;
 
   final OrderRequest _request;
+  final DateTime Function() _clock;
+
+  /// A selection-triggered [refreshOrders] within this long of the previous
+  /// load is skipped, so flicking between tabs is not polling.
+  static const Duration refreshMinInterval = Duration(seconds: 30);
+
+  DateTime? _lastLoadStartedAt;
 
   static const int _pageSize = 20;
 
   List<OrderModel> _orders = [];
   bool _isLoadingOrders = false;
-  String? _ordersError;
+  CustomerError? _ordersFailure;
 
   bool _hasLoadedFirstPage = false;
   int _page = 1;
   int _totalPages = 1;
   bool _isLoadingMore = false;
-  String? _loadMoreError;
+  CustomerError? _loadMoreFailure;
 
   // Bumped on every loadOrders() call. A refresh (loadOrders) always wins
   // over an in-flight loadMoreOrders() or a superseded loadOrders(): both
@@ -76,20 +86,43 @@ class OrderProvider extends ChangeNotifier {
   int _listGeneration = 0;
 
   bool _isPlacingOrder = false;
-  String? _placeOrderError;
+  CustomerError? _placeOrderFailure;
   OrderModel? _lastPlacedOrder;
 
   List<OrderModel> get orders => _orders;
   bool get isLoadingOrders => _isLoadingOrders;
-  String? get ordersError => _ordersError;
+  String? get ordersError => _ordersFailure?.message;
+  CustomerError? get ordersFailure => _ordersFailure;
 
   bool get hasMoreOrders => _page < _totalPages;
   bool get isLoadingMore => _isLoadingMore;
-  String? get loadMoreError => _loadMoreError;
+  String? get loadMoreError => _loadMoreFailure?.message;
+  CustomerError? get loadMoreFailure => _loadMoreFailure;
 
   bool get isPlacingOrder => _isPlacingOrder;
-  String? get placeOrderError => _placeOrderError;
+  String? get placeOrderError => _placeOrderFailure?.message;
+  CustomerError? get placeOrderFailure => _placeOrderFailure;
   OrderModel? get lastPlacedOrder => _lastPlacedOrder;
+
+  /// Forgets the signed-in customer's orders (logout / session end). Bumping
+  /// the generation makes any in-flight list request discard its response
+  /// instead of repopulating the list for the next person.
+  void reset() {
+    _listGeneration++;
+    _orders = [];
+    _isLoadingOrders = false;
+    _ordersFailure = null;
+    _hasLoadedFirstPage = false;
+    _page = 1;
+    _totalPages = 1;
+    _isLoadingMore = false;
+    _loadMoreFailure = null;
+    _isPlacingOrder = false;
+    _placeOrderFailure = null;
+    _lastPlacedOrder = null;
+    _lastLoadStartedAt = null;
+    notifyListeners();
+  }
 
   ApiException _toApiException(Object e) => e is ApiException ? e : ApiService.handleError(e);
 
@@ -102,10 +135,11 @@ class OrderProvider extends ChangeNotifier {
   /// the generation bump means that when the stale call's response does
   /// arrive, it is discarded rather than applied on top of this refresh.
   Future<void> loadOrders() async {
+    _lastLoadStartedAt = _clock();
     final gen = ++_listGeneration;
     _isLoadingOrders = true;
     _isLoadingMore = false;
-    _ordersError = null;
+    _ordersFailure = null;
     notifyListeners();
 
     try {
@@ -124,13 +158,28 @@ class OrderProvider extends ChangeNotifier {
       _hasLoadedFirstPage = true;
     } catch (e) {
       if (gen != _listGeneration) return;
-      _ordersError = _toApiException(e).message;
+      _ordersFailure = AppErrors.from(e);
     } finally {
       if (gen == _listGeneration) {
         _isLoadingOrders = false;
         notifyListeners();
       }
     }
+  }
+
+  /// Loads page 1 unless one is already loading or, when not [force]d, the
+  /// list was loaded less than [refreshMinInterval] ago. Used when the Orders
+  /// tab is selected; the first mount and pull-to-refresh force it.
+  Future<void> refreshOrders({bool force = false}) {
+    if (!force && _isLoadingOrders) return Future<void>.value();
+    final last = _lastLoadStartedAt;
+    if (!force && last != null && _clock().difference(last) < refreshMinInterval) {
+      return Future<void>.value();
+    }
+    // Stamped here as well as in loadOrders so a fake that overrides loadOrders
+    // is throttled the same way.
+    _lastLoadStartedAt = _clock();
+    return loadOrders();
   }
 
   /// Fetches the next page and appends it. A no-op when there is nothing
@@ -153,7 +202,7 @@ class OrderProvider extends ChangeNotifier {
 
     final gen = _listGeneration;
     _isLoadingMore = true;
-    _loadMoreError = null;
+    _loadMoreFailure = null;
     notifyListeners();
 
     final nextPage = _page + 1;
@@ -173,7 +222,7 @@ class OrderProvider extends ChangeNotifier {
       _totalPages = int.tryParse('${pagination?['total_pages'] ?? _totalPages}') ?? _totalPages;
     } catch (e) {
       if (gen != _listGeneration) return;
-      _loadMoreError = _toApiException(e).message;
+      _loadMoreFailure = AppErrors.from(e);
     } finally {
       if (gen == _listGeneration) {
         _isLoadingMore = false;
@@ -209,7 +258,7 @@ class OrderProvider extends ChangeNotifier {
     String? customerNotes,
   }) async {
     _isPlacingOrder = true;
-    _placeOrderError = null;
+    _placeOrderFailure = null;
     notifyListeners();
 
     try {
@@ -236,13 +285,16 @@ class OrderProvider extends ChangeNotifier {
       }
 
       _lastPlacedOrder = placed;
+      // The list on screen does not have this order yet: the next selection of
+      // the Orders tab must fetch, not be throttled.
+      _lastLoadStartedAt = null;
       cart.clear();
       _isPlacingOrder = false;
       notifyListeners();
       return placed;
     } catch (e) {
       final apiError = _toApiException(e);
-      _placeOrderError = apiError.message;
+      _placeOrderFailure = AppErrors.from(apiError);
       _isPlacingOrder = false;
       notifyListeners();
       throw apiError;

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'add_to_cart_button.dart';
 import '../../../Models/product_model.dart';
 import '../../../app_design.dart';
-import '../../../constants.dart';
+import 'money_text.dart';
 
 /// The single product tile used by Home rails, category grids and search
 /// results. There is deliberately only one of these - every grid in the app
@@ -14,6 +14,33 @@ class ProductCard extends StatelessWidget {
 
   final ProductModel product;
 
+  static const double _padding = AppSpacing.sm;
+  static const double _control = 48; // the ADD / stepper hit box
+  static const double _unitLineHeight = 1.25;
+  static const double _priceLineHeight = 1.3;
+
+  static double _nameBox(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(14) * 1.25 * 2 + 1;
+
+  /// Everything in the card except the image, at the current text scale. The
+  /// card lays out exactly this, so a rail or grid that gives the card
+  /// `heightFor` never overflows and never leaves the image squashed.
+  static double chromeHeight(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return _padding * 2 +
+        AppSpacing.sm +
+        _nameBox(context) +
+        2 +
+        scaler.scale(12) * _unitLineHeight +
+        AppSpacing.xs +
+        scaler.scale(15) * _priceLineHeight +
+        _control;
+  }
+
+  /// Card height for a card [width] wide: a square image plus [chromeHeight].
+  static double heightFor(BuildContext context, double width) =>
+      (width - _padding * 2) + chromeHeight(context);
+
   @override
   Widget build(BuildContext context) {
     final isAvailable = product.isAvailable;
@@ -23,7 +50,7 @@ class ProductCard extends StatelessWidget {
       onTap: () => Navigator.of(context).pushNamed('/product', arguments: product),
       child: Container(
         decoration: appCardDecoration(),
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.all(_padding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -66,7 +93,7 @@ class ProductCard extends StatelessWidget {
             // Always reserves two lines so a one-line name doesn't give its
             // tile a taller image than its two-line neighbour in the row.
             SizedBox(
-              height: MediaQuery.textScalerOf(context).scale(14) * 1.25 * 2 + 1,
+              height: _nameBox(context),
               child: Text(
                 product.name,
                 maxLines: 2,
@@ -86,29 +113,27 @@ class ProductCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12,
+                height: _unitLineHeight,
                 color: AppTextColors.secondary,
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(
-                    '$appCurrencySybmbol ${product.sellingPrice.toStringAsFixed(0)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: AppTextColors.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                AddToCartButton(product: product),
-              ],
+            const SizedBox(height: AppSpacing.xs),
+            // Price on its own line: the 48 dp control needs the full row
+            // (a stepper alone is 124 dp, wider than the room beside a price).
+            MoneyText(
+              product.sellingPrice,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15,
+                height: _priceLineHeight,
+                fontWeight: FontWeight.w800,
+                color: AppTextColors.primary,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AddToCartButton(product: product),
             ),
           ],
         ),

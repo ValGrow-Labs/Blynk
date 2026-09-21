@@ -374,7 +374,9 @@ void main() {
       await _pumpDetail(tester, api);
 
       expect(find.text("Couldn't load this order."), findsOneWidget);
-      expect(find.text('Something broke.'), findsOneWidget);
+      // The backend's own text is never shown: the customer reads the mapped copy.
+      expect(find.text('Something broke.'), findsNothing);
+      expect(find.text('Something went wrong on our side. Try again in a moment.'), findsOneWidget);
       expect(find.byKey(_retry), findsOneWidget);
 
       api.routes[_getKey] = () async => _envelope(orderJson(status: 'PLACED', canCancel: true));
@@ -392,7 +394,8 @@ void main() {
       await _pumpDetail(tester, api);
 
       expect(find.text("Couldn't load this order."), findsOneWidget);
-      expect(find.text('The connection timed out.'), findsOneWidget);
+      expect(find.text('The connection timed out.'), findsNothing);
+      expect(find.text('That took too long. Try again.'), findsOneWidget);
       expect(find.byKey(_retry), findsOneWidget);
     });
   });

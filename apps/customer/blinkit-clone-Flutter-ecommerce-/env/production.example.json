@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to env/production.json (git-ignored) and fill in the owner-supplied values. Release builds require an https API_BASE_URL (not localhost). MAP_TILES_URL is optional: leave it empty to derive the map archive from the API origin.",
+  "API_BASE_URL": "",
+  "MAP_TILES_URL": ""
+}

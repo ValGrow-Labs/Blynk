@@ -1,8 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-import 'package:ecom/Infrastructure/HttpMethods/requesting_methods.dart';
+import 'package:ecom/Services/app_config.dart';
 
 /// Tile-source configuration for the map (pure functions, no map SDK).
 ///
@@ -49,11 +47,19 @@ String? resolveMapTilesUrl({required String? configured, required String apiBase
   return Uri(scheme: uri.scheme, host: uri.host, port: uri.hasPort ? uri.port : null).toString() + kMapTilesPath;
 }
 
-/// Reads MAP_TILES_URL and API_BASE_URL from the app's dotenv and resolves the
-/// archive URL. Null when dotenv was never loaded or nothing usable is set.
-String? resolveMapTilesUrlFromEnvironment() {
+/// Reads MAP_TILES_URL and API_BASE_URL through [AppConfig] (dart-define, then
+/// dotenv) and resolves the archive URL. Null when nothing usable is set, or
+/// (release) when the configured tiles address is not a public https one.
+/// [config] is for tests.
+String? resolveMapTilesUrlFromEnvironment({AppConfig? config}) {
   try {
-    return resolveMapTilesUrl(configured: dotenv.env['MAP_TILES_URL'], apiBaseUrl: getApiBaseUrl());
+    final c = config ?? AppConfig.current();
+    if (c.mapTilesProblem != null) return null;
+    return resolveMapTilesUrl(
+      configured: c.mapTilesUrl,
+      // Not apiBaseUrl: its debug localhost fallback would build a map from a guess.
+      apiBaseUrl: c.configuredApiBaseUrl ?? '',
+    );
   } catch (_) {
     return null;
   }

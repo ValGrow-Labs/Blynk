@@ -11,10 +11,12 @@ import '../Services/Validation/app_validators.dart';
 import '../UI/Widgets/Atoms/app_skeleton.dart';
 import '../UI/Widgets/Atoms/app_state_views.dart';
 import '../UI/Widgets/Atoms/card_product.dart';
+import '../UI/Widgets/Atoms/connectivity_banner.dart';
+import '../UI/Widgets/Atoms/failure_states.dart';
 import '../UI/Widgets/Organisms/bottom_cart_container.dart';
-import '../app_colors.dart';
 import '../app_design.dart';
 import '../app_responsive.dart';
+import '../design/tokens.dart';
 
 /// Catalog search. Results come from the backend's server-side search
 /// (ProductProvider.search), rendered with the app's single ProductCard, so
@@ -160,6 +162,8 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final responsive = Responsive.of(context);
+    final hasResults = context
+        .select<ProductProvider, bool>((p) => p.searchResults.isNotEmpty);
 
     return Scaffold(
       backgroundColor: AppSurfaces.subtle,
@@ -177,6 +181,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     onChanged: _onChanged,
                     onSubmitted: _onSubmitted,
                     onClear: _clearQuery,
+                  ),
+                  ConnectivityBanner(
+                    hasContent: hasResults,
+                    onRetry: context.read<ProductProvider>().retrySearch,
                   ),
                   Expanded(
                     child: _query.isEmpty
@@ -228,7 +236,7 @@ class _SearchField extends StatelessWidget {
     final activeBorder = OutlineInputBorder(
       borderRadius: AppRadius.fieldBorder,
       borderSide: const BorderSide(
-        color: AppColors.primaryYellowColor,
+        color: BlynkColors.ink,
         width: 2,
       ),
     );
@@ -411,13 +419,8 @@ class _SectionTitle extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              title.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-                color: AppTextColors.secondary,
-              ),
+              title,
+              style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
             ),
           ),
           if (trailing != null) trailing!,
@@ -457,8 +460,8 @@ class _ResultsView extends StatelessWidget {
     }
 
     // A fixed aspect ratio makes tiles grow ever taller as columns widen.
-    // Instead: a square image the width of the tile, plus the card's
-    // fixed-height text block (scaled with the user's text size).
+    // Instead: the card's own height for this tile width (a square image plus
+    // its text block and 48 dp control, all scaled with the user's text size).
     final contentWidth = math.min(
       MediaQuery.sizeOf(context).width,
       Responsive.of(context).contentMaxWidth,
@@ -467,12 +470,11 @@ class _ResultsView extends StatelessWidget {
             AppSpacing.lg * 2 -
             AppSpacing.md * (crossAxisCount - 1)) /
         crossAxisCount;
-    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);
     final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: crossAxisCount,
       mainAxisSpacing: AppSpacing.md,
       crossAxisSpacing: AppSpacing.md,
-      mainAxisExtent: tileWidth - AppSpacing.lg + 124 * textScale,
+      mainAxisExtent: ProductCard.heightFor(context, tileWidth),
     );
     const gridPadding = EdgeInsets.fromLTRB(
       AppSpacing.lg,
@@ -496,16 +498,15 @@ class _ResultsView extends StatelessWidget {
           ),
         ),
       ];
-    } else if (provider.searchError != null) {
+    } else if (provider.searchFailure != null) {
       content = [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: AppStateView(
-            icon: Icons.wifi_off_rounded,
+          child: FailureState(
+            failure: provider.searchFailure!,
             title: "Couldn't load results",
-            message: 'Check your connection and try again.',
-            actionLabel: 'Try Again',
-            onAction: provider.retrySearch,
+            scrollable: false,
+            onRetry: provider.retrySearch,
           ),
         ),
       ];
@@ -517,9 +518,8 @@ class _ResultsView extends StatelessWidget {
           hasScrollBody: false,
           child: AppStateView(
             icon: Icons.search_off_rounded,
-            title: 'Sorry!',
-            message: 'We couldn\'t find anything for "$query"$scope.\n'
-                'Try checking the spelling or using a broader search.',
+            title: 'No results for "$query"$scope',
+            message: 'Check the spelling or browse categories.',
             actionLabel: 'Browse Categories',
             onAction: () => Navigator.of(context).pushNamed('/categories'),
             accent: AppTextColors.secondary,
@@ -599,20 +599,24 @@ class _ResultsView extends StatelessWidget {
       ];
     }
 
-    return CustomScrollView(
-      controller: scrollController,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      slivers: [
-        if (categories.isNotEmpty)
-          SliverToBoxAdapter(
-            child: _CategoryFilterBar(
-              categories: categories,
-              selectedSlug: categorySlug,
-              onSelected: onCategorySelected,
+    // One pulse for every skeleton card; parked (no ticker) when not loading.
+    return SkeletonScope(
+      active: isLoading,
+      child: CustomScrollView(
+        controller: scrollController,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          if (categories.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _CategoryFilterBar(
+                categories: categories,
+                selectedSlug: categorySlug,
+                onSelected: onCategorySelected,
+              ),
             ),
-          ),
-        ...content,
-      ],
+          ...content,
+        ],
+      ),
     );
   }
 }
@@ -630,28 +634,33 @@ class _CategoryFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A floor, not a fixed height: a large text size must be able to grow the
+    // bar, so the chips sit in a scroll view that sizes to them.
     return Container(
-      color: Colors.white,
-      height: 52,
-      child: ListView(
+      color: BlynkColors.paper,
+      constraints: const BoxConstraints(minHeight: 52),
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,
         ),
-        children: [
-          _FilterChip(
-            label: 'All',
-            selected: selectedSlug == null,
-            onTap: () => onSelected(null),
-          ),
-          for (final category in categories)
+        child: Row(
+          children: [
             _FilterChip(
-              label: category.name,
-              selected: selectedSlug == category.slug,
-              onTap: () => onSelected(category.slug),
+              label: 'All',
+              selected: selectedSlug == null,
+              onTap: () => onSelected(null),
             ),
-        ],
+            for (final category in categories)
+              _FilterChip(
+                label: category.name,
+                selected: selectedSlug == category.slug,
+                onTap: () => onSelected(category.slug),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -677,17 +686,12 @@ class _FilterChip extends StatelessWidget {
         selected: selected,
         showCheckmark: false,
         onSelected: (_) => onTap(),
-        selectedColor: AppColors.primaryYellowColor,
+        // Selected is ink, not yellow: yellow is only the forward action.
+        selectedColor: BlynkColors.ink,
         backgroundColor: AppSurfaces.subtle,
-        side: BorderSide(
-          color: selected
-              ? AppColors.primaryYellowColor
-              : AppSurfaces.border,
-        ),
-        labelStyle: TextStyle(
-          fontSize: 13,
-          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-          color: AppTextColors.primary,
+        side: const BorderSide(color: BlynkColors.lineStrong),
+        labelStyle: BlynkText.label.copyWith(
+          color: selected ? BlynkColors.paper : BlynkColors.ink,
         ),
       ),
     );

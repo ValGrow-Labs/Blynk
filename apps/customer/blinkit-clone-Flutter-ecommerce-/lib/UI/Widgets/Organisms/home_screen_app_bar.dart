@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../../Services/Providers/address.provider.dart';
 import '../../../Services/Providers/auth.provider.dart';
-import '../../../app_colors.dart';
+import '../../../Services/store_info.dart';
 import '../../../app_design.dart';
+import '../../../design/tokens.dart';
+import '../../../Screens/customer_shell.dart';
 
 /// Home header. Shows where we're delivering to using the customer's real
 /// default address.
@@ -57,10 +59,12 @@ class _HomeScreenAppBarState extends State<HomeScreenAppBar> {
               Expanded(
                 child: InkWell(
                   borderRadius: AppRadius.buttonBorder,
-                  onTap: isAuthenticated
-                      ? () => Navigator.of(context).pushNamed('/user/address')
-                      : null,
-                  child: Padding(
+                  // A guest's row is the way to log in; the row is the target.
+                  onTap: () => Navigator.of(context)
+                      .pushNamed(isAuthenticated ? '/user/address' : '/login'),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Padding(
                     padding: const EdgeInsets.symmetric(
                       vertical: AppSpacing.xs,
                       horizontal: AppSpacing.xs,
@@ -72,22 +76,24 @@ class _HomeScreenAppBarState extends State<HomeScreenAppBar> {
                         const Row(
                           children: [
                             Icon(
-                              Icons.storefront_rounded,
+                              BlynkIcons.shop,
                               size: 15,
-                              color: AppColors.primaryGreenColor,
+                              color: BlynkColors.ink2,
                             ),
                             SizedBox(width: AppSpacing.xs + 1),
-                            Text(
+                            Flexible(
+                              child: Text(
                               // The real Phase 1 service window, not an ETA.
-                              'Delivering 8 AM - 9 PM',
+                              'Delivering ${StoreInfo.deliveryHoursLabel}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              // A service window, not a state, so it is not green.
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12,
-                                letterSpacing: 0.3,
-                                color: AppColors.primaryGreenColor,
+                                color: BlynkColors.ink2,
                               ),
+                            ),
                             ),
                           ],
                         ),
@@ -96,7 +102,7 @@ class _HomeScreenAppBarState extends State<HomeScreenAppBar> {
                           children: [
                             Flexible(
                               child: Text(
-                                address?.label ?? 'Dharga Town',
+                                address?.label ?? StoreInfo.hubName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -130,6 +136,7 @@ class _HomeScreenAppBarState extends State<HomeScreenAppBar> {
                       ],
                     ),
                   ),
+                  ),
                 ),
               ),
               IconButton(
@@ -146,7 +153,7 @@ class _HomeScreenAppBarState extends State<HomeScreenAppBar> {
                     color: AppTextColors.primary,
                   ),
                 ),
-                onPressed: () => Navigator.of(context).pushNamed('/profile'),
+                onPressed: () => CustomerShell.selectTab(context, 3),
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ecom/Services/Validation/app_validators.dart';
@@ -6,14 +7,20 @@ import 'package:ecom/UI/Widgets/Atoms/app_toast.dart';
 import 'package:provider/provider.dart';
 
 import 'package:ecom/Services/Providers/auth.provider.dart';
-import 'package:ecom/UI/Widgets/Atoms/custom_button.dart';
-import 'package:ecom/UI/Widgets/Atoms/custom_text_field.dart';
-import 'package:ecom/app_colors.dart';
+import 'package:ecom/Services/app_errors.dart';
+import 'package:ecom/design/tokens.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_text_field.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
-  const OTPVerificationScreen({super.key, this.data});
+  const OTPVerificationScreen({super.key, this.data, bool? isDebug})
+      : isDebug = isDebug ?? kDebugMode;
 
   final dynamic data;
+
+  /// The dev code (auto-fill and the "Dev Code" chip) exists only in a debug
+  /// build. A parameter so a test can prove a release build ignores it.
+  final bool isDebug;
 
   @override
   State<OTPVerificationScreen> createState() => _OTPVerificationScreenState();
@@ -24,6 +31,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   int _secondsRemaining = 30;
   Timer? _timer;
   bool _isLoading = false;
+
+  // Shown under the code field (a live region), in the customer's words.
+  String? _errorText;
 
   String get _phoneNumber {
     if (widget.data is Map && widget.data['phoneNumber'] != null) {
@@ -38,15 +48,25 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   void initState() {
     super.initState();
     _otpController = TextEditingController();
+    _otpController.addListener(() {
+      if (_errorText != null && mounted) setState(() => _errorText = null);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (auth.lastDevOtp != null && auth.lastDevOtp!.isNotEmpty) {
+      final devCode = _devCode(auth);
+      if (devCode != null) {
         setState(() {
-          _otpController.text = auth.lastDevOtp!;
+          _otpController.text = devCode;
         });
       }
     });
     _startTimer();
+  }
+
+  String? _devCode(AuthProvider auth) {
+    if (!widget.isDebug) return null;
+    final code = auth.lastDevOtp;
+    return code != null && code.isNotEmpty ? code : null;
   }
 
   Future<void> _verifyOTP(BuildContext context, String otp) async {
@@ -55,15 +75,12 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     // Same contract as the backend's verifyOtpSchema: exactly 6 digits.
     if (AppValidators.otp(cleanOtp) != null) {
-      showAppToast(
-        msg: "Enter the 6-digit OTP",
-        backgroundColor: Colors.redAccent,
-        textColor: Colors.white,
-      );
+      setState(() => _errorText = 'Enter the 6-digit OTP');
       return;
     }
 
     setState(() {
+      _errorText = null;
       _isLoading = true;
     });
 
@@ -85,14 +102,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
+        _errorText = AppErrors.from(e).message;
       });
-
-      final message = e.toString().replaceAll('Exception: ', '');
-      showAppToast(
-        msg: message,
-        backgroundColor: Colors.redAccent,
-        textColor: Colors.white,
-      );
     }
   }
 
@@ -123,29 +134,21 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       await authProvider.requestOtp(_phoneNumber);
 
-      if (authProvider.lastDevOtp != null && authProvider.lastDevOtp!.isNotEmpty) {
+      final devCode = _devCode(authProvider);
+      if (devCode != null) {
         setState(() {
-          _otpController.text = authProvider.lastDevOtp!;
+          _otpController.text = devCode;
         });
       }
 
-      showAppToast(
-        msg: "A new OTP code has been sent",
-        backgroundColor: AppColors.primaryGreenColor,
-        textColor: Colors.white,
-      );
+      showAppToast(msg: "A new OTP code has been sent");
 
       setState(() {
         _secondsRemaining = 30;
       });
       _startTimer();
     } catch (e) {
-      final message = e.toString().replaceAll('Exception: ', '');
-      showAppToast(
-        msg: message,
-        backgroundColor: Colors.redAccent,
-        textColor: Colors.white,
-      );
+      if (mounted) setState(() => _errorText = AppErrors.from(e).message);
     }
   }
 
@@ -158,49 +161,25 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-      ),
-    );
-
     final displayPhone = _phoneNumber.startsWith('+')
         ? _phoneNumber
         : (_phoneNumber.isNotEmpty ? "+94 $_phoneNumber" : "");
 
     final auth = Provider.of<AuthProvider>(context);
-    final devCode = auth.lastDevOtp;
+    final devCode = _devCode(auth);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('OTP verification'),
         actions: [
-          TextButton(
+          BlynkButton.tertiary(
+            label: 'Skip',
             onPressed: () {
               Navigator.of(context).pushNamedAndRemoveUntil(
                 '/home',
                 (route) => false,
               );
             },
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Skip',
-                  style: TextStyle(
-                    color: AppColors.primaryGreenColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: AppColors.primaryGreenColor,
-                  size: 20,
-                ),
-              ],
-            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -218,92 +197,62 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 const Text("We've sent a verification code to "),
                 Text(
                   displayPhone,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: BlynkText.label,
                 ),
                 const SizedBox(
                   height: 10,
                 ),
                 const Text("Enter the code below to verify your account"),
-                if (devCode != null && devCode.isNotEmpty) ...[
+                if (devCode != null) ...[
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryGreenColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
+                    decoration: const BoxDecoration(
+                      color: BlynkColors.well,
+                      borderRadius: BlynkRadius.smAll,
                     ),
                     child: Text(
                       "Dev Code: $devCode (auto-filled)",
-                      style: const TextStyle(
-                        color: AppColors.primaryGreenColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
+                      style: BlynkText.caption,
                     ),
                   ),
                 ],
                 const SizedBox(
                   height: 10,
                 ),
-                customTextField(
-                  hintText: "Enter 6-digit OTP",
-                  isPhoneNumberField: true,
+                BlynkTextField(
+                  label: 'Verification code',
+                  hintText: 'Enter 6-digit OTP',
+                  controller: _otpController,
                   maxLength: 6,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  autofillHints: const [AutofillHints.oneTimeCode],
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: AppValidators.otp,
-                  textEditingController: _otpController,
-                  prefix: "",
-                  onFieldSubmitted: (value) {
-                    if (value != null && value.isNotEmpty) {
-                      _verifyOTP(context, value);
-                    }
-                    return null;
+                  errorText: _errorText,
+                  onSubmitted: (value) {
+                    if (value.isNotEmpty) _verifyOTP(context, value);
                   },
                 ),
                 const SizedBox(
                   height: 15,
                 ),
-                _isLoading
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8.0),
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryGreenColor,
-                          ),
-                        ),
-                      )
-                    : customTextButton(
-                        context,
-                        title: "Verify & Continue",
-                        color: AppColors.primaryGreenColor,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 60,
-                          vertical: 12,
-                        ),
-                        callback: () {
-                          _verifyOTP(context, _otpController.text);
-                        },
-                      ),
+                BlynkButton.primary(
+                  label: 'Verify',
+                  loading: _isLoading,
+                  onPressed: () => _verifyOTP(context, _otpController.text),
+                ),
                 const SizedBox(
                   height: 8,
                 ),
-                TextButton(
+                BlynkButton.tertiary(
+                  label: 'Skip & Explore Store',
                   onPressed: () {
                     Navigator.of(context).pushNamedAndRemoveUntil(
                       '/home',
                       (route) => false,
                     );
                   },
-                  child: const Text(
-                    "Skip & Explore Store",
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
                 ),
                 const SizedBox(
                   height: 10,
@@ -311,20 +260,11 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 (_timer != null && _timer!.isActive && _secondsRemaining > 0)
                     ? Text(
                         'Resend OTP in $_secondsRemaining s',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: BlynkText.label,
                       )
-                    : TextButton(
+                    : BlynkButton.tertiary(
+                        label: 'Resend OTP',
                         onPressed: _restartTimer,
-                        child: const Text(
-                          "Resend OTP",
-                          style: TextStyle(
-                            color: AppColors.primaryGreenColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
                       ),
               ],
             ),

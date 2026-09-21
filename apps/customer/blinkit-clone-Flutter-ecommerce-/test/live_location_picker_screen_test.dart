@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ecom/Screens/live_location_picker_screen.dart';
 import 'package:ecom/Services/Location/device_location_source.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_provider.dart';
+import 'package:ecom/UI/Widgets/Organisms/map_provider_config.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_tracking_map.dart' show mapAttributionText;
 import 'package:ecom/app_theme.dart';
 
@@ -409,6 +410,11 @@ void main() {
   });
 
   group('map unavailable (default map builder, no tile config in tests)', () {
+    // Google is the default provider; this group asserts the MapLibre adapter's
+    // tile-config failure, so it pins MapLibre.
+    setUp(() => MapProviderConfig.debugOverride = MapProviderKind.maplibre);
+    tearDown(() => MapProviderConfig.debugOverride = null);
+
     testWidgets('shows an honest unavailable state, the label, and Confirm still works', (tester) async {
       await openPicker(tester, fakeMap: false);
       await tester.tap(find.text('Allow location'));
