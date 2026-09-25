@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:ecom/app_colors.dart';
 import 'package:ecom/app_design.dart';
 import 'order_model.dart';
 
@@ -79,14 +78,24 @@ IconData orderStatusIcon(OrderStatus status) {
 }
 
 /// Blynk tokens for each tone. Green is reserved for delivered/paid.
+///
+/// These are TEXT colours: `order_status_header.dart` renders them at headline
+/// size and `order_timeline.dart` at label size, so every one of them has to
+/// clear 4.5:1 on **both** surfaces they land on — the order-detail page
+/// background (`AppColors.greyWhiteColor`, #EDF2F8) and the white timeline
+/// card. That is why `success` is [AppTextColors.positiveOnBackground] rather
+/// than `AppColors.primaryGreenColor` (4.36:1 on #EDF2F8) and `neutral` is
+/// [AppTextColors.onBackground] rather than `AppTextColors.secondary`
+/// (4.29:1). `order_format_test.dart` measures all four tones on both
+/// surfaces; keep the colour honest rather than lowering that floor.
 Color orderToneColor(OrderTone tone) {
   switch (tone) {
     case OrderTone.active:
       return AppTextColors.primary;
     case OrderTone.success:
-      return AppColors.primaryGreenColor;
+      return AppTextColors.positiveOnBackground;
     case OrderTone.neutral:
-      return AppTextColors.secondary;
+      return AppTextColors.onBackground;
     case OrderTone.problem:
       return AppTextColors.problem;
   }

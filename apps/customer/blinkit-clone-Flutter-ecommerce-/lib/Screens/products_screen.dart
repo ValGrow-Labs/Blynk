@@ -1,14 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:ecom/app_colors.dart';
 import '../Models/category_model.dart';
 import '../UI/Widgets/Atoms/failure_states.dart';
 import '../UI/Widgets/Organisms/bottom_cart_container.dart';
 import '../UI/Widgets/Organisms/products_screen_grid.dart';
 import '../UI/Widgets/Organisms/products_screen_sub_category_list.dart';
 import '../Services/Providers/product.provider.dart';
+import '../design/tokens.dart';
 
+/// Category listing: a sticky category rail on the left, the responsive
+/// product grid on the right.
+///
+/// 2026-09 redesign (W3): the rail is a fixed-width `paper` column rather than
+/// a fifth of the screen, so a wide viewport spends its extra width on product
+/// columns instead of on a rail that grows to 300 dp.
+///
+/// The page sits on the soft [BlynkColors.well] tint and the cards and the
+/// rail on `paper`: a page is the opposite surface of what sits on it, so a
+/// screen of white cards gets a tinted page. That contrast is also what
+/// separates the rail from the grid - there is no divider between them,
+/// because sections are separated by space, not rules.
+///
+/// Everything a customer can do here is unchanged: the rail re-filters from
+/// the real category list, the grid is the shared [buildProductsGrid], and the
+/// floating cart bar still stacks over the content.
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key, required this.categorySlug});
 
@@ -66,74 +82,66 @@ class _ProductsScreenState extends State<ProductsScreen> {
         final failure = productProvider.productsFailureFor(_activeSlug);
 
         return Scaffold(
-          backgroundColor: AppColors.greyWhiteColor,
+          backgroundColor: BlynkColors.well,
           appBar: AppBar(
-                automaticallyImplyLeading: true,
+            automaticallyImplyLeading: true,
             title: Text(title),
             actions: [
               IconButton(
-                icon: const Icon(Icons.search),
+                icon: const Icon(BlynkIcons.search),
                 tooltip: 'Search',
                 onPressed: () => Navigator.of(context).pushNamed(
                   '/search',
                   arguments: _activeSlug.isEmpty ? null : _activeSlug,
                 ),
               ),
-              const SizedBox(
-                width: 10,
-              ),
+              const SizedBox(width: BlynkSpace.s4),
             ],
           ),
           body: Stack(
             children: [
-              // Both side panels used to be forced to the full screen height via
-              // raw MediaQuery, which is taller than what's actually left inside
-              // Scaffold.body once the AppBar/status bar are subtracted - a real
-              // vertical overflow on every breakpoint. CrossAxisAlignment.stretch
-              // lets each Expanded child fill exactly the Row's real height.
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      color: Colors.white,
-                      child: CategorySidebar(
-                        activeSlug: _activeSlug,
-                        onSelect: _onCategorySelected,
+              // CrossAxisAlignment.stretch lets each child fill exactly the
+              // Row's real height - the height left inside Scaffold.body, not
+              // the whole screen, which is what a raw MediaQuery gave here and
+              // which overflowed at every breakpoint.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: CategorySidebar.widthFor(constraints.maxWidth),
+                        child: ColoredBox(
+                          color: BlynkColors.paper,
+                          child: CategorySidebar(
+                            activeSlug: _activeSlug,
+                            onSelect: _onCategorySelected,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 10,
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      child: isLoading
-                          ? buildProductsSkeletonGrid(context)
-                          : (failure != null && products.isEmpty)
-                              ? FailureState(
-                                  failure: failure,
-                                  title: "We couldn't load products",
-                                  retryKey: const Key('products-retry'),
-                                  scrollable: false,
-                                  onRetry: () => productProvider.loadProducts(
-                                    categorySlug:
-                                        _activeSlug.isEmpty ? null : _activeSlug,
-                                    force: true,
-                                  ),
-                                )
-                              : buildProductsGrid(context, products),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 10,
-                  ),
-                ],
+                      Expanded(
+                        child: isLoading
+                            ? buildProductsSkeletonGrid(context)
+                            : (failure != null && products.isEmpty)
+                                ? FailureState(
+                                    failure: failure,
+                                    title: "We couldn't load products",
+                                    retryKey: const Key('products-retry'),
+                                    scrollable: false,
+                                    onRetry: () => productProvider.loadProducts(
+                                      categorySlug: _activeSlug.isEmpty
+                                          ? null
+                                          : _activeSlug,
+                                      force: true,
+                                    ),
+                                  )
+                                : buildProductsGrid(context, products),
+                      ),
+                    ],
+                  );
+                },
               ),
-              const BottomStickyContainer()
+              const BottomStickyContainer(),
             ],
           ),
         );

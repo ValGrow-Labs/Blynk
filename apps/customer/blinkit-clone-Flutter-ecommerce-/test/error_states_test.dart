@@ -23,6 +23,7 @@ import 'package:ecom/Services/app_errors.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_skeleton.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_state_views.dart';
 import 'package:ecom/UI/Widgets/Organisms/cart_screen_payment_container.dart';
+import 'package:ecom/UI/Widgets/Organisms/home_product_sections.dart';
 import 'package:ecom/app_theme.dart';
 import 'package:ecom/main.dart' show rootScaffoldMessengerKey;
 
@@ -239,6 +240,10 @@ void main() {
         expect(retry, findsOneWidget);
         expect(find.descendant(of: retry, matching: find.text('Try again')), findsOneWidget);
         await tester.ensureVisible(retry);
+        // ensureVisible jumps the scroll position but does not pump; Home's
+        // composition is tall enough at 2.0x that the row really is below the
+        // fold, so the frame has to be built before tap() can locate it.
+        await tester.pump();
         final before = catalog.calls['/catalog/categories']!;
         catalog.failCategories = null;
         await tester.tap(retry);
@@ -251,7 +256,7 @@ void main() {
     }
 
     for (final scale in _scales) {
-      testWidgets('a rail that fails to load shows a compact retry row instead of vanishing (text scale $scale)', (tester) async {
+      testWidgets('a product section that fails to load shows a compact retry row instead of vanishing (text scale $scale)', (tester) async {
         final catalog = _Catalog()..failProducts = ApiException(500, 'boom');
         final products = ProductProvider(request: catalog.call);
         await tester.pumpWidget(_app(
@@ -262,24 +267,35 @@ void main() {
         ));
         await tester.pumpAndSettle();
 
-        expect(find.text("Couldn't load Dairy & Eggs."), findsOneWidget);
+        // Home's product section is now one grid of the selected chip's
+        // products, and it opens on "All" - the catalogue-wide query - so the
+        // sentence names products rather than one category. Same rule, same
+        // strength: a section that failed says so and offers a retry.
+        //
+        // The section sits under the brand tagline, the hero slot, the chips
+        // and the dental entry, so at 2.0x text scale on an 860 dp viewport it
+        // is genuinely below the fold - scroll to it first. It is the same row
+        // and the same assertions; only its position on the page changed.
+        final retry = find.byKey(HomeProductSections.retryKey);
+        await tester.scrollUntilVisible(retry, 200, scrollable: find.byType(Scrollable).first);
+        await tester.pumpAndSettle();
+
+        expect(find.text("Couldn't load products."), findsOneWidget);
         expect(tester.takeException(), isNull);
-        final retry = find.byKey(const Key('rail-retry-dairy-eggs'));
         expect(retry, findsOneWidget);
 
-        await tester.ensureVisible(retry);
         final before = catalog.calls['/catalog/products']!;
         catalog.failProducts = null;
         await tester.tap(retry);
         await tester.pumpAndSettle();
 
         expect(catalog.calls['/catalog/products'], before + 1);
-        expect(find.text("Couldn't load Dairy & Eggs."), findsNothing);
+        expect(find.text("Couldn't load products."), findsNothing);
         expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
       });
     }
 
-    testWidgets('a category with no stock (a successful empty answer) still shows no section', (tester) async {
+    testWidgets('an empty catalogue (a successful empty answer) still shows no section', (tester) async {
       final products = ProductProvider(request: (url, query) async {
         if (url == '/catalog/categories') return _categoriesResponse();
         if (url == '/promotions') return {'data': {'promotions': []}};
@@ -293,8 +309,8 @@ void main() {
       await tester.pumpWidget(_app(tester, home: const HomeScreen(), providers: _shopProviders(products)));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('rail-retry-dairy-eggs')), findsNothing);
-      expect(find.text("Couldn't load Dairy & Eggs."), findsNothing);
+      expect(find.byKey(HomeProductSections.retryKey), findsNothing);
+      expect(find.text("Couldn't load products."), findsNothing);
     });
   });
 
@@ -393,6 +409,7 @@ void main() {
     });
 
     testWidgets('loading says what is loading', (tester) async {
+      final handle = tester.ensureSemantics();
       final gate = Completer<void>();
       final orders = OrderProvider(request: (method, url, {body, query}) async {
         await gate.future;
@@ -401,10 +418,17 @@ void main() {
       await tester.pumpWidget(ordersApp(tester, orders));
       await tester.pump();
       await tester.pump();
-      expect(find.text('Loading your orders'), findsOneWidget);
+      // W9: the list now loads with skeleton rows instead of a centred
+      // spinner labelled in visible text, so the announcement is asserted
+      // where it actually has to arrive. This is the stronger form of the
+      // same intent: `find.text` only proved a string was painted, this
+      // proves an assistive technology receives it.
+      expect(find.bySemanticsLabel('Loading your orders'), findsOneWidget);
+      expect(find.byType(ListRowSkeleton), findsWidgets);
       gate.complete();
       await tester.pumpAndSettle();
       expect(find.text("You haven't placed any orders yet."), findsOneWidget);
+      handle.dispose();
     });
   });
 

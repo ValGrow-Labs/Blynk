@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../app_design.dart';
 import '../../../design/tokens.dart';
 import 'blynk_button.dart';
 import 'blynk_spinner.dart';
+import 'section_header.dart';
 
 /// The one state view for every empty, error, offline, not-found and loading
 /// case in the customer app: an outline glyph, a title, one sentence and at
@@ -166,6 +166,12 @@ class AppStateView extends StatelessWidget {
 }
 
 /// Section title with an optional trailing action (e.g. "See all").
+///
+/// W1 moved the implementation to [BlynkSectionHeader] in
+/// `section_header.dart`; this is the compatibility name its existing call
+/// sites keep using, so every section header in the app got the redesigned
+/// treatment without a screen edit. New code should name
+/// [BlynkSectionHeader] directly.
 class AppSectionHeader extends StatelessWidget {
   const AppSectionHeader({
     super.key,
@@ -179,42 +185,9 @@ class AppSectionHeader extends StatelessWidget {
   final VoidCallback? onAction;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.xl,
-        AppSpacing.sm,
-        AppSpacing.md,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppTextColors.primary,
-              ),
-            ),
-          ),
-          if (actionLabel != null && onAction != null)
-            TextButton(
-              onPressed: onAction,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(actionLabel!),
-                  const Icon(Icons.chevron_right, size: 18),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => BlynkSectionHeader(
+        title: title,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      );
 }

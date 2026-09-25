@@ -1,16 +1,15 @@
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ecom/Models/order_format.dart';
 import 'package:ecom/Models/order_model.dart';
-import 'package:ecom/Models/order_status_labels.dart';
-import 'package:ecom/UI/Widgets/Atoms/order_status_chip.dart';
+import 'package:ecom/UI/Widgets/Atoms/card_product_order_summary.dart';
+import 'package:ecom/UI/Widgets/Atoms/image_well.dart';
+import 'package:ecom/UI/Widgets/Atoms/money_text.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_bill_card.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_status_header.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_timeline.dart';
-import 'package:ecom/app_colors.dart';
 import 'package:ecom/app_theme.dart';
 
 import 'fixtures/order_fixtures.dart';
@@ -24,74 +23,7 @@ Future<void> _pump(WidgetTester tester, Widget child) {
   );
 }
 
-// --- WCAG 2.x contrast, computed rather than eyeballed ---------------------
-
-double _srgbToLinear(double c) => c <= 0.03928 ? c / 12.92 : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
-
-double _relativeLuminance(double r, double g, double b) =>
-    0.2126 * _srgbToLinear(r) + 0.7152 * _srgbToLinear(g) + 0.0722 * _srgbToLinear(b);
-
-double _contrastRatio(double lum1, double lum2) {
-  final lighter = math.max(lum1, lum2);
-  final darker = math.min(lum1, lum2);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-/// The WCAG contrast ratio between an opaque foreground colour and a
-/// (possibly translucent) background colour, after alpha-compositing
-/// (straight alpha) `background` over the real, opaque page colour `base`
-/// sitting behind the chip.
-double _contrastAgainst({required Color foreground, required Color background, required Color base}) {
-  final a = background.a;
-  final r = background.r * a + base.r * (1 - a);
-  final g = background.g * a + base.g * (1 - a);
-  final b = background.b * a + base.b * (1 - a);
-  final fgLum = _relativeLuminance(foreground.r, foreground.g, foreground.b);
-  final bgLum = _relativeLuminance(r, g, b);
-  return _contrastRatio(fgLum, bgLum);
-}
-
 void main() {
-  group('OrderStatusChip', () {
-    testWidgets('always pairs an icon with the label - never colour alone', (tester) async {
-      await _pump(tester, const OrderStatusChip(status: OrderStatus.delivered));
-
-      expect(find.text('Delivered'), findsOneWidget);
-      expect(find.byIcon(Icons.check_circle), findsOneWidget);
-    });
-
-    testWidgets('problem tone pairs an alert icon with the label', (tester) async {
-      await _pump(tester, const OrderStatusChip(status: OrderStatus.failed));
-
-      expect(find.text('Delivery failed'), findsOneWidget);
-      expect(find.byIcon(Icons.error_outline), findsOneWidget);
-    });
-
-    // The chip is used both on the order-detail page (white) and in the
-    // orders list (AppColors.greyWhiteColor scaffold) - every tone must
-    // clear the 4.5:1 minimum text contrast on both, computed here rather
-    // than trusted by eye.
-    group('every tone clears 4.5:1 WCAG text contrast on both page backgrounds', () {
-      const white = Color(0xffFFFFFF);
-      const greyWhite = AppColors.greyWhiteColor;
-
-      for (final tone in OrderTone.values) {
-        test(tone.name, () {
-          final colors = orderChipColors(tone);
-          final onWhite = _contrastAgainst(foreground: colors.foreground, background: colors.background, base: white);
-          final onGreyWhite =
-              _contrastAgainst(foreground: colors.foreground, background: colors.background, base: greyWhite);
-
-          expect(onWhite, greaterThanOrEqualTo(4.5), reason: '${tone.name} on white was ${onWhite.toStringAsFixed(2)}:1');
-          expect(
-            onGreyWhite,
-            greaterThanOrEqualTo(4.5),
-            reason: '${tone.name} on grey-white was ${onGreyWhite.toStringAsFixed(2)}:1',
-          );
-        });
-      }
-    });
-  });
 
   group('OrderStatusHeader', () {
     // C3 wording: label + sentence for every one of the 8 canonical
@@ -213,6 +145,59 @@ void main() {
       // fabricated clock time.
       expect(find.textContaining('AM'), findsNothing);
       expect(find.textContaining('PM'), findsNothing);
+    });
+  });
+
+  // --- 2026-09 premium redesign (W5) --------------------------------------
+  group('OrderSummaryProductCard', () {
+    OrderItemModel item({String status = 'SOURCED'}) => OrderModel.fromJson(
+          orderJson(items: [itemJson('i1', 'Kotmale Fresh Milk 1L', 2, 540, status: status)]),
+        ).items.single;
+
+    testWidgets('carries the shared no-image well, never a broken-image glyph', (tester) async {
+      await _pump(tester, OrderSummaryProductCard(item: item()));
+
+      expect(find.byType(BlynkImageWell), findsOneWidget);
+      for (final glyph in [Icons.broken_image, Icons.image_not_supported, Icons.hide_image]) {
+        expect(find.byIcon(glyph), findsNothing, reason: '$glyph');
+      }
+    });
+
+    testWidgets('an UNAVAILABLE line strikes the real name; no "was" price is invented', (tester) async {
+      await _pump(tester, OrderSummaryProductCard(item: item(status: 'UNAVAILABLE')));
+
+      final name = tester.widget<Text>(find.text('Kotmale Fresh Milk 1L'));
+      expect(name.style?.decoration, TextDecoration.lineThrough);
+      // Exactly two amounts would mean a fabricated original price beside the
+      // real one; this line shows one amount, the one the backend sent.
+      final amounts = tester
+          .widgetList<Text>(find.byType(Text))
+          .where((t) => (t.data ?? '').startsWith('Rs. '));
+      expect(amounts, hasLength(1));
+      expect(find.byType(StruckPrice), findsNothing);
+    });
+
+    testWidgets('the thumbnail gives way to the words above a 1.3x text scale', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.appTHeme,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2.0)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SizedBox(
+              width: 336,
+              child: SingleChildScrollView(child: OrderSummaryProductCard(item: item())),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BlynkImageWell), findsNothing);
+      expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 

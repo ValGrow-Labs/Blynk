@@ -43,6 +43,43 @@ export interface CodPaymentConfirmedPayload {
   amount: number | string;
 }
 
+/** Dental (B5): confirmation/cancellation only - no reminder payload exists
+ * anywhere in this file, by instruction (DENTAL-11 is blocked this pass). */
+export interface DentalAppointmentConfirmedPayload {
+  clinic_name: string;
+  doctor_name: string;
+  start_at: string;
+  consultation_fee_snapshot: number | string | null;
+}
+
+export interface DentalAppointmentCancelledPayload {
+  clinic_name: string;
+  doctor_name: string;
+  start_at: string;
+  cancelled_by: 'customer' | 'clinic';
+  reason?: string | null;
+}
+
+/** Clinic-local (Asia/Colombo) "12 Jan 2026 at 10:30 AM" for a dental SMS -
+ * same explicit-options `toLocaleString` pattern ORDER_PLACED already uses
+ * for its own scheduled-time rendering, just with the date part added. */
+function formatClinicDateTime(iso: string): string {
+  const when = new Date(iso);
+  const datePart = when.toLocaleDateString('en-US', {
+    timeZone: 'Asia/Colombo',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = when.toLocaleString('en-US', {
+    timeZone: 'Asia/Colombo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+  return `${datePart} at ${timePart}`;
+}
+
 export class NotificationTemplates {
   static render(notificationType: string, payload: unknown): string {
     const data = (payload as Record<string, unknown>) || {};
@@ -92,6 +129,22 @@ export class NotificationTemplates {
       case 'COD_PAYMENT_CONFIRMED': {
         const amount = Number(data.amount || 0).toFixed(2);
         return `Blynk: Cash payment of LKR ${amount} received for order #${orderNumber}. Payment status: PAID.`;
+      }
+
+      case 'DENTAL_APPOINTMENT_CONFIRMED': {
+        const doctorName = (data.doctor_name as string) || 'your doctor';
+        const clinicName = (data.clinic_name as string) || 'the clinic';
+        const when = formatClinicDateTime(data.start_at as string);
+        return `Blynk Dental: your appointment with Dr. ${doctorName} at ${clinicName} is confirmed for ${when}. The consultation fee is indicative and payable at the clinic.`;
+      }
+
+      case 'DENTAL_APPOINTMENT_CANCELLED': {
+        const doctorName = (data.doctor_name as string) || 'your doctor';
+        const clinicName = (data.clinic_name as string) || 'the clinic';
+        const when = formatClinicDateTime(data.start_at as string);
+        const cancelledBy = data.cancelled_by === 'clinic' ? 'by the clinic' : 'by you';
+        const reason = data.reason ? ` Reason: ${data.reason as string}.` : '';
+        return `Blynk Dental: your appointment with Dr. ${doctorName} at ${clinicName} on ${when} has been cancelled ${cancelledBy}.${reason}`;
       }
 
       default: {

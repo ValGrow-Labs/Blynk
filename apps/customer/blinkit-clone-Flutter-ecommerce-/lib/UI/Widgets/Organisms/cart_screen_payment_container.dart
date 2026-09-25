@@ -59,20 +59,25 @@ class CartScreenPaymentContainer extends StatelessWidget {
     final isCartEmpty = context.watch<CartProvider>().isEmpty;
     final stack = appButtonTextScale(context) > kStackButtonsAboveTextScale;
 
+    // The same row shape, the same two type roles and the same icon size as
+    // the delivery-address row directly above it on the checkout page: the
+    // answer in `rowLabel`, its supporting line in `body`/`ink2`. They used to
+    // be `bold`/`w500` and `label`/`body` - two ramps for one pattern.
     const method = Row(
       children: [
-        Icon(Icons.payments_outlined, color: BlynkColors.ink2),
-        SizedBox(width: BlynkSpace.s16),
+        Icon(Icons.payments_outlined, color: BlynkColors.ink2, size: BlynkIcons.md),
+        SizedBox(width: BlynkSpace.s12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Payment method', style: BlynkText.label),
               // Phase 1 is Cash on Delivery only - the payments module
               // is a deliberate stub server-side, so no other method is
               // offered here.
-              Text(StoreInfo.paymentMethodLabel, style: BlynkText.body),
+              Text(StoreInfo.paymentMethodLabel, style: BlynkText.rowLabel),
+              Text('Payment method', style: BlynkText.bodyMuted),
             ],
           ),
         ),

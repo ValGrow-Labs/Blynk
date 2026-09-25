@@ -14,39 +14,53 @@ ridersRouter.get('/orders', requireAuth, requireRoles('RIDER'), (_req, res) => {
   res.json({ success: true, message: 'Welcome Rider' });
 });
 
-// Rider Deliveries & COD Cash Collection (Guarded by RIDER role)
+/**
+ * Rider Deliveries & COD Cash Collection.
+ *
+ * ADMIN is on the allow-list for the Operations app (operations plan §2, §7):
+ * one users row with role='ADMIN', optionally linked to one riders row through
+ * the existing riders.user_id FK. Passing this guard is only permission to
+ * *reach* the rider services - it is not an identity. Every handler below
+ * still resolves the acting rider from findRiderByUserId(req.user.id) alone,
+ * so an ADMIN with no linked riders row gets 403 RIDER_PROFILE_NOT_FOUND, an
+ * inactive one 403 RIDER_INACTIVE, and another rider's delivery is still the
+ * same 404 DELIVERY_NOT_FOUND it has always been. No rider id is ever read
+ * from the request.
+ */
+const RIDER_OR_OPS = requireRoles(['RIDER', 'ADMIN']);
+
 ridersRouter.get(
   '/deliveries',
   requireAuth,
-  requireRoles('RIDER'),
+  RIDER_OR_OPS,
   riderController.getActiveDeliveries.bind(riderController)
 );
 
 ridersRouter.get(
   '/deliveries/:id',
   requireAuth,
-  requireRoles('RIDER'),
+  RIDER_OR_OPS,
   riderController.getDeliveryById.bind(riderController)
 );
 
 ridersRouter.patch(
   '/deliveries/:id/status',
   requireAuth,
-  requireRoles('RIDER'),
+  RIDER_OR_OPS,
   riderController.updateDeliveryStatus.bind(riderController)
 );
 
 ridersRouter.post(
   '/deliveries/:id/collect-cod',
   requireAuth,
-  requireRoles('RIDER'),
+  RIDER_OR_OPS,
   riderController.collectCod.bind(riderController)
 );
 
 ridersRouter.post(
   '/deliveries/:id/location',
   requireAuth,
-  requireRoles('RIDER'),
+  RIDER_OR_OPS,
   riderController.updateLocation.bind(riderController)
 );
 

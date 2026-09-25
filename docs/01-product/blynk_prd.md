@@ -132,3 +132,17 @@ $$\text{PLACED} \longrightarrow \text{PACKED} \longrightarrow \text{OUT\_FOR\_DE
   - Online card and digital wallet payment gateway (IPG) integration.
   - Automated algorithmic rider dispatch and route optimization.
   - Partner merchant marketplace and fresh produce expansion.
+
+---
+
+## 6. Dental Clinic Appointments (New Vertical — Phase 1, Booking Only)
+
+Blynk's first non-grocery vertical: a customer can discover participating dental clinics, pick a doctor, see real availability, and book an appointment — reusing the existing backend (RBAC, transaction/locking patterns, outbox notifications) and the existing Customer app (design tokens, component library, map abstraction) rather than building parallel infrastructure. Full detail: `docs/05-implementation/blynk-dental-appointments-report.md`; decision record: `docs/03-decisions/adr-005-dental-appointments-phase-1-no-payment.md`.
+
+- **Phase 1 scope is booking only — no online payment.** A customer reserves a slot and pays the clinic directly (COD-equivalent, off-platform), the same way the original grocery product launched COD-only. The only payment-adjacent element is an indicative consultation fee, admin-set per clinic-doctor and shown to the customer as "payable at the clinic."
+- **Entities**: clinics (physical locations, admin-managed, mirroring `dark_stores`), doctors (clinic-independent identity), the clinic-doctor working relationship (fee, hours, and blocked dates are scoped here, since a doctor may work at more than one clinic with different hours/fees at each), a weekly availability template computed on read, and the appointment itself.
+- **Booking flow**: browse clinics → clinic detail (with a static map pin) → doctor profile → pick a date/time → a short-lived 5-minute hold on that slot → patient details → review → confirm. Double booking is prevented at the database level (a partial unique index, the same mechanism already used for rider assignment), not by client trust.
+- **Lifecycle**: `HELD → CONFIRMED`, with cancellation by the customer or by Blynk Admin (on the clinic's behalf); "completed" is inferred once the appointment time has passed, not a stored state. No `NO_SHOW` tracking and no rescheduling in Phase 1.
+- **Management**: clinics, doctors, availability, blocked dates, and appointment cancellation are managed entirely through Blynk Admin (existing `ADMIN` role). There is no clinic self-service portal and no clinic/doctor login account in Phase 1.
+- **Notifications**: booking confirmation and cancellation, via the existing SMS outbox. Appointment reminders are not implemented in Phase 1 (open decision on lead time).
+- **Explicitly deferred**: online payment (its own future ADR/plan once a provider is chosen), a cancellation time-cutoff (currently unconditional for a confirmed appointment — open decision), reminders, rescheduling, and any clinic self-service/login capability.

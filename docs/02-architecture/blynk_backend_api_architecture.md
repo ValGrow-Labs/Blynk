@@ -103,6 +103,7 @@ The codebase is partitioned into discrete domain modules. Modules interact via e
 | **`admin`** | Packing queue view, catalog modifications, manual rider assignments, ops cancellation overrides, daily financial reports. | All modules |
 | **`audit`** | Lightweight, non-blocking capture of administrative mutations (price changes, manual stock adjustments, cancellations) into `audit_logs`. | All modules |
 | **`configuration`**| In-memory cached access to platform operational constants (default markup percentage, delivery fee, operating hours). | None |
+| **`dental`** *(added 2026-09-22)* | An independent vertical (not the grocery `orders` domain): clinic/doctor discovery, on-read availability computation from a weekly template, appointment hold/confirm/cancel with database-enforced double-booking prevention (partial unique index), and admin CRUD for clinics/doctors/availability/blocked dates. Booking only — no payment in Phase 1 (ADR-005). | `notifications` (confirmation/cancellation only) |
 
 ---
 
@@ -172,8 +173,14 @@ blynk-backend/
 │   │   │   ├── admin.controller.ts
 │   │   │   ├── admin.service.ts
 │   │   │   └── admin.routes.ts
-│   │   └── configuration/
-│   │       └── configuration.service.ts
+│   │   ├── configuration/
+│   │   │   └── configuration.service.ts
+│   │   └── dental/                  # Added 2026-09-22 — own domain, booking only, no payment
+│   │       ├── dental.controller.ts / dental.repository.ts / dental.schema.ts
+│   │       ├── clinic.service.ts / doctor.service.ts / availability.service.ts
+│   │       ├── appointment.service.ts / appointment.repository.ts / appointment.controller.ts / appointment.schema.ts
+│   │       ├── dental-admin.service.ts / dental-admin.repository.ts / dental-admin.controller.ts / dental-admin.schema.ts
+│   │       └── index.ts             # mounts /dental and /admin/dental routers
 │   ├── utils/                       # Shared pure utilities
 │   │   ├── geo.ts                   # Haversine distance calculator
 │   │   ├── phone.ts                 # E.164 phone normalizer (+94)

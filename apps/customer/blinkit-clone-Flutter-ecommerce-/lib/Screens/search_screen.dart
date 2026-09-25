@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,19 +12,29 @@ import '../UI/Widgets/Atoms/app_state_views.dart';
 import '../UI/Widgets/Atoms/card_product.dart';
 import '../UI/Widgets/Atoms/connectivity_banner.dart';
 import '../UI/Widgets/Atoms/failure_states.dart';
+import '../UI/Widgets/Atoms/section_header.dart';
 import '../UI/Widgets/Organisms/bottom_cart_container.dart';
-import '../app_design.dart';
+import '../UI/Widgets/Organisms/products_screen_grid.dart';
 import '../app_responsive.dart';
 import '../design/tokens.dart';
 
 /// Catalog search. Results come from the backend's server-side search
 /// (ProductProvider.search), rendered with the app's single ProductCard, so
 /// adding from here goes through the same CartProvider as everywhere else.
+///
+/// Every surface on this screen is backed by something real: the results and
+/// their count come from the search endpoint's `pagination.total`, the filter
+/// chips from the live category list, and "Recent searches" from queries this
+/// customer actually ran. There are no suggested, trending or popular
+/// searches, because the backend has no such source.
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.initialCategorySlug});
 
   /// Pre-selects a category filter (e.g. when opened from a category page).
   final String? initialCategorySlug;
+
+  /// Clearance under the last row so the floating cart bar never covers it.
+  static const double bottomClearance = BlynkSpace.s48 + BlynkSpace.s48;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -166,7 +175,7 @@ class _SearchScreenState extends State<SearchScreen> {
         .select<ProductProvider, bool>((p) => p.searchResults.isNotEmpty);
 
     return Scaffold(
-      backgroundColor: AppSurfaces.subtle,
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(title: const Text('Search')),
       body: Stack(
         children: [
@@ -216,6 +225,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
+/// The query field. It wears the app's one field recipe - `well` fill, `md`
+/// radius, a `lineStrong` boundary at rest and a 2 dp `ink` focus ring - so
+/// it reads as the same control the customer tapped on Home.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
@@ -231,23 +243,23 @@ class _SearchField extends StatelessWidget {
   final ValueChanged<String> onSubmitted;
   final VoidCallback onClear;
 
+  static OutlineInputBorder _border(Color color, double width) =>
+      OutlineInputBorder(
+        borderRadius: BlynkRadius.mdAll,
+        borderSide: BorderSide(color: color, width: width),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final activeBorder = OutlineInputBorder(
-      borderRadius: AppRadius.fieldBorder,
-      borderSide: const BorderSide(
-        color: BlynkColors.ink,
-        width: 2,
-      ),
-    );
+    final gutter = BlynkSpace.gutterFor(Responsive.of(context).width);
 
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.xs,
-        AppSpacing.lg,
-        AppSpacing.md,
+      color: BlynkColors.paper,
+      padding: EdgeInsets.fromLTRB(
+        gutter,
+        BlynkSpace.s4,
+        gutter,
+        BlynkSpace.s12,
       ),
       child: Semantics(
         label: 'Search groceries and essentials',
@@ -260,34 +272,47 @@ class _SearchField extends StatelessWidget {
           // Hard stop at the backend's search limit; the query is also
           // normalized before every request.
           maxLength: AppValidators.searchMax,
-          buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
-              null,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: AppTextColors.primary,
-          ),
+          style: BlynkText.body,
+          cursorColor: BlynkColors.ink,
           decoration: InputDecoration(
             hintText: 'Search groceries & essentials',
-            fillColor: Colors.white,
-            isDense: true,
-            prefixIcon: const Icon(
-              Icons.search_rounded,
-              color: AppTextColors.primary,
+            hintStyle: BlynkText.body.copyWith(color: BlynkColors.ink2),
+            filled: true,
+            fillColor: BlynkColors.well,
+            // The counter is decoration, not information a shopper needs.
+            counterText: '',
+            constraints:
+                const BoxConstraints(minHeight: BlynkControl.minHeight),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: BlynkSpace.s16,
+              vertical: BlynkSpace.s12,
             ),
+            prefixIcon: const Icon(
+              BlynkIcons.search,
+              color: BlynkColors.ink,
+              size: BlynkIcons.md,
+            ),
+            prefixIconConstraints:
+                const BoxConstraints(minHeight: BlynkControl.minHeight),
             suffixIcon: controller.text.isEmpty
                 ? null
                 : IconButton(
                     tooltip: 'Clear search',
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: AppTextColors.secondary,
+                    icon: const Icon(BlynkIcons.close, size: BlynkIcons.sm),
+                    color: BlynkColors.ink2,
+                    constraints: const BoxConstraints.tightFor(
+                      width: BlynkControl.minHeight,
+                      height: BlynkControl.minHeight,
                     ),
                     onPressed: onClear,
                   ),
-            focusedBorder: activeBorder,
+            suffixIconConstraints:
+                const BoxConstraints(minHeight: BlynkControl.minHeight),
+            border: _border(BlynkColors.lineStrong, 1),
+            enabledBorder: _border(BlynkColors.lineStrong, 1),
+            focusedBorder: _border(BlynkColors.ink, BlynkCta.focusRingWidth),
           ),
         ),
       ),
@@ -312,80 +337,49 @@ class _InitialState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categories = context.watch<ProductProvider>().categories;
+    final gutter = BlynkSpace.gutterFor(Responsive.of(context).width);
 
     if (recent.isEmpty && categories.isEmpty) {
       return const AppStateView(
-        icon: Icons.manage_search_rounded,
+        icon: Icons.manage_search,
         title: 'What are you looking for?',
         message: 'Search for groceries, snacks and everyday essentials.',
       );
     }
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 96),
+      padding: const EdgeInsets.only(bottom: SearchScreen.bottomClearance),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         if (recent.isNotEmpty) ...[
-          _SectionTitle(
+          BlynkSectionHeader(
             title: 'Recent searches',
-            trailing: TextButton(
-              onPressed: onClearRecent,
-              child: const Text('Clear'),
-            ),
+            actionLabel: 'Clear',
+            onAction: onClearRecent,
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            decoration: appCardDecoration(),
-            child: Material(
-              color: Colors.transparent,
-              child: Column(
-                children: [
-                  for (final query in recent)
-                    ListTile(
-                      dense: true,
-                      leading: const Icon(
-                        Icons.history_rounded,
-                        color: AppTextColors.muted,
-                      ),
-                      title: Text(
-                        query,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppTextColors.primary,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.north_west_rounded,
-                        size: 18,
-                        color: AppTextColors.muted,
-                      ),
-                      onTap: () => onRecentTap(query),
-                    ),
-                ],
-              ),
+          // Rows on the page, not a bordered card: sections here are
+          // separated by space, never by a rule or a box.
+          for (final query in recent)
+            _RecentRow(
+              query: query,
+              gutter: gutter,
+              onTap: () => onRecentTap(query),
             ),
-          ),
         ],
         if (categories.isNotEmpty) ...[
-          const _SectionTitle(title: 'Browse categories'),
+          const BlynkSectionHeader(title: 'Browse categories'),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            padding: EdgeInsets.symmetric(horizontal: gutter),
             child: Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
+              spacing: BlynkSpace.s8,
+              runSpacing: BlynkSpace.s8,
               children: [
                 for (final category in categories)
                   ActionChip(
-                    avatar: const Icon(
-                      Icons.local_grocery_store_outlined,
-                      size: 16,
-                      color: AppTextColors.secondary,
-                    ),
                     label: Text(category.name),
-                    backgroundColor: Colors.white,
+                    labelStyle: BlynkText.label,
+                    backgroundColor: BlynkColors.well,
+                    side: const BorderSide(color: BlynkColors.lineStrong),
                     onPressed: () => Navigator.of(context).pushNamed(
                       '/products',
                       arguments: category.slug,
@@ -400,31 +394,55 @@ class _InitialState extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.trailing});
+/// One remembered query. The whole row is the target, at the shared control
+/// height, and the trailing glyph says it will be put back in the field.
+class _RecentRow extends StatelessWidget {
+  const _RecentRow({
+    required this.query,
+    required this.gutter,
+    required this.onTap,
+  });
 
-  final String title;
-  final Widget? trailing;
+  final String query;
+  final double gutter;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
-            ),
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: BlynkControl.minHeight),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: gutter,
+            vertical: BlynkSpace.s8,
           ),
-          if (trailing != null) trailing!,
-        ],
+          child: Row(
+            children: [
+              const Icon(
+                Icons.history,
+                size: BlynkIcons.sm,
+                color: BlynkColors.ink2,
+              ),
+              const SizedBox(width: BlynkSpace.s12),
+              Expanded(
+                child: Text(
+                  query,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BlynkText.body,
+                ),
+              ),
+              const SizedBox(width: BlynkSpace.s8),
+              const Icon(
+                Icons.north_west,
+                size: BlynkIcons.xs,
+                color: BlynkColors.ink2,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -452,169 +470,176 @@ class _ResultsView extends StatelessWidget {
     final isCurrent = provider.lastQuery == query &&
         provider.searchCategorySlug == categorySlug;
     final isLoading = !isCurrent || provider.isSearching;
-    final crossAxisCount = Responsive.of(context).gridColumns;
 
     CategoryModel? activeCategory;
     for (final c in categories) {
       if (c.slug == categorySlug) activeCategory = c;
     }
 
-    // A fixed aspect ratio makes tiles grow ever taller as columns widen.
-    // Instead: the card's own height for this tile width (a square image plus
-    // its text block and 48 dp control, all scaled with the user's text size).
-    final contentWidth = math.min(
-      MediaQuery.sizeOf(context).width,
-      Responsive.of(context).contentMaxWidth,
-    );
-    final tileWidth = (contentWidth -
-            AppSpacing.lg * 2 -
-            AppSpacing.md * (crossAxisCount - 1)) /
-        crossAxisCount;
-    final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: crossAxisCount,
-      mainAxisSpacing: AppSpacing.md,
-      crossAxisSpacing: AppSpacing.md,
-      mainAxisExtent: ProductCard.heightFor(context, tileWidth),
-    );
-    const gridPadding = EdgeInsets.fromLTRB(
-      AppSpacing.lg,
-      0,
-      AppSpacing.lg,
-      AppSpacing.lg,
-    );
+    // The grid follows the app's one column rule (BlynkProductGrid): 2/3/4/5
+    // by width, with its gutter and tile spacing, and a *measured* tile
+    // height rather than a fixed aspect ratio - a product card is a square
+    // image plus a text-scale-dependent block, so a ratio either squashes the
+    // image or clips the name at 2.0x.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final gridDelegate = productGridDelegate(context, width);
+        final gridPadding = BlynkProductGrid.paddingFor(width);
+        final columns = BlynkProductGrid.columnsFor(width);
 
-    final List<Widget> content;
-    if (isLoading) {
-      content = [
-        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-        SliverPadding(
-          padding: gridPadding,
-          sliver: SliverGrid(
-            gridDelegate: gridDelegate,
-            delegate: SliverChildBuilderDelegate(
-              (_, __) => const ProductCardSkeleton(),
-              childCount: crossAxisCount * 2,
-            ),
-          ),
-        ),
-      ];
-    } else if (provider.searchFailure != null) {
-      content = [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: FailureState(
-            failure: provider.searchFailure!,
-            title: "Couldn't load results",
-            scrollable: false,
-            onRetry: provider.retrySearch,
-          ),
-        ),
-      ];
-    } else if (provider.searchResults.isEmpty) {
-      final scope =
-          activeCategory != null ? ' in ${activeCategory.name}' : '';
-      content = [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: AppStateView(
-            icon: Icons.search_off_rounded,
-            title: 'No results for "$query"$scope',
-            message: 'Check the spelling or browse categories.',
-            actionLabel: 'Browse Categories',
-            onAction: () => Navigator.of(context).pushNamed('/categories'),
-            accent: AppTextColors.secondary,
-          ),
-        ),
-      ];
-    } else {
-      final total = provider.searchTotal;
-      content = [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.md,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Search results',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTextColors.secondary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '"$query"',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-                Text(
-                  '$total ${total == 1 ? 'product' : 'products'}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTextColors.secondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: gridPadding,
-          sliver: SliverGrid(
-            gridDelegate: gridDelegate,
-            delegate: SliverChildBuilderDelegate(
-              (context, index) =>
-                  ProductCard(product: provider.searchResults[index]),
-              childCount: provider.searchResults.length,
-            ),
-          ),
-        ),
-        if (provider.isLoadingMoreSearch)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.lg),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.4),
+        final List<Widget> content;
+        if (isLoading) {
+          content = [
+            const SliverToBoxAdapter(child: SizedBox(height: BlynkSpace.s12)),
+            SliverPadding(
+              padding: gridPadding,
+              sliver: SliverGrid(
+                gridDelegate: gridDelegate,
+                delegate: SliverChildBuilderDelegate(
+                  (_, __) => const ProductCardSkeleton(),
+                  childCount: columns * 2,
                 ),
               ),
             ),
-          ),
-        // Clears the floating cart bar.
-        const SliverToBoxAdapter(child: SizedBox(height: 96)),
-      ];
-    }
-
-    // One pulse for every skeleton card; parked (no ticker) when not loading.
-    return SkeletonScope(
-      active: isLoading,
-      child: CustomScrollView(
-        controller: scrollController,
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        slivers: [
-          if (categories.isNotEmpty)
+          ];
+        } else if (provider.searchFailure != null) {
+          content = [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: FailureState(
+                failure: provider.searchFailure!,
+                title: "Couldn't load results",
+                scrollable: false,
+                onRetry: provider.retrySearch,
+              ),
+            ),
+          ];
+        } else if (provider.searchResults.isEmpty) {
+          final scope =
+              activeCategory != null ? ' in ${activeCategory.name}' : '';
+          content = [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: AppStateView(
+                icon: Icons.search_off,
+                title: 'No results for "$query"$scope',
+                message: 'Check the spelling or browse categories.',
+                actionLabel: 'Browse categories',
+                onAction: () => Navigator.of(context).pushNamed('/categories'),
+              ),
+            ),
+          ];
+        } else {
+          content = [
             SliverToBoxAdapter(
-              child: _CategoryFilterBar(
-                categories: categories,
-                selectedSlug: categorySlug,
-                onSelected: onCategorySelected,
+              child: _ResultsSummary(
+                query: query,
+                // The count is the backend's pagination.total, never the
+                // length of the page we happen to be holding.
+                total: provider.searchTotal,
+                padding: EdgeInsets.fromLTRB(
+                  gridPadding.left,
+                  BlynkSpace.s16,
+                  gridPadding.right,
+                  BlynkSpace.s12,
+                ),
               ),
             ),
-          ...content,
+            SliverPadding(
+              padding: gridPadding,
+              sliver: SliverGrid(
+                gridDelegate: gridDelegate,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) =>
+                      ProductCard(product: provider.searchResults[index]),
+                  childCount: provider.searchResults.length,
+                ),
+              ),
+            ),
+            if (provider.isLoadingMoreSearch)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(BlynkSpace.s16),
+                  child: Center(
+                    child: SizedBox(
+                      width: BlynkSpace.s24,
+                      height: BlynkSpace.s24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: BlynkColors.ink,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Clears the floating cart bar.
+            const SliverToBoxAdapter(
+              child: SizedBox(height: SearchScreen.bottomClearance),
+            ),
+          ];
+        }
+
+        // One pulse for every skeleton card; parked (no ticker) when not loading.
+        return SkeletonScope(
+          active: isLoading,
+          child: CustomScrollView(
+            controller: scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              if (categories.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: _CategoryFilterBar(
+                    categories: categories,
+                    selectedSlug: categorySlug,
+                    onSelected: onCategorySelected,
+                  ),
+                ),
+              ...content,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// What was searched for and how many the backend found. Both values are
+/// real: the query as typed, and `pagination.total` from the response.
+class _ResultsSummary extends StatelessWidget {
+  const _ResultsSummary({
+    required this.query,
+    required this.total,
+    required this.padding,
+  });
+
+  final String query;
+  final int total;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Search results',
+            style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
+          ),
+          const SizedBox(height: BlynkSpace.s4),
+          Text(
+            '"$query"',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BlynkText.sectionHeader,
+          ),
+          const SizedBox(height: BlynkSpace.s4),
+          Text(
+            '$total ${total == 1 ? 'product' : 'products'}',
+            style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
+          ),
         ],
       ),
     );
@@ -632,19 +657,23 @@ class _CategoryFilterBar extends StatelessWidget {
   final String? selectedSlug;
   final ValueChanged<String?> onSelected;
 
+  /// A floor, not a fixed height: a large text size must be able to grow the
+  /// bar, so the chips sit in a scroll view that sizes to them.
+  static const double minBarHeight = 52;
+
   @override
   Widget build(BuildContext context) {
-    // A floor, not a fixed height: a large text size must be able to grow the
-    // bar, so the chips sit in a scroll view that sizes to them.
+    final gutter = BlynkSpace.gutterFor(Responsive.of(context).width);
+
     return Container(
       color: BlynkColors.paper,
-      constraints: const BoxConstraints(minHeight: 52),
+      constraints: const BoxConstraints(minHeight: minBarHeight),
       alignment: Alignment.centerLeft,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
+        padding: EdgeInsets.symmetric(
+          horizontal: gutter,
+          vertical: BlynkSpace.s8,
         ),
         child: Row(
           children: [
@@ -680,7 +709,7 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.sm),
+      padding: const EdgeInsets.only(right: BlynkSpace.s8),
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
@@ -688,7 +717,7 @@ class _FilterChip extends StatelessWidget {
         onSelected: (_) => onTap(),
         // Selected is ink, not yellow: yellow is only the forward action.
         selectedColor: BlynkColors.ink,
-        backgroundColor: AppSurfaces.subtle,
+        backgroundColor: BlynkColors.well,
         side: const BorderSide(color: BlynkColors.lineStrong),
         labelStyle: BlynkText.label.copyWith(
           color: selected ? BlynkColors.paper : BlynkColors.ink,

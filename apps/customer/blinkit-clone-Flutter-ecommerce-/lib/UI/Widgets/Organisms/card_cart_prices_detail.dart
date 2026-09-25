@@ -5,13 +5,29 @@ import '../../../Services/Providers/cart.provider.dart';
 import '../../../app_design.dart';
 import '../../../Services/store_info.dart';
 import '../Atoms/money_text.dart';
+import '../../../design/tokens.dart';
+
+/// The estimate the customer is shown before the order exists: the cart's own
+/// [CartProvider.subtotal] plus the store's flat delivery fee.
+///
+/// **This is the one place that combination is expressed.** It was written out
+/// at two call sites (this card and the cart's pinned checkout bar), which is
+/// how a summary and a bar end up disagreeing. Nothing else here is derived:
+/// the subtotal is the provider's, the fee is [StoreInfo.flatDeliveryFee]
+/// (mirroring `system_configurations.delivery_fee`), and once an order exists
+/// the backend's own `totalAmount` is authoritative — see
+/// `OrderProvider.placeOrder`.
+double cartEstimateTotal(CartProvider cart) =>
+    cart.subtotal + StoreInfo.flatDeliveryFee;
 
 /// Order Summary: subtotal from CartProvider plus the flat delivery fee.
 ///
 /// These are the prices the customer saw while shopping. The backend
 /// re-prices the order and computes the real total when it's placed (see
 /// OrderProvider.placeOrder), so no discount, handling or platform fee is
-/// ever invented here.
+/// ever invented here. There is no discount, savings or promo-code row
+/// because the backend returns no such field — an order carries only
+/// `subtotalAmount`, `deliveryFee` and `totalAmount`.
 class CartPriceDetailWidget extends StatelessWidget {
   const CartPriceDetailWidget({super.key, this.footer});
 
@@ -23,70 +39,49 @@ class CartPriceDetailWidget extends StatelessWidget {
     final cart = context.watch<CartProvider>();
     final subtotal = cart.subtotal;
     final itemCount = cart.itemCount;
-    final total = subtotal + StoreInfo.flatDeliveryFee;
+    final total = cartEstimateTotal(cart);
 
     return Container(
       decoration: appCardDecoration(),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(BlynkSpace.s16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Semantics(
             header: true,
-            child: const Text(
-              'Order Summary',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: AppTextColors.primary,
-              ),
-            ),
+            child: const Text('Order Summary', style: BlynkText.sectionHeader),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: BlynkSpace.s12),
           _SummaryRow(
             label: 'Subtotal ($itemCount ${itemCount == 1 ? 'item' : 'items'})',
             amount: subtotal,
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: BlynkSpace.s8),
           const _SummaryRow(
-            label: 'Delivery Fee',
+            label: 'Delivery fee',
             amount: StoreInfo.flatDeliveryFee,
           ),
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Divider(height: 1, color: AppSurfaces.border),
+            padding: EdgeInsets.symmetric(vertical: BlynkSpace.s12),
+            child: Divider(height: 1, color: BlynkColors.line),
           ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               const Expanded(
-                child: Text(
-                  'Total',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: AppTextColors.primary,
-                  ),
-                ),
+                child: Text('Total', style: BlynkText.sectionHeader),
               ),
-              MoneyText(
-                total,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTextColors.primary,
-                ),
-              ),
+              MoneyText(total, style: BlynkType.priceTotal),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
+          const SizedBox(height: BlynkSpace.s4),
+          Text(
             '${StoreInfo.paymentMethodLabel} · final amount is confirmed when you place the order.',
-            style: TextStyle(fontSize: 12, color: AppTextColors.secondary),
+            style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
           ),
           if (footer != null) ...[
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: BlynkSpace.s16),
             footer!,
           ],
         ],
@@ -108,17 +103,10 @@ class _SummaryRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(fontSize: 14, color: AppTextColors.secondary),
+            style: BlynkText.body.copyWith(color: BlynkColors.ink2),
           ),
         ),
-        MoneyText(
-          amount,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: AppTextColors.primary,
-          ),
-        ),
+        MoneyText(amount, style: BlynkType.price),
       ],
     );
   }

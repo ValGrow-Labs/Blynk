@@ -13,6 +13,7 @@ import 'package:ecom/UI/Widgets/Atoms/card_product.dart';
 import 'package:ecom/UI/Widgets/Organisms/category_with_products.dart';
 import 'package:ecom/UI/Widgets/Organisms/products_screen_grid.dart';
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/tokens.dart';
 
 import 'fixtures/component_host.dart';
 
@@ -140,9 +141,13 @@ void main() {
         }),
       ));
       expect(at2, greaterThan(at1));
-      expect(wide - at1, closeTo(190 - 152, 0.001));
-      // The old rail was cardWidth + 132 = 284; the 48 dp control takes more.
-      expect(at1, greaterThan(284));
+      // 2026-09-24: the image well is 4:5, not square, so height grows with
+      // width at `imageRatio`, not 1:1. Expressed as the rule rather than a
+      // number so it keeps meaning if the ratio is tuned again.
+      expect(wide - at1, closeTo((190 - 152) * ProductCard.imageRatio, 0.001));
+      // Still comfortably taller than the image alone — the chrome (name, unit,
+      // price and the 48 dp control) is real and must not be squeezed out.
+      expect(at1, greaterThan(ProductCard.imageHeightFor(152)));
     });
   });
 
@@ -225,15 +230,131 @@ void main() {
           final blocks = find.descendant(of: find.byType(ProductCardSkeleton), matching: find.byType(AppSkeleton));
           final pill = tester.getRect(blocks.last);
           expect(pill.height, 40);
-          expect(pill.right, card.right - 8);
-          expect(card.bottom - pill.bottom, closeTo(8 + 4, 0.01), reason: 'centred in a 48 dp slot above the 8 dp padding');
+          // W1: read from the card's own padding token rather than a literal,
+          // so the next restyle moves this with the card instead of past it.
+          expect(pill.right, card.right - ProductCard.padding);
+          expect(card.bottom - pill.bottom, closeTo(ProductCard.padding + 4, 0.01),
+              reason: 'centred in a 48 dp slot above the card padding');
           // Image well first, and it is square: the card width minus its padding.
           final image = tester.getRect(blocks.first);
-          expect(image.width, width - 16);
+          expect(image.width, ProductCard.imageSideFor(width));
           expect(image.height, greaterThan(0));
         });
       }
     }
+  });
+
+  // T2: a skeleton whose silhouette differs from the card's makes the tile
+  // visibly re-draw the moment data lands. The geometry group above pins the
+  // BOX; this pins the SURFACE it is drawn on. T3 must move both together
+  // when it restyles ProductCard.
+  group('ProductCardSkeleton wears the card surface, not the generic card', () {
+    BoxDecoration decorationOf(WidgetTester tester, Finder of) => tester
+        .widget<Container>(find.descendant(of: of, matching: find.byType(Container)).first)
+        .decoration! as BoxDecoration;
+
+    testWidgets('same fill, same radius, same elevation, and no stroke the card does not have',
+        (tester) async {
+      await tester.pumpWidget(_app(
+        tester,
+        cart: CartProvider(),
+        width: 900,
+        textScale: 1,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Column(
+              children: [
+                SizedBox(
+                  width: 160,
+                  height: ProductCard.heightFor(context, 160),
+                  child: const ProductCardSkeleton(),
+                ),
+                SizedBox(
+                  width: 160,
+                  height: ProductCard.heightFor(context, 160),
+                  child: ProductCard(product: _p(1)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ));
+      final skeleton = decorationOf(tester, find.byType(ProductCardSkeleton));
+      final card = decorationOf(tester, find.byType(ProductCard));
+
+      expect(skeleton.color, card.color);
+      expect(skeleton.borderRadius, card.borderRadius);
+      expect(skeleton.boxShadow, card.boxShadow);
+      expect(skeleton.border, isNull, reason: 'the real card has no stroke');
+      expect(card.border, isNull);
+    });
+
+    // Review M-3: these two used to be pinned against BlynkRadius.chip/.pill
+    // directly, so a T3 card restyle could move the card's radii and leave the
+    // skeleton behind without failing anything. They are now read off the
+    // card that is rendered beside the skeleton, exactly like the surface test
+    // above — the assertion is "the skeleton matches the card", not "both
+    // happen to equal a constant I typed twice".
+    testWidgets('the image and control blocks carry the radii the CARD renders', (tester) async {
+      await tester.pumpWidget(_app(
+        tester,
+        cart: CartProvider(),
+        width: 900,
+        textScale: 1,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Column(
+              children: [
+                SizedBox(
+                  width: 160,
+                  height: ProductCard.heightFor(context, 160),
+                  child: const ProductCardSkeleton(),
+                ),
+                SizedBox(
+                  width: 160,
+                  height: ProductCard.heightFor(context, 160),
+                  child: ProductCard(product: _p(1)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ));
+
+      // What the card really draws: the image well is the first ClipRRect
+      // inside it, the add control the DecoratedBox inside AddToCartButton.
+      final cardImageRadius = tester
+          .widget<ClipRRect>(
+            find.descendant(of: find.byType(ProductCard), matching: find.byType(ClipRRect)).first,
+          )
+          .borderRadius;
+      final cardAddRadius = (tester
+              .widget<DecoratedBox>(
+                find
+                    .descendant(
+                      of: find.byType(AddToCartButton),
+                      matching: find.byType(DecoratedBox),
+                    )
+                    .first,
+              )
+              .decoration as BoxDecoration)
+          .borderRadius;
+
+      final blocks = find.descendant(
+        of: find.byType(ProductCardSkeleton),
+        matching: find.byType(AppSkeleton),
+      );
+      final skeletonImage = tester.widget<AppSkeleton>(blocks.first).radius;
+      final skeletonControl = tester.widget<AppSkeleton>(blocks.last).radius;
+
+      expect(BorderRadius.circular(skeletonImage), cardImageRadius,
+          reason: 'the placeholder image well must not pop when the photo lands');
+      expect(BorderRadius.circular(skeletonControl), cardAddRadius,
+          reason: 'the placeholder control must not pop when the ADD button lands');
+      // Both are still token values, not stray numbers.
+      expect(skeletonImage, BlynkRadius.chip);
+      expect(skeletonControl, BlynkRadius.pill);
+    });
   });
 
   group('products grid (buildProductsGrid)', () {

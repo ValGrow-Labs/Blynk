@@ -22,6 +22,18 @@ Future<void> _pump(WidgetTester tester, {AuthProvider? auth, double textScale = 
   await tester.pumpAndSettle();
 }
 
+/// W7 added "My appointments" to the account rows (the appointment list is
+/// the customer's own and had no entry point outside the dental clinics
+/// screen). It is signed-in only, so the guest rows are unchanged.
+const _signedInRows = [
+  'Your orders',
+  'Address book',
+  'My appointments',
+  'Share the app',
+  'About us',
+  'Log out',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   FlutterSecureStorage.setMockInitialValues({});
@@ -45,10 +57,10 @@ void main() {
     expect(find.text('Log out'), findsNothing);
   });
 
-  testWidgets('a signed-in user sees exactly the five real rows, in sentence case', (tester) async {
+  testWidgets('a signed-in user sees exactly the six real rows, in sentence case', (tester) async {
     await _pump(tester, auth: SignedInAuth());
 
-    for (final row in ['Your orders', 'Address book', 'Share the app', 'About us', 'Log out']) {
+    for (final row in _signedInRows) {
       expect(find.text(row), findsOneWidget, reason: row);
     }
     expect(find.text('Log in'), findsNothing);
@@ -61,11 +73,14 @@ void main() {
 
     expect(find.byType(IconButton), findsNothing);
     final chevrons = find.byIcon(BlynkIcons.chevron);
-    expect(chevrons, findsNWidgets(5));
-    // The chevron is not a button, and the only tap targets around the five
-    // chevrons are the five rows themselves (one InkWell per row).
+    expect(chevrons, findsNWidgets(_signedInRows.length));
+    // The chevron is not a button, and the only tap targets around the
+    // chevrons are the rows themselves (one InkWell per row).
     expect(find.ancestor(of: chevrons, matching: find.byType(IconButton)), findsNothing);
-    expect(find.ancestor(of: chevrons, matching: find.byType(InkWell)), findsNWidgets(5));
+    expect(
+      find.ancestor(of: chevrons, matching: find.byType(InkWell)),
+      findsNWidgets(_signedInRows.length),
+    );
   });
 
   testWidgets('Your orders and Address book use different icons', (tester) async {
@@ -79,7 +94,7 @@ void main() {
   testWidgets('each row is one 48 dp+ target with button semantics', (tester) async {
     await _pump(tester, auth: SignedInAuth());
 
-    for (final row in ['Your orders', 'Address book', 'Share the app', 'About us', 'Log out']) {
+    for (final row in _signedInRows) {
       final size = tester.getSize(
         find.ancestor(of: find.text(row), matching: find.byType(InkWell)).first,
       );

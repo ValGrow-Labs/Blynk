@@ -41,6 +41,21 @@ export type DeliveryAssignmentStatus =
 export type NotificationChannel = 'SMS' | 'WHATSAPP' | 'IN_APP' | 'EMAIL';
 export type NotificationStatus = 'QUEUED' | 'PROCESSING' | 'SENT' | 'DELIVERED' | 'FAILED';
 
+export type DentalSpecialty =
+  | 'GENERAL_DENTIST'
+  | 'ORTHODONTIST'
+  | 'PERIODONTIST'
+  | 'ENDODONTIST'
+  | 'ORAL_SURGEON'
+  | 'PEDIATRIC_DENTIST';
+
+export type DentalAppointmentStatus =
+  | 'HELD'
+  | 'EXPIRED'
+  | 'CONFIRMED'
+  | 'CANCELLED_BY_CUSTOMER'
+  | 'CANCELLED_BY_CLINIC';
+
 export interface SystemConfigurationsTable {
   key: string;
   value: unknown;
@@ -156,6 +171,11 @@ export interface ProductsTable {
   unit: string;
   pack_size: string | null;
   image_url: string | null;
+  // Migration 009: where the crop anchors when the photo is drawn into a
+  // fixed shape, as a percentage of the image's own width/height. 50/50 is
+  // the centre, which is exactly what `cover` did before these existed.
+  image_focal_x: Generated<number>;
+  image_focal_y: Generated<number>;
   purchase_cost: ColumnType<number, number | string, number | string>;
   custom_markup_percent: ColumnType<number | null, number | string | null, number | string | null>;
   is_available: Generated<boolean>;
@@ -353,6 +373,10 @@ export interface ProductCatalogView {
   calculated_selling_price: ColumnType<number, number | string, number | string>;
   is_available: boolean;
   is_active: boolean;
+  // Migration 009 appended these to the view so both the customer and admin
+  // product reads carry the crop anchor with the image they describe.
+  image_focal_x: number;
+  image_focal_y: number;
 }
 
 export interface SuppliersTable {
@@ -389,10 +413,18 @@ export interface PromotionsTable {
   title: string;
   subtitle: string | null;
   image_url: string | null;
-  background_type: 'SOLID' | 'GRADIENT' | 'IMAGE';
+  // Migration 008 widened the CHECK constraint to include ARTWORK: a
+  // finished banner drawn full-bleed, with no scrim and none of the app's
+  // own words over it. It stores its file in background_image_url, exactly
+  // as IMAGE does.
+  background_type: 'SOLID' | 'GRADIENT' | 'IMAGE' | 'ARTWORK';
   background_color: string | null;
   background_color_end: string | null;
   background_image_url: string | null;
+  // Migration 009: the crop anchor for background_image_url, shared by IMAGE
+  // and ARTWORK because they share the file. 50/50 is the centre.
+  background_focal_x: Generated<number>;
+  background_focal_y: Generated<number>;
   cta_label: string | null;
   cta_destination_type: 'CATEGORY' | 'PRODUCT' | 'CATALOG' | null;
   cta_destination_value: string | null;
@@ -400,6 +432,93 @@ export interface PromotionsTable {
   is_active: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+export interface DentalClinicsTable {
+  id: Generated<string>;
+  name: string;
+  city: string;
+  address_line: string;
+  latitude: ColumnType<number, number | string, number | string>;
+  longitude: ColumnType<number, number | string, number | string>;
+  contact_phone: string;
+  operating_start_time: string;
+  operating_end_time: string;
+  is_active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface DoctorsTable {
+  id: Generated<string>;
+  full_name: string;
+  specialty: DentalSpecialty;
+  photo_url: string | null;
+  bio: string | null;
+  is_active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ClinicDoctorsTable {
+  id: Generated<string>;
+  clinic_id: string;
+  doctor_id: string;
+  consultation_fee: ColumnType<number | null, number | string | null, number | string | null>;
+  is_active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface DoctorAvailabilityTable {
+  id: Generated<string>;
+  clinic_doctor_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_duration_minutes: number;
+  buffer_minutes: Generated<number>;
+  is_active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface DoctorBlockedDatesTable {
+  id: Generated<string>;
+  clinic_doctor_id: string;
+  blocked_date: ColumnType<string, string | Date, string | Date>;
+  reason: string;
+  created_by: string;
+  created_at: Generated<Date>;
+}
+
+export interface AppointmentsTable {
+  id: Generated<string>;
+  clinic_doctor_id: string;
+  customer_id: string;
+  start_at: Date;
+  end_at: Date;
+  status: Generated<DentalAppointmentStatus>;
+  held_by: string | null;
+  held_until: Date | null;
+  patient_name: string | null;
+  patient_phone: string | null;
+  patient_notes: string | null;
+  consultation_fee_snapshot: ColumnType<number | null, number | string | null, number | string | null>;
+  cancellation_reason: string | null;
+  cancelled_by: string | null;
+  idempotency_key: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface AppointmentStatusHistoryTable {
+  id: Generated<string>;
+  appointment_id: string;
+  old_status: DentalAppointmentStatus | null;
+  new_status: DentalAppointmentStatus;
+  changed_by: string;
+  created_at: Generated<Date>;
 }
 
 export interface Database {
@@ -425,5 +544,12 @@ export interface Database {
   deliveries: DeliveriesTable;
   notifications: NotificationsTable;
   audit_logs: AuditLogsTable;
+  dental_clinics: DentalClinicsTable;
+  doctors: DoctorsTable;
+  clinic_doctors: ClinicDoctorsTable;
+  doctor_availability: DoctorAvailabilityTable;
+  doctor_blocked_dates: DoctorBlockedDatesTable;
+  appointments: AppointmentsTable;
+  appointment_status_history: AppointmentStatusHistoryTable;
   v_product_catalog: ProductCatalogView;
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,9 +10,11 @@ import 'package:ecom/Screens/order_summary_screen.dart';
 import 'package:ecom/Services/Exceptions/api_exception.dart';
 import 'package:ecom/Services/Providers/location.provider.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_bill_card.dart';
 import 'package:ecom/UI/Widgets/Organisms/order_tracking_map.dart';
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/tokens.dart';
 
 import 'fixtures/order_fixtures.dart';
 
@@ -487,6 +490,81 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(api.countOf(_getKey), 2);
+  });
+
+  // 11b (2026-09 premium redesign, W5): the screen's yellow budget.
+  //
+  // Plan §4.3: one yellow ACTION per screen. The order detail is a reference
+  // page and has none of its own; the confirmation surface has exactly one,
+  // and it is "Keep order" - the destructive action is never the yellow one.
+  testWidgets('no yellow action on the page, exactly one on the cancel sheet', (tester) async {
+    int yellowActions(WidgetTester tester) => tester
+        .widgetList<Container>(find.byType(Container))
+        .map((w) => w.decoration)
+        .whereType<BoxDecoration>()
+        .where((d) => d.color == BlynkCta.fill)
+        .length;
+
+    api.routes[_getKey] = () async => _envelope(orderJson(status: 'PLACED', canCancel: true));
+    await _pumpDetail(tester, api);
+    expect(yellowActions(tester), 0);
+
+    await tester.tap(find.byKey(_cancelButton));
+    await tester.pumpAndSettle();
+
+    expect(yellowActions(tester), 1);
+    expect(find.widgetWithText(BlynkButton, 'Keep order'), findsOneWidget);
+    expect(find.widgetWithText(BlynkButton, 'Cancel order'), findsWidgets);
+
+    // A `.cta` paints a Container with an alignment, so it EXPANDS to fill any
+    // bounded height it is handed (a Row, a bottomNavigationBar slot). Measured
+    // rather than read: a finder is happy with an 800 dp tall button, and so is
+    // `flutter analyze`. It sits in a Column(mainAxisSize: min) here, so its
+    // main axis is unbounded and it stays a button.
+    final keep = tester.getSize(find.byKey(_keepOrder));
+    expect(keep.height, lessThan(BlynkCta.minHeight * 2),
+        reason: 'the CTA grew to fill its slot: ${keep.height} dp');
+    expect(tester.getSize(find.byKey(_confirmCancel)).height, lessThan(BlynkCta.minHeight * 2));
+    // ...and the page underneath still has real height.
+    expect(tester.getSize(find.byType(ListView).first).height, greaterThan(BlynkCta.minHeight * 2));
+
+    await tester.tap(find.byKey(_keepOrder));
+    await tester.pumpAndSettle();
+    expect(api.countOf(_cancelKey), 0);
+  });
+
+  // 11c: the cancel action is the shared button, so its duplicate-submission
+  // guarantee is the shared one rather than a per-screen reimplementation.
+  testWidgets('the cancel action is a shared BlynkButton and reports loading semantically',
+      (tester) async {
+    final gate = Completer<void>();
+    api.routes[_getKey] = () async => _envelope(orderJson(status: 'PLACED', canCancel: true));
+    await _pumpDetail(tester, api);
+
+    final handle = tester.ensureSemantics();
+    expect(tester.widget(find.byKey(_cancelButton)), isA<BlynkButton>());
+
+    api.routes[_cancelKey] = () async {
+      await gate.future;
+      return _envelope(orderJson(status: 'CANCELLED', canCancel: false));
+    };
+    api.routes[_getKey] = () async => _envelope(orderJson(status: 'CANCELLED', canCancel: false));
+
+    // Not pumpAndSettle: the POST is held open and the button's spinner
+    // animates, so the tree never settles while the request is in flight.
+    await tester.tap(find.byKey(_cancelButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(_confirmCancel));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final data = tester.getSemantics(find.bySemanticsLabel('Cancel order, loading')).getSemanticsData();
+    expect(data.flagsCollection.isEnabled, Tristate.isFalse);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(api.countOf(_cancelKey), 1);
+    handle.dispose();
   });
 
   // 12

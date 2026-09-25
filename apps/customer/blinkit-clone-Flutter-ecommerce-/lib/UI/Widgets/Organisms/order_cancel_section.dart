@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:ecom/app_colors.dart';
 import '../../../Models/order_model.dart';
 import '../../../Services/Exceptions/api_exception.dart';
 import '../../../Services/Providers/order.provider.dart';
-import '../../../app_design.dart';
+import '../../Widgets/Atoms/adaptive_sheet.dart';
+import '../../Widgets/Atoms/blynk_button.dart';
+import '../../../design/tokens.dart';
 
 /// What to tell the customer when the backend refuses (or we never heard
 /// back about) a cancellation.
@@ -68,73 +69,45 @@ class _OrderCancelSectionState extends State<OrderCancelSection> {
   Future<void> _openSheet() async {
     if (_busy) return;
 
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetBorder),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
-            AppSpacing.xl,
-            AppSpacing.xl,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: AppSurfaces.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const Text(
-                'Cancel this order?',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppTextColors.primary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                "This can't be undone.",
-                style: TextStyle(fontSize: 14, color: AppTextColors.secondary),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              ElevatedButton(
-                key: const Key('keep-order'),
-                onPressed: () => Navigator.of(sheetContext).pop(false),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryYellowColor,
-                  foregroundColor: AppTextColors.onYellow,
-                  elevation: 0,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonBorder),
-                ),
-                child: const Text('Keep order'),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              TextButton(
-                key: const Key('confirm-cancel'),
-                onPressed: () => Navigator.of(sheetContext).pop(true),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppTextColors.problem,
-                  side: const BorderSide(color: AppTextColors.problem),
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonBorder),
-                ),
-                child: const Text('Cancel order'),
-              ),
-            ],
-          ),
+    // The shared adaptive surface (sheet under 600, dialog from 600) rather
+    // than a second bottom-sheet recipe: it brings the drag handle, the scrim,
+    // the safe area, the keyboard inset and the route semantics with it.
+    final confirmed = await showAdaptiveSheet<bool>(
+      context,
+      semanticLabel: 'Cancel this order?',
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+          BlynkSpace.s24,
+          BlynkSpace.s8,
+          BlynkSpace.s24,
+          BlynkSpace.s24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Cancel this order?', style: BlynkText.title),
+            const SizedBox(height: BlynkSpace.s8),
+            Text(
+              "This can't be undone.",
+              style: BlynkText.body.copyWith(color: BlynkColors.ink2),
+            ),
+            const SizedBox(height: BlynkSpace.s24),
+            // Keeping the order is the forward action, so it is the one
+            // yellow action on this surface; cancelling is destructive.
+            BlynkButton.cta(
+              key: const Key('keep-order'),
+              label: 'Keep order',
+              onPressed: () => Navigator.of(sheetContext).pop(false),
+            ),
+            const SizedBox(height: BlynkSpace.s12),
+            BlynkButton.destructive(
+              key: const Key('confirm-cancel'),
+              label: 'Cancel order',
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+              expand: true,
+            ),
+          ],
         ),
       ),
     );
@@ -173,27 +146,20 @@ class _OrderCancelSectionState extends State<OrderCancelSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
+        Text(
           'You can cancel until your order is out for delivery.',
-          style: TextStyle(fontSize: 13, color: AppTextColors.onBackground),
+          style: BlynkText.caption.copyWith(color: BlynkColors.ink3),
         ),
-        const SizedBox(height: AppSpacing.md),
-        OutlinedButton(
+        const SizedBox(height: BlynkSpace.s12),
+        // `loading` is the shared duplicate-submission guarantee: the button
+        // keeps its size, swallows a second tap and reports disabled to
+        // assistive technology, so no second POST can leave this screen.
+        BlynkButton.destructive(
           key: const Key('cancel-order-button'),
-          onPressed: _busy ? null : _openSheet,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppTextColors.problem,
-            side: const BorderSide(color: AppTextColors.problem),
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonBorder),
-          ),
-          child: _busy
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2.2, color: AppTextColors.problem),
-                )
-              : const Text('Cancel order'),
+          label: 'Cancel order',
+          onPressed: _openSheet,
+          loading: _busy,
+          expand: true,
         ),
       ],
     );

@@ -4,6 +4,7 @@ import { requireRoles } from '../../middleware/role.middleware.js';
 import { adminCatalogRouter } from '../catalog/index.js';
 import { adminPromotionsRouter } from '../promotions/index.js';
 import { adminMediaRouter } from '../media/index.js';
+import { adminDentalRouter } from '../dental/index.js';
 import { orderController } from '../orders/order.controller.js';
 import { inventoryController } from '../inventory/index.js';
 import { listRidersForAssignment } from '../riders/rider.controller.js';
@@ -26,6 +27,10 @@ adminRouter.use(adminCatalogRouter);
 // Home promotions and media uploads - each route guarded by ADMIN inside.
 adminRouter.use(adminPromotionsRouter);
 adminRouter.use(adminMediaRouter);
+
+// Dental clinic operations (task B3): clinic-initiated cancellation.
+// Guarded by ADMIN inside adminDentalRouter.
+adminRouter.use('/dental', adminDentalRouter);
 
 // Store Operations & Fulfillment Queue (Guarded by ADMIN and PACKING_STAFF)
 adminRouter.get(

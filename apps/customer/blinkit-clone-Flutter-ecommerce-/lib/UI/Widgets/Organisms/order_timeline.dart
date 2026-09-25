@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../Models/order_format.dart';
 import '../../../Models/order_model.dart';
 import '../../../Models/order_status_labels.dart';
-import '../../../app_design.dart';
+import '../../../app_design.dart' show appCardDecoration;
+import '../../../design/tokens.dart';
 
 /// "What happened": one row per `history[]` entry, oldest first, exactly as
 /// the backend recorded it. No future/greyed/placeholder steps - a status
@@ -14,26 +15,34 @@ class OrderTimeline extends StatelessWidget {
 
   final List<OrderStatusEvent> history;
 
+  /// Fixed-width gutter: the past dots, the final dot and the rail all centre
+  /// on the same x, so every row's label starts on the same x too.
+  static const double _dotColumn = BlynkSpace.s12;
+  static const double _pastDot = 10;
+
+  /// A past dot is the row's own tone at a quieter weight — the wording
+  /// already says what happened; this only adds emphasis to it.
+  static const double _pastDotAlpha = 0.45;
+
+  /// The optical gap between a row's label and its timestamp; smaller than
+  /// [BlynkSpace.s4] because the two lines are one block.
+  static const double _timeGap = 2;
+
   @override
   Widget build(BuildContext context) {
     if (history.isEmpty) return const SizedBox.shrink();
 
     return Container(
       key: const Key('order-timeline'),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.cardBorder,
-        border: Border.all(color: AppSurfaces.border),
-      ),
+      padding: const EdgeInsets.all(BlynkSpace.s16),
+      // The app's one card recipe, the same one the bill card already uses,
+      // instead of this file's own flat white + hairline.
+      decoration: appCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'What happened',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTextColors.primary),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          const Text('What happened', style: BlynkText.sectionHeader),
+          const SizedBox(height: BlynkSpace.s16),
           for (var i = 0; i < history.length; i++) _row(i, history[i], isLast: i == history.length - 1),
         ],
       ),
@@ -59,47 +68,43 @@ class OrderTimeline extends StatelessWidget {
             // the rail all centre on the same x, and every row's label
             // therefore starts on the same x too.
             SizedBox(
-              width: 12,
+              width: _dotColumn,
               child: Column(
                 children: [
                   Container(
-                    width: isLast ? 12 : 10,
-                    height: isLast ? 12 : 10,
+                    width: isLast ? _dotColumn : _pastDot,
+                    height: isLast ? _dotColumn : _pastDot,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isLast ? tone : Colors.white,
+                      color: isLast ? tone : BlynkColors.paper,
                       border: isLast
                           ? null
-                          : Border.all(color: tone.withValues(alpha: 0.45), width: 2),
+                          : Border.all(color: tone.withValues(alpha: _pastDotAlpha), width: 2),
                     ),
                   ),
                   if (!isLast)
                     Container(
                       width: 2,
-                      height: AppSpacing.lg,
-                      color: const Color(0xffDCE2EC),
+                      height: BlynkSpace.s16,
+                      color: BlynkColors.line,
                     ),
                 ],
               ),
             ),
-            const SizedBox(width: AppSpacing.md - 2),
+            const SizedBox(width: BlynkSpace.s12),
             Expanded(
               child: Padding(
-                padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.sm),
+                padding: EdgeInsets.only(bottom: isLast ? 0 : BlynkSpace.s12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       label,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: tone,
-                      ),
+                      style: BlynkText.label.copyWith(color: tone),
                     ),
                     if (time != null) ...[
-                      const SizedBox(height: 2),
-                      Text(time, style: const TextStyle(fontSize: 12, color: AppTextColors.secondary)),
+                      const SizedBox(height: _timeGap),
+                      Text(time, style: BlynkText.caption.copyWith(color: BlynkColors.ink2)),
                     ],
                   ],
                 ),

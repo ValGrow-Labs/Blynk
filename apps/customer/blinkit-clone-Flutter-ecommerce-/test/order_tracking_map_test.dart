@@ -34,10 +34,14 @@ class _FakeTrackingMap extends TrackingMapView {
   Widget build(BuildContext context) => const SizedBox.expand(key: Key('fake-map'));
 }
 
+// `semanticsLabel` is accepted (required by the `TrackingMapBuilder` typedef,
+// task-F1 review-fix round 1) and ignored - `_FakeTrackingMap` carries no
+// Semantics of its own, unrelated to what this file's tests cover.
 TrackingMapView _fakeBuilder({
   required GeoPoint initialCenter,
   required double initialZoom,
   required Set<MapMarkerSpec> markers,
+  String? semanticsLabel,
 }) =>
     _FakeTrackingMap(initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
 
@@ -407,6 +411,92 @@ void main() {
         matching: find.byType(ClipRRect),
       ));
       expect(clip.borderRadius, BorderRadius.circular(AppRadius.card));
+    });
+
+    // --- 2026-09 premium redesign (W5): the CONTAINER only ----------------
+    //
+    // The architecture above (markers, freshness, staleness, the SSE wiring)
+    // is unchanged and is covered by the groups above. These cover what the
+    // redesign owns: the header, the rounded surface, the freshness pill.
+
+    _testMap('the section carries a header above the map, announced as a header', (tester) async {
+      final handle = tester.ensureSemantics();
+      final order = _order();
+      await _watching(tester, order);
+
+      final title = find.text(mapSectionTitle);
+      expect(title, findsOneWidget);
+      final frame = tester.getRect(find.byKey(const Key('order-tracking-map-frame')));
+      expect(tester.getRect(title).bottom, lessThanOrEqualTo(frame.top));
+      expect(tester.getSemantics(title).getSemanticsData().flagsCollection.isHeader, isTrue);
+      handle.dispose();
+    });
+
+    _testMap('the freshness indicator sits below the map and is never colour alone', (tester) async {
+      final order = _order();
+      final h = await _watching(tester, order);
+      h.sendPoint(lat: 6.44, lng: 80.03, age: const Duration(seconds: 3));
+      await _settle(tester);
+
+      final caption = find.byKey(const Key('order-tracking-caption'));
+      final frame = tester.getRect(find.byKey(const Key('order-tracking-map-frame')));
+      expect(tester.getRect(caption).top, greaterThanOrEqualTo(frame.bottom));
+      // The dot is an indicator, not the message: a word always goes with it.
+      expect(find.descendant(of: caption, matching: find.byType(Text)), findsOneWidget);
+    });
+
+    _testMap('the container invents no ETA, distance, route or rider identity', (tester) async {
+      final order = _order();
+      final h = await _watching(tester, order);
+      h.sendPoint(lat: 6.4411, lng: 80.0299, age: const Duration(seconds: 3));
+      await _settle(tester);
+
+      final fabricated = [
+        RegExp(r'\bETA\b'),
+        RegExp(r'estimat', caseSensitive: false),
+        RegExp(r'arriv', caseSensitive: false),
+        RegExp(r'rider', caseSensitive: false),
+        RegExp(r'\bkm\b', caseSensitive: false),
+        RegExp(r'distance', caseSensitive: false),
+        RegExp(r'\broute\b', caseSensitive: false),
+        RegExp(r'\baway\b', caseSensitive: false),
+      ];
+      for (final text in tester.widgetList<Text>(find.byType(Text))) {
+        final data = text.data ?? '';
+        for (final pattern in fabricated) {
+          expect(pattern.hasMatch(data), isFalse, reason: '"$data" matched ${pattern.pattern}');
+        }
+      }
+    });
+
+    _testMap('does not overflow at 2.0x text scale on a narrow screen', (tester) async {
+      tester.view.physicalSize = const Size(360, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final order = _order();
+      final h = _Harness();
+      _open.add(h);
+      h.provider.watch(order.id);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<LocationProvider>.value(
+          value: h.provider,
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2.0)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: OrderTrackingMap(order: order, mapBuilder: _fakeBuilder),
+              ),
+            ),
+          ),
+        ),
+      );
+      await _settle(tester);
+      expect(tester.takeException(), isNull);
     });
   });
 }

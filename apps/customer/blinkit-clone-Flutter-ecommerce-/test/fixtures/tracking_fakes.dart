@@ -27,10 +27,14 @@ class FakeTrackingMap extends TrackingMapView {
   Widget build(BuildContext context) => const SizedBox.expand(key: Key('fake-map'));
 }
 
+// `semanticsLabel` is accepted (required by the `TrackingMapBuilder` typedef,
+// task-F1 review-fix round 1) and ignored - `FakeTrackingMap` carries no
+// Semantics of its own, unrelated to what tests using this fixture cover.
 TrackingMapView fakeMapBuilder({
   required GeoPoint initialCenter,
   required double initialZoom,
   required Set<MapMarkerSpec> markers,
+  String? semanticsLabel,
 }) =>
     FakeTrackingMap(initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
 

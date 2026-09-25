@@ -59,6 +59,7 @@ class AdaptiveScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // The page canvas, not the nav surface (BlynkNav.surface is that).
       backgroundColor: BlynkColors.paper,
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -96,7 +97,7 @@ class AdaptiveScaffold extends StatelessWidget {
                 onSelected: onSelected,
                 extended: extended,
               ),
-              const VerticalDivider(width: 1, thickness: 1, color: BlynkColors.line),
+              const VerticalDivider(width: 1, thickness: 1, color: BlynkNav.divider),
               Expanded(
                 // The rail's own SafeArea covers the left/top; the content
                 // column keeps clear of the bottom and right system insets
@@ -120,6 +121,12 @@ class AdaptiveScaffold extends StatelessWidget {
   }
 }
 
+/// The dot on a nav icon: [BlynkNav.badgeDot] with a [BlynkNav.badgeDotBorder]
+/// ring. The token is neutral `ink`, not `problem` — see [BlynkNav.badgeDot]
+/// for why a normal in-progress delivery must not be red. The dot never
+/// carries meaning on its own either: the destination's
+/// [AdaptiveDestination.badgeDescription] is spoken with the label (see
+/// [AdaptiveDestination.semanticLabel]).
 Widget _dot(Widget icon) => Stack(
       clipBehavior: Clip.none,
       children: [
@@ -133,10 +140,10 @@ Widget _dot(Widget icon) => Stack(
             height: 10,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: BlynkColors.ink,
+                color: BlynkNav.badgeDot,
                 shape: BoxShape.circle,
                 border: Border.fromBorderSide(
-                  BorderSide(color: BlynkColors.paper, width: 2),
+                  BorderSide(color: BlynkNav.badgeDotBorder, width: 2),
                 ),
               ),
             ),
@@ -160,8 +167,8 @@ class _BottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: BlynkColors.paper,
-        border: Border(top: BorderSide(color: BlynkColors.line)),
+        color: BlynkNav.surface,
+        border: Border(top: BorderSide(color: BlynkNav.divider)),
       ),
       child: SafeArea(
         top: false,
@@ -215,9 +222,10 @@ class _BarItemState extends State<_BarItem> {
   Widget build(BuildContext context) {
     final d = widget.destination;
     final selected = widget.selected;
-    final color = selected ? BlynkColors.ink : BlynkColors.ink2;
+    final iconColor = selected ? BlynkNav.selectedIcon : BlynkNav.unselectedIcon;
+    final labelColor = selected ? BlynkNav.selectedLabel : BlynkNav.unselectedLabel;
 
-    Widget icon = Icon(selected ? d.selectedIcon : d.icon, size: BlynkIcons.md, color: color);
+    Widget icon = Icon(selected ? d.selectedIcon : d.icon, size: BlynkNav.iconSize, color: iconColor);
     if (d.hasBadge) icon = _dot(icon);
 
     return Semantics(
@@ -243,25 +251,26 @@ class _BarItemState extends State<_BarItem> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // 2026-09 redesign (spec §3 "Bottom nav"): the selected item
+                // sits on a `signal` rounded-square tile behind the icon
+                // (was a 3 dp bar above it).
                 Container(
                   key: ValueKey('nav-indicator-${d.label}'),
-                  width: 32,
-                  height: 3,
-                  margin: const EdgeInsets.only(bottom: BlynkSpace.s4),
+                  padding: BlynkNav.tilePadding,
                   decoration: BoxDecoration(
-                    color: selected ? BlynkColors.signal : BlynkColors.clear,
-                    borderRadius: BlynkRadius.full,
+                    color: selected ? BlynkNav.selectedTile : BlynkNav.unselectedTile,
+                    borderRadius: BlynkNav.tileRadius,
                   ),
+                  child: icon,
                 ),
-                icon,
                 const SizedBox(height: 2),
                 Text(
                   d.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: BlynkText.caption.copyWith(
+                  style: BlynkNav.label.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: color,
+                    color: labelColor,
                   ),
                 ),
               ],
@@ -298,9 +307,30 @@ class _Rail extends StatelessWidget {
         selectedIndex: selectedIndex,
         onDestinationSelected: onSelected,
         labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-        backgroundColor: BlynkColors.paper,
-        // Selected is the filled glyph on a quiet well, never a yellow pill.
-        indicatorColor: BlynkColors.well,
+        backgroundColor: BlynkNav.surface,
+        // T2: the rail's selected state is the SAME treatment as the compact
+        // bar's — a filled glyph on a `signal` rounded-square tile (plan §9,
+        // BlynkNav.selectedTile). A previous pass left the rail on a quiet
+        // `well` pill, so one component presented two different selected
+        // states depending on the width it was given.
+        indicatorColor: BlynkNav.selectedTile,
+        indicatorShape: const RoundedRectangleBorder(borderRadius: BlynkNav.tileRadius),
+        selectedIconTheme: const IconThemeData(
+          color: BlynkNav.selectedIcon,
+          size: BlynkNav.iconSize,
+        ),
+        unselectedIconTheme: const IconThemeData(
+          color: BlynkNav.unselectedIcon,
+          size: BlynkNav.iconSize,
+        ),
+        selectedLabelTextStyle: BlynkNav.label.copyWith(
+          fontWeight: FontWeight.w700,
+          color: BlynkNav.selectedLabel,
+        ),
+        unselectedLabelTextStyle: BlynkNav.label.copyWith(
+          fontWeight: FontWeight.w700,
+          color: BlynkNav.unselectedLabel,
+        ),
         destinations: [
           for (final d in destinations)
             NavigationRailDestination(

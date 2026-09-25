@@ -1,79 +1,28 @@
 import 'package:flutter/material.dart';
 
 import '../../../Screens/customer_shell.dart';
-import '../../../design/tokens.dart';
-import '../../../app_design.dart';
+import '../Atoms/app_state_views.dart';
 
-/// Shown wherever the cart is empty (Cart and Checkout). Browse Groceries
+/// Shown wherever the cart is empty (Cart and Checkout). Browse groceries
 /// goes back to the existing Shop tab rather than opening a new catalog.
+///
+/// W9: this is now the shared [AppStateView.empty], not a second empty-state
+/// dialect. It used to compose its own: a 112 dp tinted medallion instead of
+/// the shared glyph, `title` instead of `heading`, `ink2` instead of `ink3`,
+/// a 360 instead of 400 measure, and — the part that actually mattered — a
+/// raw `ElevatedButton` instead of a [BlynkButton], which was the only
+/// primary action in the app still styled by the Material theme rather than
+/// by the token layer. Copy, destination and behaviour are unchanged.
 class EmptyCartView extends StatelessWidget {
   const EmptyCartView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xxl,
-          vertical: AppSpacing.xxxl,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ExcludeSemantics(
-                child: Container(
-                  width: 112,
-                  height: 112,
-                  decoration: const BoxDecoration(
-                    color: BlynkColors.well,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.shopping_basket_outlined,
-                    size: 52,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Semantics(
-                header: true,
-                child: const Text(
-                  'Your cart is empty',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                "Add your everyday essentials and we'll deliver them to your doorstep.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.45,
-                  color: AppTextColors.secondary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              // No fixed height: the button's 48 dp floor grows with a large text size.
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => CustomerShell.openShop(context),
-                  child: const Text('Browse Groceries'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return AppStateView.empty(
+      title: 'Your cart is empty',
+      message: "Add your everyday essentials and we'll deliver them to your doorstep.",
+      actionLabel: 'Browse groceries',
+      onAction: () => CustomerShell.openShop(context),
     );
   }
 }

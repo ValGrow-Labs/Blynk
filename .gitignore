@@ -63,3 +63,13 @@ graphify-out/
 backend/api/uploads/
 uploads/
 *.tsbuildinfo
+
+# Agent tooling caches and generated media. These are local scratch, not
+# project source: the skill bundles duplicate themselves across .claude/ and
+# .agents/, and brag-output/ holds rendered video (a single brag.mp4 is 30 MB).
+# Git keeps every blob forever, so these must never enter history.
+.claude/
+.agents/
+brag-output/
+brag-output-*/
+skills-lock.json

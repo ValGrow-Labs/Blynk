@@ -8,9 +8,9 @@ import '../Models/address_model.dart';
 import '../Services/Location/device_location_source.dart';
 import '../Services/Providers/address.provider.dart';
 import '../Services/store_info.dart';
+import '../UI/Widgets/Atoms/blynk_button.dart';
+import '../UI/Widgets/Atoms/blynk_text_field.dart';
 import '../UI/Widgets/Organisms/map_provider.dart';
-import '../app_colors.dart';
-import '../app_design.dart';
 import '../design/tokens.dart';
 import 'live_location_picker_screen.dart';
 
@@ -55,6 +55,10 @@ final _coordinateFormatter =
 
 const List<String> _kLabelPresets = ['Home', 'Work'];
 const String _kOtherLabel = 'Other';
+
+/// Tablet/desktop get a centred column, not a stretched form.
+/// W8: the number is now [BlynkForm.maxWidth] — same 560, named once.
+const double _kFormMaxWidth = BlynkForm.maxWidth;
 
 class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -189,11 +193,11 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppSurfaces.subtle,
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit Address' : 'Add Address'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: BlynkColors.paper,
+        surfaceTintColor: BlynkColors.paper,
         elevation: 0,
         // Hairline separation only once the form scrolls under it.
         scrolledUnderElevation: 0.5,
@@ -201,8 +205,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          // Tablet/desktop get a centred column, not a stretched form.
-          constraints: const BoxConstraints(maxWidth: 560),
+          constraints: const BoxConstraints(maxWidth: _kFormMaxWidth),
           child: Form(
             key: _formKey,
             // After the first interaction a corrected field clears its own
@@ -210,10 +213,10 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.xxl,
+                BlynkSpace.s16,
+                BlynkSpace.s16,
+                BlynkSpace.s16,
+                BlynkSpace.s32,
               ),
               children: [
                 _LabelPicker(
@@ -222,14 +225,13 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       setState(() => _selectedPreset = value),
                 ),
                 if (_isCustomLabel) ...[
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: BlynkSpace.s16),
                   _FormSection(
                     children: [
                       _AddressField(
                         controller: _labelController,
                         label: 'Address name',
                         hint: 'e.g. Parents, Hostel',
-                        icon: Icons.bookmark_outline_rounded,
                         textCapitalization: TextCapitalization.words,
                         maxLength: AppValidators.addressNameMax,
                         validator: AppValidators.addressName,
@@ -244,7 +246,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       controller: _nameController,
                       label: 'Recipient name',
                       hint: 'Who receives the order',
-                      icon: Icons.person_outline_rounded,
                       textCapitalization: TextCapitalization.words,
                       maxLength: AppValidators.recipientNameMax,
                       validator: AppValidators.recipientName,
@@ -253,7 +254,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       controller: _phoneController,
                       label: 'Recipient phone',
                       hint: '07XXXXXXXX',
-                      icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
                       maxLength: 16,
                       // Keeps letters out while typing; a pasted number with
@@ -270,7 +270,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       controller: _line1Controller,
                       label: 'Address line 1',
                       hint: 'House / street',
-                      icon: Icons.location_on_outlined,
                       textCapitalization: TextCapitalization.words,
                       maxLength: AppValidators.addressLineMax,
                       validator: AppValidators.addressLine1,
@@ -286,7 +285,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     _AddressField(
                       controller: _cityController,
                       label: 'City',
-                      icon: Icons.location_city_outlined,
                       textCapitalization: TextCapitalization.words,
                       maxLength: AppValidators.cityMax,
                       validator: AppValidators.city,
@@ -309,44 +307,28 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     // never implies a detected position; only the picker
                     // below detects one, and only when tapped.
                     const _SectionNote(
-                      icon: Icons.my_location_rounded,
+                      icon: Icons.my_location,
                       title: 'Delivery location',
                       message:
                           'Your delivery location helps us confirm service '
                           'availability.',
                     ),
-                    // Same insets on every side as the note above it, so the
-                    // button is not jammed under the section hairline. At
-                    // least 48 dp tall, and taller when a large font wraps
-                    // the label (a fixed height clipped it at 1.6x).
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        AppSpacing.md,
-                        AppSpacing.lg,
-                        AppSpacing.md,
-                      ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(64, 48),
-                          ),
-                          onPressed: _useCurrentLocation,
-                          icon: const Icon(Icons.gps_fixed_rounded, size: 18),
-                          label: const Text(
-                            'Use my current location',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
+                    // Full width and at least 48 dp tall, growing when a large
+                    // font wraps the label (a fixed height clipped it at 1.6x).
+                    BlynkButton.secondary(
+                      label: 'Use my current location',
+                      leadingIcon: Icons.gps_fixed,
+                      expand: true,
+                      onPressed: _useCurrentLocation,
                     ),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: _AddressField(
                             controller: _latController,
                             label: 'Latitude',
+                            showClear: false,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                               signed: true,
@@ -355,11 +337,12 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                             validator: AppValidators.latitude,
                           ),
                         ),
-                        const _FieldDivider(),
+                        const SizedBox(width: BlynkSpace.s12),
                         Expanded(
                           child: _AddressField(
                             controller: _lngController,
                             label: 'Longitude',
+                            showClear: false,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                               signed: true,
@@ -379,7 +362,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       controller: _instructionsController,
                       label: 'Delivery instructions',
                       hint: 'Gate code, landmark, when to call (optional)',
-                      icon: Icons.sticky_note_2_outlined,
                       maxLines: 2,
                       maxLength: AppValidators.instructionsMax,
                       textCapitalization: TextCapitalization.sentences,
@@ -387,7 +369,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: BlynkSpace.s24),
                 _DefaultAddressTile(
                   value: _isDefault,
                   onChanged: (value) => setState(() => _isDefault = value),
@@ -424,22 +406,21 @@ class _LabelPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Text(
-            'Save address as',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppTextColors.secondary,
+        Padding(
+          padding: const EdgeInsets.only(bottom: BlynkSpace.s8),
+          child: Semantics(
+            header: true,
+            child: Text(
+              'Save address as',
+              style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
             ),
           ),
         ),
         // Wraps rather than overflowing when the type scale is large or
         // the phone is narrow.
         Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
+          spacing: BlynkSpace.s8,
+          runSpacing: BlynkSpace.s8,
           children: [
             for (final option in options)
               _LabelChip(
@@ -454,6 +435,9 @@ class _LabelPicker extends StatelessWidget {
   }
 }
 
+/// Selection chrome, not an action: a selected chip wears the `signal` fill
+/// the nav's selected tile does, so it does not consume the screen's one
+/// yellow *action* (plan §4.3, T2 report §8 A).
 class _LabelChip extends StatelessWidget {
   const _LabelChip({
     required this.label,
@@ -466,9 +450,9 @@ class _LabelChip extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _icons = {
-    'Home': Icons.home_outlined,
-    'Work': Icons.work_outline_rounded,
-    _kOtherLabel: Icons.place_outlined,
+    'Home': BlynkIcons.addressHome,
+    'Work': BlynkIcons.addressWork,
+    _kOtherLabel: BlynkIcons.addressOther,
   };
 
   @override
@@ -477,47 +461,40 @@ class _LabelChip extends StatelessWidget {
       button: true,
       selected: isSelected,
       child: Material(
-        color: Colors.transparent,
+        color: BlynkColors.clear,
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.chip),
+          borderRadius: BlynkRadius.full,
           onTap: onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
+            duration: BlynkMotion.resolve(context, BlynkMotion.fast),
+            curve: BlynkMotion.easeOut,
+            constraints: const BoxConstraints(minHeight: BlynkControl.minHeight),
+            alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.sm + 2,
+              horizontal: BlynkSpace.s16,
+              vertical: BlynkSpace.s8,
             ),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.primaryYellowColor
-                  : Colors.white,
-              borderRadius: BorderRadius.circular(AppRadius.chip),
+              color: isSelected ? BlynkNav.selectedTile : BlynkColors.paper,
+              borderRadius: BlynkRadius.full,
               border: Border.all(
-                color: isSelected
-                    ? AppColors.primaryYellowColor
-                    : BlynkColors.lineStrong,
+                color: isSelected ? BlynkNav.selectedTile : BlynkColors.lineStrong,
+                width: BlynkControl.outlineWidth,
               ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  _icons[label] ?? Icons.place_outlined,
-                  size: 16,
-                  color: isSelected
-                      ? AppTextColors.onYellow
-                      : AppTextColors.secondary,
+                  _icons[label] ?? BlynkIcons.addressOther,
+                  size: BlynkIcons.xs,
+                  color: isSelected ? BlynkColors.onSignal : BlynkColors.ink2,
                 ),
-                const SizedBox(width: AppSpacing.xs + 2),
+                const SizedBox(width: BlynkSpace.s8),
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected
-                        ? AppTextColors.onYellow
-                        : AppTextColors.primary,
+                  style: BlynkText.label.copyWith(
+                    color: isSelected ? BlynkColors.onSignal : BlynkColors.ink,
                   ),
                 ),
               ],
@@ -538,10 +515,10 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xs,
-        AppSpacing.xl,
-        AppSpacing.xs,
-        AppSpacing.sm,
+        BlynkSpace.s4,
+        BlynkSpace.s24,
+        BlynkSpace.s4,
+        BlynkSpace.s8,
       ),
       child: Semantics(
         header: true,
@@ -554,8 +531,9 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// One card per section with hairline dividers between its fields, so a
-/// section reads as a single grouped block instead of loose white boxes.
+/// A section's fields, separated by space rather than by hairlines or a box.
+/// Each field already carries its own `well` fill and label, so the grouping
+/// needs no rule and no card around it.
 class _FormSection extends StatelessWidget {
   const _FormSection({required this.children});
 
@@ -563,132 +541,102 @@ class _FormSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.cardBorder,
-        border: Border.all(color: AppSurfaces.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              const Divider(
-                height: 1,
-                thickness: 1,
-                color: AppSurfaces.subtle,
-              ),
-            children[i],
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(height: BlynkSpace.s16),
+          children[i],
         ],
-      ),
+      ],
     );
   }
 }
 
-class _FieldDivider extends StatelessWidget {
-  const _FieldDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 56,
-      child: VerticalDivider(width: 1, thickness: 1, color: AppSurfaces.subtle),
-    );
-  }
-}
-
-/// A borderless field inside a section card: compact height, a floating
-/// label once it has a value or focus, and an icon only where one actually
-/// helps scanning.
-class _AddressField extends StatelessWidget {
+/// A [BlynkTextField] that still takes part in the [Form]: the validator, the
+/// `Form.validate()` gate on Save and the on-interaction re-validation are
+/// exactly what they were, and the message is presented by the shared field
+/// (2 dp problem border, inline glyph, live region) instead of Material's
+/// default decoration.
+class _AddressField extends StatefulWidget {
   const _AddressField({
     required this.controller,
     required this.label,
     this.hint,
-    this.icon,
     this.keyboardType,
     this.validator,
     this.maxLines = 1,
     this.maxLength,
     this.inputFormatters,
     this.textCapitalization = TextCapitalization.none,
+    this.showClear = true,
   });
 
   final TextEditingController controller;
   final String label;
   final String? hint;
-  final IconData? icon;
   final TextInputType? keyboardType;
   final FormFieldValidator<String>? validator;
   final int maxLines;
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
   final TextCapitalization textCapitalization;
+  final bool showClear;
+
+  @override
+  State<_AddressField> createState() => _AddressFieldState();
+}
+
+class _AddressFieldState extends State<_AddressField> {
+  FormFieldState<String>? _field;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_syncFromController);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_syncFromController);
+    super.dispose();
+  }
+
+  /// The picker writes straight into the coordinate controllers, so the form
+  /// field has to hear about a change it did not originate - otherwise the
+  /// validator would still be judging the previous text.
+  void _syncFromController() {
+    final field = _field;
+    if (field == null) return;
+    if (field.value != widget.controller.text) {
+      field.didChange(widget.controller.text);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      maxLength: maxLength,
-      // The limit is enforced, but no "12/80" counter clutters the form.
-      buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
-          null,
-      inputFormatters: inputFormatters,
-      textCapitalization: textCapitalization,
-      textInputAction:
-          maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-        color: AppTextColors.primary,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        // Fields without an icon keep the same text inset, so a section
-        // reads as one aligned column instead of a ragged edge.
-        prefixIcon: Padding(
-          padding: const EdgeInsets.only(
-            left: AppSpacing.md,
-            right: AppSpacing.sm,
-          ),
-          child: icon == null
-              ? const SizedBox(width: 19)
-              : Icon(icon, size: 19, color: AppTextColors.muted),
-        ),
-        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-        filled: true,
-        fillColor: Colors.white,
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md + 2,
-        ),
-        // The card draws the outline; the field only shows state.
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        errorBorder: InputBorder.none,
-        focusedErrorBorder: InputBorder.none,
-        // Focus reads as a yellow underline rather than a heavy box.
-        focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(
-            color: AppColors.primaryYellowColor,
-            width: 2,
-          ),
-        ),
-        labelStyle: const TextStyle(fontSize: 14, color: AppTextColors.secondary),
-        floatingLabelStyle: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: AppTextColors.secondary,
-        ),
-        hintStyle: const TextStyle(fontSize: 14, color: AppTextColors.muted),
-      ),
-      validator: validator,
+    return FormField<String>(
+      initialValue: widget.controller.text,
+      validator: widget.validator,
+      builder: (field) {
+        _field = field;
+        return BlynkTextField(
+          label: widget.label,
+          controller: widget.controller,
+          hintText: widget.hint,
+          errorText: field.errorText,
+          keyboardType: widget.keyboardType,
+          textCapitalization: widget.textCapitalization,
+          inputFormatters: widget.inputFormatters,
+          maxLength: widget.maxLength,
+          maxLines: widget.maxLines,
+          showClear: widget.showClear,
+          textInputAction: widget.maxLines > 1
+              ? TextInputAction.newline
+              : TextInputAction.next,
+          onChanged: field.didChange,
+        );
+      },
     );
   }
 }
@@ -706,44 +654,25 @@ class _SectionNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md + 2,
-        AppSpacing.lg,
-        AppSpacing.md,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: AppColors.primaryGreenColor),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    height: 1.35,
-                    color: AppTextColors.secondary,
-                  ),
-                ),
-              ],
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: BlynkIcons.sm, color: BlynkColors.ink2),
+        const SizedBox(width: BlynkSpace.s12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: BlynkText.label),
+              const SizedBox(height: BlynkSpace.s4),
+              Text(
+                message,
+                style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -757,38 +686,28 @@ class _DefaultAddressTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.cardBorder,
-        border: Border.all(color: AppSurfaces.border),
+      // A setting, not a form field: a soft tinted well, no border.
+      decoration: const BoxDecoration(
+        color: BlynkColors.well,
+        borderRadius: BlynkRadius.lgAll,
       ),
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.md,
-        AppSpacing.md,
+        BlynkSpace.s16,
+        BlynkSpace.s12,
+        BlynkSpace.s12,
+        BlynkSpace.s12,
       ),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Default delivery address',
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-                SizedBox(height: 2),
+                const Text('Default delivery address', style: BlynkText.label),
+                const SizedBox(height: BlynkSpace.s4),
                 Text(
                   'Use this address automatically at checkout',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: AppTextColors.secondary,
-                  ),
+                  style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
                 ),
               ],
             ),
@@ -796,8 +715,10 @@ class _DefaultAddressTile extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: AppTextColors.onYellow,
-            activeTrackColor: AppColors.primaryYellowColor,
+            // Selection state, not the screen's action: the same `signal`
+            // treatment the nav's selected tile uses.
+            activeThumbColor: BlynkColors.onSignal,
+            activeTrackColor: BlynkColors.signal,
           ),
         ],
       ),
@@ -820,47 +741,35 @@ class _ActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppSurfaces.border)),
+        color: BlynkColors.paper,
+        border: Border(top: BorderSide(color: BlynkColors.line)),
       ),
       child: SafeArea(
         top: false,
         child: Center(
           heightFactor: 1,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: const BoxConstraints(maxWidth: _kFormMaxWidth),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.lg,
-                AppSpacing.md,
+                BlynkSpace.s16,
+                BlynkSpace.s12,
+                BlynkSpace.s16,
+                BlynkSpace.s12,
               ),
-              // Buttons are at least 50 dp tall and grow with a large font
-              // instead of clipping; the pair stacks at a large text scale.
-              child: AppButtonPair(
-                secondary: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(64, 50),
-                  ),
+              // The pair shares one height and stacks (primary on top) at a
+              // large text scale or on a very narrow column, so neither label
+              // is squeezed or clipped.
+              child: BlynkButtonPair(
+                secondary: BlynkButton.secondary(
+                  label: 'Cancel',
+                  expand: true,
                   onPressed: isSaving ? null : onCancel,
-                  child: const Text('Cancel', textAlign: TextAlign.center),
                 ),
-                primary: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(64, 50),
-                  ),
-                  onPressed: isSaving ? null : onSave,
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppTextColors.onYellow,
-                          ),
-                        )
-                      : const Text('Save Address', textAlign: TextAlign.center),
+                primary: BlynkButton.cta(
+                  label: 'Save address',
+                  loading: isSaving,
+                  onPressed: onSave,
                 ),
               ),
             ),

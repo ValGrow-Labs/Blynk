@@ -13,6 +13,7 @@ import 'package:ecom/Screens/search_screen.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
 import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
+import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_skeleton.dart';
 import 'package:ecom/UI/Widgets/Atoms/card_product.dart';
@@ -102,6 +103,9 @@ Future<void> _pump(
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider<AddressProvider>(create: (_) => _NoAddresses()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // Home ranks "Browse all" against the customer's own order history,
+        // so the section reads OrderProvider the same way main.dart wires it.
+        ChangeNotifierProvider(create: (_) => OrderProvider()),
       ],
       child: MaterialApp(
         theme: AppTheme.theme,
@@ -142,9 +146,17 @@ void main() {
   });
 
   group('Home', () {
+    // 2026-09-24: a taller viewport than the shared 400x900 default. Home's
+    // header grew by the restored search field and the address block's second
+    // line, which pushed the product grid's second row out of the sliver
+    // cache — so only two skeletons were built and the "more than two share
+    // one pulse" assertion had nothing left to prove. The assertion is
+    // unchanged; the viewport is what moved, to keep the same rows on screen.
+    const tallPhone = Size(400, 1100);
+
     testWidgets('category tiles, then rails: one ticker while anything loads, none once loaded', (tester) async {
       final gate = _Gate();
-      await _pump(tester, gate, const HomeScreen());
+      await _pump(tester, gate, const HomeScreen(), size: tallPhone);
       final idle = _tickers(tester) - 1; // everything else on Home that ticks
 
       // Categories loading: a row of tile skeletons.
@@ -171,7 +183,8 @@ void main() {
 
     testWidgets('reduced motion: a loading Home runs no skeleton ticker at all', (tester) async {
       final gate = _Gate();
-      await _pump(tester, gate, const HomeScreen(), disableAnimations: true);
+      await _pump(tester, gate, const HomeScreen(),
+          disableAnimations: true, size: tallPhone);
       final idle = _tickers(tester);
       gate.categories.complete(_categories());
       for (var i = 0; i < 4; i++) {

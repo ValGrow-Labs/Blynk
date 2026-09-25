@@ -39,13 +39,13 @@ class Responsive {
   bool get isMobile => width < AppBreakpoints.tablet;
 
   /// Product/category grid column count for the current width.
-  int get gridColumns {
-    if (width >= 1600) return 6;
-    if (width >= 1280) return 5;
-    if (isDesktop) return 4;
-    if (isTablet) return 3;
-    return 2;
-  }
+  ///
+  /// W1: this is now one line over [BlynkProductGrid], the single place the
+  /// product grid's columns, gutter and spacing are decided. It stays here so
+  /// existing call sites keep working; new code should call
+  /// `BlynkProductGrid.columnsFor(availableWidth)` with the width it actually
+  /// has (a `LayoutBuilder` constraint), not the whole screen's.
+  int get gridColumns => BlynkProductGrid.columnsFor(width);
 
   /// Caps single-column/list content width on wide desktop viewports so it
   /// doesn't stretch edge-to-edge; returns the full width on mobile.
@@ -60,6 +60,89 @@ class Responsive {
     if (isTablet) return 32.0;
     return 16.0;
   }
+}
+
+/// **The product grid rule — defined once, here.** (W1)
+///
+/// Every listing, category and search grid asks this class rather than
+/// choosing its own columns, gutter, spacing or tile width, and every Home
+/// rail asks it for its card width. A screen that wants a different density
+/// changes this file, not itself: that is what stops six separately-redesigned
+/// grids appearing.
+///
+/// | Class | Width | Columns | Gutter | Spacing |
+/// |---|---|---|---|---|
+/// | compact | < 600 | **2** | 16 | 12 |
+/// | medium | 600–1023 | **3** | 24 | 16 |
+/// | expanded | 1024–1439 | **4** | 32 | 16 |
+/// | expanded (wide) | ≥ 1440 | **5** | 32 | 16 |
+///
+/// The tile's *aspect* is deliberately not a ratio: a product card is a square
+/// image plus a text-scale-dependent chrome block, so a fixed ratio either
+/// squashes the image or clips the text at 2.0×. [tileWidthFor] gives the
+/// width and `ProductCard.heightFor(context, tileWidth)` gives the matching
+/// height — pass it as the grid delegate's `mainAxisExtent`.
+abstract final class BlynkProductGrid {
+  /// The fifth column only appears when it can still carry a readable card.
+  static const double wide = 1440;
+
+  /// The narrowest screen that can carry three columns.
+  ///
+  /// Measured, not chosen: three columns leaves each card a content box of
+  /// `(width - gutter*2 - spacing*2) / 3 - cardPadding*2`, and the quantity
+  /// stepper needs two 48 dp tap targets plus its count - about 96 dp - which
+  /// is a floor `touch_targets_test` enforces and no styling can go under.
+  /// Below this width that sum does not fit and the stepper overflowed its
+  /// row by 32 px, which is exactly how the 2026-09-24 attempt failed.
+  static const double threeColumn = 390;
+
+  static int columnsFor(double width) {
+    if (width >= wide) return 5;
+    if (width >= AppBreakpoints.desktop) return 4;
+    if (width >= AppBreakpoints.tablet) return 3;
+    // 2026-09-25: three columns on a phone, but only where it actually fits.
+    // The earlier blanket attempt was reverted because it overflowed at 360
+    // AND 412 dp; it failed on the stepper's width, not the card's height, so
+    // the fix was to widen the tile (tighter spacing and card padding) and to
+    // stop at the width where the tap-target floor stops fitting.
+    return width >= threeColumn ? 3 : 2;
+  }
+
+
+
+  /// The page gutter on both sides — the same ladder the rest of the app uses,
+  /// so a grid's first column lines up with a section header's title.
+  static double gutterFor(double width) => BlynkSpace.gutterFor(width);
+
+  /// The gap between tiles, in both axes.
+  static double spacingFor(double width) =>
+      width < AppBreakpoints.tablet ? BlynkSpace.s8 : BlynkSpace.s16;
+
+  static EdgeInsets paddingFor(double width) =>
+      EdgeInsets.symmetric(horizontal: gutterFor(width));
+
+  /// The width one tile gets inside [width] of available space.
+  static double tileWidthFor(double width) {
+    final columns = columnsFor(width);
+    final inner = width - gutterFor(width) * 2 - spacingFor(width) * (columns - 1);
+    return inner / columns;
+  }
+
+  // Home-rail card widths, one per class. A rail card is narrower than a grid
+  // tile on purpose: the next card must peek past the edge so the rail reads
+  // as scrollable without a scrollbar.
+  static const double railCardCompact = 152;
+  static const double railCardMedium = 175;
+  static const double railCardExpanded = 190;
+
+  static double railCardWidthFor(double width) => switch (Responsive.classOf(width)) {
+        ResponsiveClass.compact => railCardCompact,
+        ResponsiveClass.medium => railCardMedium,
+        ResponsiveClass.expanded => railCardExpanded,
+      };
+
+  /// The gap between rail cards.
+  static const double railGap = BlynkSpace.s12;
 }
 
 /// Centres [child] in a column whose width follows the ladder: full width when

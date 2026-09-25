@@ -59,7 +59,14 @@ export type StockEffect = 'NONE' | 'RESTORE_ORDER_STOCK';
 
 const STORE: readonly UserRole[] = ['ADMIN', 'PACKING_STAFF'];
 const ADMIN: readonly UserRole[] = ['ADMIN'];
-const RIDER: readonly UserRole[] = ['RIDER'];
+/**
+ * The four rider steps, which the Operations app's ADMIN operator also runs
+ * (operations plan §2, §7). Reaching them still requires a delivery owned by
+ * the caller's own riders row - the `riderDelivery` lock scopes every one of
+ * them to req.riderId, which is resolved from the authenticated user, never
+ * from the request body.
+ */
+const RIDER_OR_OPS: readonly UserRole[] = ['RIDER', 'ADMIN'];
 
 export const CATALOGUE: Record<ActionName, CatalogueEntry> = {
   CUSTOMER_CANCEL: {
@@ -83,19 +90,19 @@ export const CATALOGUE: Record<ActionName, CatalogueEntry> = {
     lock: 'activeDeliveries', notesRequired: false, stock: 'NONE', notifications: ['OUT_FOR_DELIVERY'],
   },
   RIDER_PICKUP: {
-    action: 'RIDER_PICKUP', from: ['PACKED'], to: 'OUT_FOR_DELIVERY', roles: RIDER,
+    action: 'RIDER_PICKUP', from: ['PACKED'], to: 'OUT_FOR_DELIVERY', roles: RIDER_OR_OPS,
     lock: 'riderDelivery', notesRequired: false, stock: 'NONE', notifications: ['OUT_FOR_DELIVERY'],
   },
   RIDER_ARRIVE: {
-    action: 'RIDER_ARRIVE', from: ['OUT_FOR_DELIVERY'], to: null, roles: RIDER,
+    action: 'RIDER_ARRIVE', from: ['OUT_FOR_DELIVERY'], to: null, roles: RIDER_OR_OPS,
     lock: 'riderDelivery', notesRequired: false, stock: 'NONE', notifications: [],
   },
   RIDER_FAIL: {
-    action: 'RIDER_FAIL', from: ['OUT_FOR_DELIVERY'], to: 'FAILED', roles: RIDER,
+    action: 'RIDER_FAIL', from: ['OUT_FOR_DELIVERY'], to: 'FAILED', roles: RIDER_OR_OPS,
     lock: 'riderDelivery', notesRequired: false, stock: 'NONE', notifications: [],
   },
   RIDER_COLLECT_COD: {
-    action: 'RIDER_COLLECT_COD', from: ['OUT_FOR_DELIVERY'], to: 'DELIVERED', roles: RIDER,
+    action: 'RIDER_COLLECT_COD', from: ['OUT_FOR_DELIVERY'], to: 'DELIVERED', roles: RIDER_OR_OPS,
     lock: 'riderDelivery', notesRequired: false, stock: 'NONE', notifications: ['DELIVERED', 'COD_PAYMENT_CONFIRMED'],
   },
   ADMIN_MARK_DELIVERED: {

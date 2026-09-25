@@ -37,7 +37,8 @@ export class RiderController {
       const input = updateDeliveryStatusSchema.parse(req.body);
       const delivery = await riderService.updateDeliveryStatus(
         id,
-        req.user!.id,
+        // The verified token's own id and role - never anything from the body.
+        { id: req.user!.id, role: req.user!.role },
         input.status,
         input.failure_reason
       );
@@ -56,7 +57,7 @@ export class RiderController {
       const input = collectCodSchema.parse(req.body);
       const settlement = await riderService.collectCod(
         id,
-        req.user!.id,
+        { id: req.user!.id, role: req.user!.role },
         input.amount
       );
       res.status(200).json({

@@ -348,7 +348,8 @@ backend/
 │   │   ├── riders/         # Rider management
 │   │   ├── deliveries/     # Delivery assignment
 │   │   ├── notifications/  # SMS/WhatsApp/push
-│   │   └── admin/          # Admin-only operations
+│   │   ├── admin/          # Admin-only operations
+│   │   └── dental/         # Dental clinic appointments (2026-09-22, own domain — see below)
 │   ├── shared/
 │   │   ├── middleware/     # Auth, rate limit, validation
 │   │   ├── database/       # Prisma client
@@ -361,6 +362,8 @@ backend/
 - At 50 orders/day, a single process handles all traffic easily
 - Modules are self-contained and can be extracted to microservices in Phase 3 without rewriting business logic
 - One deployment, one database connection, one codebase to maintain
+
+> **Addition (2026-09-22): `modules/dental/` — Dental Clinic Appointments.** A self-contained new domain, not a grocery extension: it does not reuse `orders`, `OrderStatus`, or any `orders/lifecycle/*` file. Seven new tables (`dental_clinics`, `doctors`, `clinic_doctors`, `doctor_availability`, `doctor_blocked_dates`, `appointments`, `appointment_status_history`); its own booking lifecycle (hold → confirm → cancel) with the same locked-transaction + partial-unique-index double-booking guard already proven for rider assignment; read-only availability computed on request from a weekly template (no slot-generation batch job); admin-only clinic/doctor management (no new role, no clinic login); and two additive notification types on the existing outbox. Phase 1 is booking only — no online payment (ADR-005). Full detail: `docs/05-implementation/blynk-dental-appointments-report.md`.
 
 ### C. Database Architecture
 

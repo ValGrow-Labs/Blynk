@@ -248,4 +248,35 @@ void main() {
       expect(AppValidators.isValidQuantity(null), isFalse);
     });
   });
+
+  // task F3 - dental booking's patient-details form.
+  group('patient name', () {
+    test('accepts real names, at the backend\'s own bounds (2-128)', () {
+      expect(AppValidators.patientName('Jane Silva'), isNull);
+      expect(AppValidators.patientName('a' * 128), isNull);
+      expect(AppValidators.patientName('Jo'), isNull);
+    });
+
+    test('rejects blank, too short, too long and symbol-only', () {
+      expect(AppValidators.patientName(''), isNotNull);
+      expect(AppValidators.patientName('  '), isNotNull);
+      expect(AppValidators.patientName('J'), isNotNull);
+      expect(AppValidators.patientName('a' * 129), isNotNull);
+      expect(AppValidators.patientName('123'), isNotNull);
+    });
+  });
+
+  group('patient notes', () {
+    test('optional: empty and null are both fine', () {
+      expect(AppValidators.patientNotes(null), isNull);
+      expect(AppValidators.patientNotes(''), isNull);
+      expect(AppValidators.patientNotes('   '), isNull);
+    });
+
+    test('accepts up to the backend cap (500), rejects beyond it', () {
+      expect(AppValidators.patientNotes('Sensitive to cold water.'), isNull);
+      expect(AppValidators.patientNotes('a' * AppValidators.patientNotesMax), isNull);
+      expect(AppValidators.patientNotes('a' * (AppValidators.patientNotesMax + 1)), isNotNull);
+    });
+  });
 }

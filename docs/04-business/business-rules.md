@@ -94,3 +94,17 @@ Each product is `UNTRACKED` (bought at market for each order; the count is never
 - **Customer Android**: Native Android mobile application (Flutter client in `apps/customer/`).
 - **Customer iOS**: Responsive Web Application / Progressive Web App (PWA) fallback for Safari; native iOS App Store release pursued in parallel.
 - **Platform Agnostic**: Backend exposes a unified REST API (`/api/v1`) serving all clients without platform-specific business logic bifurcation.
+
+---
+
+## 10. Dental Clinic Appointments (Phase 1, booking only — implemented 2026-09-22)
+
+A separate vertical from grocery ordering, with its own tables and its own lifecycle (`backend/api/src/modules/dental/`) — not a reuse of `orders`/`OrderStatus`. Full detail: `docs/05-implementation/blynk-dental-appointments-report.md`; decision record: `docs/03-decisions/adr-005-dental-appointments-phase-1-no-payment.md`.
+
+- **No online payment in Phase 1.** Booking is a reservation; the customer pays the clinic directly, off-platform. The only payment-adjacent field is `appointments.consultation_fee_snapshot`, an admin-set indicative fee shown as "payable at the clinic" — never validated, charged, or reconciled by any code path.
+- **Double-booking prevention**: database-enforced, not application trust. A partial unique index (`uq_appointments_active_slot`, scoped to `HELD`/`CONFIRMED` rows on `(clinic_doctor_id, start_at)`) is the same mechanism already proven for rider assignment (`uq_deliveries_active_assignment`), backed by an in-transaction pre-check and a Postgres `23505` catch as the last line of defence.
+- **Slot hold**: a customer's slot selection creates a `HELD` row good for 5 minutes; if not confirmed within that window, the hold is reclaimable by anyone (lazy expiry — no background sweep). Confirming inside the window transitions the row to `CONFIRMED`.
+- **Clinics and doctors are admin-managed only.** There is no clinic self-service portal and no `CLINIC_STAFF`/`DOCTOR` login role in Phase 1; every clinic, doctor, availability template, and blocked date is created and edited through Blynk Admin (`ADMIN` role).
+- **Cancellation (open decision, DENTAL-07)**: a customer may currently cancel a `CONFIRMED` appointment they own **unconditionally** — there is no time-window cutoff enforced yet. The exact cutoff (how close to the appointment time cancellation stops being allowed) remains an open business decision, not yet set; a single isolated guard function (`canCustomerCancel`) exists so the rule can be added later without a redesign. Admin/clinic-initiated cancellation is allowed at any time, with a reason.
+- **Reminders are not implemented in Phase 1** (open decision, DENTAL-11, on lead time). Only booking-confirmation and cancellation SMS notifications exist today.
+- **No `NO_SHOW` tracking and no rescheduling** in Phase 1 — a missed appointment or a desired time change has no dedicated workflow; a customer who wants a different time cancels and re-books.

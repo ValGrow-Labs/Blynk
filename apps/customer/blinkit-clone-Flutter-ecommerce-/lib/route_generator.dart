@@ -6,6 +6,12 @@ import 'package:ecom/Screens/app_about_screen.dart';
 import 'package:ecom/Screens/categories_screen.dart';
 import 'package:ecom/Screens/checkout_screen.dart';
 import 'package:ecom/Screens/customer_shell.dart';
+import 'package:ecom/Screens/dental_appointment_detail_screen.dart';
+import 'package:ecom/Screens/dental_clinic_detail_screen.dart';
+import 'package:ecom/Screens/dental_clinics_screen.dart';
+import 'package:ecom/Screens/dental_doctor_profile_screen.dart';
+import 'package:ecom/Screens/dental_my_appointments_screen.dart';
+import 'package:ecom/Screens/dental_slot_picker_screen.dart';
 import 'package:ecom/Screens/not_found_screen.dart';
 import 'package:ecom/Screens/search_screen.dart';
 import 'package:ecom/Screens/session_gate.dart';
@@ -121,9 +127,83 @@ class AppRouter {
           settings: settings,
           builder: (_) => const AppAboutScreen(),
         );
+      // --- Dental clinic appointments (task F5) ---------------------------
+      case '/dental/clinics':
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const DentalClinicsScreen(),
+        );
+      // Bare clinic id, mirroring '/order's argument style exactly. The
+      // route string itself is '/dental/clinic' (singular) - the exact
+      // spelling F2's clinic-list row already pushes
+      // (dental_clinics_screen.dart), kept as-is rather than renamed to the
+      // brief's sketched '/dental/clinics/detail', so no F2 call site needs
+      // touching; see task-F5-report.md for the full reconciliation note.
+      case '/dental/clinic':
+        final clinicId = settings.arguments;
+        if (clinicId is! String || clinicId.trim().isEmpty) return _notFound(settings);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => DentalClinicDetailScreen(clinicId: clinicId),
+        );
+      // {doctorId, clinicId} map, exactly what dental_clinic_detail_screen.dart's
+      // doctor row and DentalDoctorProfileScreen's constructor already agree on.
+      case '/dental/doctor':
+        final args = _dentalPairArgs(settings.arguments);
+        if (args == null) return _notFound(settings);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => DentalDoctorProfileScreen(
+            doctorId: args.doctorId,
+            clinicId: args.clinicId,
+          ),
+        );
+      // Same {doctorId, clinicId} shape - dental_doctor_profile_screen.dart's
+      // "Book appointment" CTA and DentalSlotPickerScreen's constructor both
+      // use it (task-F2-report.md / task-F3-report.md).
+      case '/dental/book':
+        final args = _dentalPairArgs(settings.arguments);
+        if (args == null) return _notFound(settings);
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => DentalSlotPickerScreen(
+            doctorId: args.doctorId,
+            clinicId: args.clinicId,
+          ),
+        );
+      case '/dental/appointments':
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const DentalMyAppointmentsScreen(),
+        );
+      // Bare appointment id, mirroring '/order's argument style exactly
+      // (including the empty-string check) - the shape
+      // dental_booking_confirmation_screen.dart's "View appointment" CTA and
+      // dental_my_appointments_screen.dart's row tap both already push.
+      case '/dental/appointments/detail':
+        final appointmentId = settings.arguments;
+        if (appointmentId is! String || appointmentId.trim().isEmpty) {
+          return _notFound(settings);
+        }
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => DentalAppointmentDetailScreen(appointmentId: appointmentId),
+        );
       default:
         return _notFound(settings);
     }
+  }
+
+  /// Shared {doctorId, clinicId} argument shape for '/dental/doctor' and
+  /// '/dental/book' - both present and non-empty, or null (caller returns
+  /// not-found). A record, not a class, since this is purely internal.
+  static ({String doctorId, String clinicId})? _dentalPairArgs(Object? arguments) {
+    if (arguments is! Map) return null;
+    final doctorId = arguments['doctorId'];
+    final clinicId = arguments['clinicId'];
+    if (doctorId is! String || doctorId.trim().isEmpty) return null;
+    if (clinicId is! String || clinicId.trim().isEmpty) return null;
+    return (doctorId: doctorId, clinicId: clinicId);
   }
 
   static Route<dynamic> _notFound(RouteSettings settings) => MaterialPageRoute(

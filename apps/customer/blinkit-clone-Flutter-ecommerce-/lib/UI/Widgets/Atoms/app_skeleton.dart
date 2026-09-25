@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_design.dart';
+import '../../../app_responsive.dart';
 import '../../../design/tokens.dart';
+import 'card_product.dart';
+import 'category_widget.dart';
 
 /// Owns the ONE pulse animation every skeleton below it shares, so a loading
 /// screen runs a single ticker instead of one per block.
@@ -139,24 +142,42 @@ class _SkeletonBlock extends StatelessWidget {
 /// layout the real products will occupy instead of collapsing and jumping:
 /// an image well, two name lines, the unit, the price and the 48 dp control
 /// row (heights are the card's at 1.0x text scale).
+///
+/// It carries the **card's own** surface, radius and elevation rather than
+/// the generic `appCardDecoration()`, which adds a `line` stroke and a
+/// 16 dp radius the real card does not have — the placeholder used to pop
+/// into a different silhouette the moment content landed.
+/// `product_card_layout_test.dart` pins the box to `ProductCard.heightFor`;
+/// T3 must move both together when it restyles the card.
 class ProductCardSkeleton extends StatelessWidget {
   const ProductCardSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // W1: every box below is read from ProductCard's own geometry helpers, so
+    // the placeholder cannot drift from the card it stands in for (T2 report
+    // §8 E). A restyle of the card moves this in the same edit or the
+    // silhouette tests go red.
     return SkeletonScope.ensure(
       child: Container(
-        decoration: appCardDecoration(),
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: const Column(
+        decoration: const BoxDecoration(
+          color: BlynkCardProduct.surface,
+          borderRadius: BlynkCardProduct.radius,
+          boxShadow: BlynkCardProduct.elevation,
+        ),
+        padding: const EdgeInsets.all(ProductCard.padding),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: AppSkeleton(height: double.infinity)),
-            SizedBox(height: AppSpacing.sm),
-            // The name box: two lines.
+            // The image well's own radius, not the default block radius.
+            const Expanded(
+              child: AppSkeleton(height: double.infinity, radius: BlynkRadius.chip),
+            ),
+            const SizedBox(height: ProductCard.gap),
+            // The name box: two lines, at the card's own two-line height.
             SizedBox(
-              height: 36,
-              child: Column(
+              height: ProductCard.nameBox(context),
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppSkeleton(height: 12),
@@ -165,17 +186,30 @@ class ProductCardSkeleton extends StatelessWidget {
                 ],
               ),
             ),
-            SizedBox(height: 2),
-            SizedBox(height: 15, child: AppSkeleton(width: 60, height: 10)),
-            SizedBox(height: AppSpacing.xs),
-            SizedBox(height: 20, child: AppSkeleton(width: 54, height: 14)),
-            // The control row: a 40 dp pill in a 48 dp slot, right aligned.
+            const SizedBox(height: ProductCard.rowGap),
             SizedBox(
-              height: 48,
+              height: ProductCard.unitBox(context),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: AppSkeleton(width: 60, height: 10),
+              ),
+            ),
+            const SizedBox(height: ProductCard.rowGap),
+            SizedBox(
+              height: ProductCard.priceBox(context),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: AppSkeleton(width: 54, height: 14),
+              ),
+            ),
+            // The control row: a 40 dp pill in the card's control slot, right
+            // aligned, at the add control's own radius (BlynkRadius.pill).
+            const SizedBox(
+              height: ProductCard.controlSlot,
               width: double.infinity,
               child: Align(
                 alignment: Alignment.centerRight,
-                child: AppSkeleton(width: 64, height: 40, radius: 20),
+                child: AppSkeleton(width: 64, height: 40, radius: BlynkRadius.pill),
               ),
             ),
           ],
@@ -192,16 +226,21 @@ class CategoryTileSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonScope.ensure(
-      child: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: AppSkeleton(height: double.infinity),
-          ),
-          SizedBox(height: AppSpacing.sm),
-          AppSkeleton(width: 56, height: 10),
-        ],
+      // A circle and a centred label, because that is what the real
+      // [CategoryWidget] is: a square skeleton under a circular tile makes
+      // the row jump shape the moment categories arrive.
+      child: Builder(
+        builder: (context) {
+          final size = CategoryWidget.diameterFor(Responsive.of(context).width);
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppSkeleton(width: size, height: size, radius: size / 2),
+              const SizedBox(height: BlynkCategory.gap),
+              const AppSkeleton(width: 56, height: 10),
+            ],
+          );
+        },
       ),
     );
   }

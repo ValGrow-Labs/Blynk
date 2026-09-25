@@ -2,139 +2,210 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../Models/order_format.dart';
+import '../Models/order_model.dart';
 import '../Services/Providers/order.provider.dart';
 import '../Services/store_info.dart';
-import '../app_colors.dart';
+import '../UI/Widgets/Atoms/blynk_button.dart';
 import '../app_design.dart';
 import '../design/tokens.dart';
 
+/// The moment the order exists. Everything on this screen comes from the
+/// order the backend just returned (`OrderProvider.lastPlacedOrder`) — its
+/// number, its own `totalAmount`, its payment method, its schedule and the
+/// address it will be delivered to. Nothing is estimated, re-summed or
+/// predicted here: there is no ETA, no rider and no progress state, because
+/// the backend reports none at this point.
 class OrderConfirmationScreen extends StatelessWidget {
   const OrderConfirmationScreen({super.key});
+
+  /// The success medallion: Blynk Green is a genuine positive state, which is
+  /// exactly what this is. It is static — the order is placed, nothing is
+  /// moving.
+  static const double _medallion = 128;
 
   @override
   Widget build(BuildContext context) {
     final order = context.watch<OrderProvider>().lastPlacedOrder;
+    final address = order == null
+        ? ''
+        : [
+            order.deliveryAddressLine1,
+            order.deliveryAddressLine2 ?? '',
+            order.deliveryCity,
+          ].where((part) => part.trim().isNotEmpty).join(', ');
 
     return Scaffold(
-      backgroundColor: AppColors.greyWhiteColor,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // A static check mark: the order is placed, nothing is moving.
-              const ExcludeSemantics(
-                child: Icon(BlynkIcons.check, size: 96, color: BlynkColors.positive),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              if (order != null) ...[
-                Text(
-                  order.orderNumber,
-                  textAlign: TextAlign.center,
-                  // The scaffold is the grey-white page, so this uses the
-                  // on-background token (6.72:1) rather than `secondary`,
-                  // which is only 4.29:1 off a card.
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTextColors.onBackground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-              ],
-              const Text(
-                'Order placed',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Your order has been placed successfully.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              if (order != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  key: const Key('confirmation-amount'),
-                  order.paymentMethod == 'COD'
-                      ? '${formatLkr(order.totalAmount)} · ${StoreInfo.paymentMethodLabel}'
-                      : formatLkr(order.totalAmount),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-                if (order.isScheduled) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.chip),
-                      border: Border.all(color: BlynkColors.lineStrong),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 2),
-                          child: Icon(Icons.schedule, size: 16, color: AppTextColors.secondary),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Flexible(
-                          child: Text(
-                            key: const Key('confirmation-schedule'),
-                            'Scheduled — delivery ${formatScheduled(order.scheduledFor!)}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppTextColors.primary,
+      backgroundColor: BlynkColors.well,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(
+              horizontal: BlynkSpace.s24,
+              vertical: BlynkSpace.s32,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ExcludeSemantics(
+                    child: Center(
+                      child: SizedBox(
+                        width: _medallion,
+                        height: _medallion,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: BlynkColors.positiveTint,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Icon(
+                              BlynkIcons.check,
+                              size: _medallion / 2,
+                              color: BlynkColors.positive,
                             ),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
+                  const SizedBox(height: BlynkSpace.s24),
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'Order placed',
+                      textAlign: TextAlign.center,
+                      style: BlynkText.display,
+                    ),
+                  ),
+                  const SizedBox(height: BlynkSpace.s8),
+                  Text(
+                    'Your order has been placed successfully.',
+                    textAlign: TextAlign.center,
+                    style: BlynkText.body.copyWith(color: BlynkColors.ink2),
+                  ),
+                  if (order != null) ...[
+                    const SizedBox(height: BlynkSpace.s24),
+                    _OrderFacts(order: order, address: address),
+                  ],
+                  const SizedBox(height: BlynkSpace.s32),
+                  BlynkButton.cta(
+                    key: const Key('view-order'),
+                    label: 'View order',
+                    onPressed: order == null
+                        ? null
+                        : () => Navigator.of(context)
+                            .pushNamed('/order', arguments: order.id),
+                  ),
+                  const SizedBox(height: BlynkSpace.s12),
+                  BlynkButton.secondary(
+                    label: 'Back to home',
+                    expand: true,
+                    onPressed: () => Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/home', (route) => false),
+                  ),
                 ],
-              ],
-              const SizedBox(height: AppSpacing.xxl),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  key: const Key('view-order'),
-                  onPressed: order == null
-                      ? null
-                      : () => Navigator.of(context).pushNamed('/order', arguments: order.id),
-                  style: appPrimaryButtonStyle(),
-                  child: const Text('View order'),
-                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context)
-                      .pushNamedAndRemoveUntil('/home', (route) => false),
-                  child: const Text('Back to Home'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The facts the backend actually returned about this order, stacked so a
+/// large system font grows the card instead of squeezing a label against a
+/// value.
+class _OrderFacts extends StatelessWidget {
+  const _OrderFacts({required this.order, required this.address});
+
+  final OrderModel order;
+  final String address;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: appCardDecoration(),
+      padding: const EdgeInsets.all(BlynkSpace.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _FactLabel('Order number'),
+          Text(order.orderNumber, style: BlynkText.label),
+          const SizedBox(height: BlynkSpace.s16),
+          const _FactLabel('Amount'),
+          Text(
+            key: const Key('confirmation-amount'),
+            order.paymentMethod == 'COD'
+                ? '${formatLkr(order.totalAmount)} · ${StoreInfo.paymentMethodLabel}'
+                : formatLkr(order.totalAmount),
+            style: BlynkType.priceTotal,
+          ),
+          if (address.isNotEmpty) ...[
+            const SizedBox(height: BlynkSpace.s16),
+            const _FactLabel('Delivering to'),
+            Text(address, style: BlynkText.body),
+          ],
+          if (order.isScheduled) ...[
+            const SizedBox(height: BlynkSpace.s16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: BlynkSpace.s12,
+                  vertical: BlynkSpace.s8,
+                ),
+                decoration: BoxDecoration(
+                  color: BlynkColors.paper,
+                  borderRadius: BlynkRadius.full,
+                  border: Border.all(color: BlynkColors.lineStrong),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(
+                        Icons.schedule,
+                        size: BlynkIcons.xs,
+                        color: BlynkColors.ink2,
+                      ),
+                    ),
+                    const SizedBox(width: BlynkSpace.s4),
+                    Flexible(
+                      child: Text(
+                        key: const Key('confirmation-schedule'),
+                        'Scheduled — delivery ${formatScheduled(order.scheduledFor!)}',
+                        style: BlynkText.label,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FactLabel extends StatelessWidget {
+  const _FactLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: BlynkSpace.s4),
+      child: Text(
+        text,
+        style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
       ),
     );
   }

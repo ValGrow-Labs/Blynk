@@ -13,9 +13,12 @@ import 'package:ecom/Screens/search_screen.dart';
 import 'package:ecom/Services/Exceptions/api_exception.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
+import 'package:ecom/UI/Widgets/Atoms/add_to_cart_button.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_skeleton.dart';
-import 'package:ecom/UI/Widgets/Atoms/card_product.dart';
+import 'package:ecom/UI/Widgets/Atoms/image_well.dart';
+import 'package:ecom/UI/Widgets/Organisms/cart_bar.dart';
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/tokens.dart';
 import 'package:ecom/route_generator.dart';
 
 const _milkId = 'b0000001-0000-0000-0000-000000000001';
@@ -135,7 +138,7 @@ void main() {
       expect(catalog.detailCalls, [_milkId]);
       expect(find.byType(AppSkeleton), findsWidgets);
       expect(find.text('Kotmale Fresh Milk 1L'), findsNothing);
-      expect(find.text('Add to Cart'), findsNothing);
+      expect(find.text('Add to cart'), findsNothing);
 
       pending.complete(jsonDecode(_realMilkDetail));
       await settle(tester);
@@ -145,9 +148,10 @@ void main() {
       expect(find.text('1 L · Tetra Pack'), findsOneWidget);
       expect(find.text('Dairy & Eggs'), findsWidgets);
       expect(find.text('DAIRY & EGGS'), findsNothing, reason: 'no all-caps eyebrow');
-      // Once in the summary, once in the pinned phone CTA bar.
-      expect(find.text('Rs. 540'), findsNWidgets(2));
-      expect(find.text('Add to Cart'), findsOneWidget);
+      // W3: the price is stated ONCE, at hero size in the summary. The sticky
+      // bar is the full-width "Add to cart" action and nothing else.
+      expect(find.text('Rs. 540'), findsOneWidget);
+      expect(find.text('Add to cart'), findsOneWidget);
     });
 
     testWidgets('opened from a card: renders instantly and refreshes by id',
@@ -169,7 +173,7 @@ void main() {
       // The fresh backend copy wins (here: a changed selling price).
       pending.complete(_milkDetailWith({'selling_price': 560}));
       await settle(tester);
-      expect(find.text('Rs. 560'), findsNWidgets(2));
+      expect(find.text('Rs. 560'), findsOneWidget);
       expect(find.text('Rs. 540'), findsNothing);
     });
 
@@ -205,6 +209,89 @@ void main() {
       expect(find.byIcon(Icons.favorite_border), findsNothing);
       expect(find.byIcon(Icons.star), findsNothing);
     });
+
+    // T2 report section 8G asked each screen task to add this line as its
+    // screen landed: plan section 4.3 is "one yellow ACTION per screen", and
+    // only a widget test can see what actually renders.
+    testWidgets('exactly one yellow action renders, and it is flat',
+        (tester) async {
+      await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
+      await settle(tester);
+
+      final yellow = tester
+          .widgetList<ElevatedButton>(find.byType(ElevatedButton))
+          .where((b) =>
+              b.style?.backgroundColor?.resolve(const <WidgetState>{}) ==
+              BlynkCta.fill)
+          .toList();
+      expect(yellow, hasLength(1),
+          reason: 'the sticky Add to cart, and nothing else on the page');
+
+      // ...and nothing on the page is a gradient.
+      expect(
+        find.byWidgetPredicate((w) =>
+            (w is DecoratedBox &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).gradient != null) ||
+            (w is Container &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).gradient != null)),
+        findsNothing,
+      );
+    });
+
+    // A fill-height widget placed in Scaffold.bottomNavigationBar (ContentFrame,
+    // BlynkButton.cta) takes the WHOLE screen and leaves the body zero-high -
+    // and the page still builds without throwing, so every find.* silently
+    // returns nothing and a suite can go green over a broken screen. Sizes are
+    // the only check that catches it, so both are measured here.
+    testWidgets('the sticky bar is a bar, and the body keeps the rest',
+        (tester) async {
+      const size = Size(400, 860);
+      await pumpApp(
+        tester,
+        home: const ProductDetailsScreen(productId: _milkId),
+        size: size,
+      );
+      await settle(tester);
+
+      final bar = tester.getSize(
+        find
+            .ancestor(
+              of: find.byType(AddToCartButton),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      expect(bar.width, size.width);
+      expect(bar.height, lessThan(140),
+          reason: 'the sticky CTA bar must be bar-height, not screen-height');
+
+      final body = tester.getSize(find.byType(ListView).first);
+      expect(body.height, greaterThan(size.height / 2),
+          reason: 'the scrolling body must keep the rest of the screen');
+      expect(body.height + bar.height, lessThanOrEqualTo(size.height));
+
+      // ...and the content really is laid out inside it.
+      expect(tester.getSize(find.byType(ProductImageWell)).height,
+          greaterThan(100));
+    });
+
+    testWidgets('the details section collapses and reopens', (tester) async {
+      await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
+      await settle(tester);
+      expect(find.text('Tetra Pack'), findsOneWidget);
+
+      await tester.tap(find.text('Product details'));
+      await settle(tester);
+      expect(find.text('Tetra Pack'), findsNothing,
+          reason: 'collapsing really removes the content, it does not hide it');
+
+      await tester.tap(find.text('Product details'));
+      await settle(tester);
+      expect(find.text('Tetra Pack'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('failure states', () {
@@ -218,7 +305,7 @@ void main() {
       expect(find.text("Couldn't load this product"), findsOneWidget);
       expect(find.textContaining('ECONNREFUSED'), findsNothing);
       expect(find.textContaining('500'), findsNothing);
-      expect(find.text('Add to Cart'), findsNothing);
+      expect(find.text('Add to cart'), findsNothing);
 
       catalog.onDetail = null;
       await tester.tap(find.text('Try again'));
@@ -242,7 +329,7 @@ void main() {
 
       expect(find.text('Product no longer available'), findsOneWidget);
       expect(find.text(_realNotFoundMessage), findsNothing);
-      expect(find.text('Add to Cart'), findsNothing);
+      expect(find.text('Add to cart'), findsNothing);
     });
 
     testWidgets('unavailable product: labelled and cannot be added',
@@ -253,7 +340,7 @@ void main() {
 
       // Pill in the summary + the disabled CTA label.
       expect(find.text('Currently unavailable'), findsNWidgets(2));
-      expect(find.text('Add to Cart'), findsNothing);
+      expect(find.text('Add to cart'), findsNothing);
 
       await tester.tap(find.text('Currently unavailable').last);
       await tester.pump();
@@ -262,26 +349,24 @@ void main() {
   });
 
   group('cart', () {
-    testWidgets('Add to Cart, +, - all go through the shared CartProvider',
+    testWidgets('Add to cart, +, - all go through the shared CartProvider',
         (tester) async {
       await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
       await settle(tester);
 
-      await tester.tap(find.text('Add to Cart'));
+      await tester.tap(find.text('Add to cart'));
       await settle(tester);
       expect(cart.quantityOf(_milkId), 1);
       expect(cart.lines.single.product.name, 'Kotmale Fresh Milk 1L');
       expect(find.text('1 in cart'), findsOneWidget);
-      // Global floating cart reflects it.
-      expect(find.text('1 item'), findsOneWidget);
+      // The screen's own bottom bar gains the View cart action; the count
+      // and total live on the cart bar, which this screen does not show.
       expect(find.text('View cart'), findsOneWidget);
 
       await tester.tap(find.bySemanticsLabel('Add one more Kotmale Fresh Milk 1L'));
       await settle(tester);
       expect(cart.quantityOf(_milkId), 2);
       expect(find.text('2 in cart'), findsOneWidget);
-      expect(find.text('2 items'), findsOneWidget);
-      expect(find.text('Rs. 1,080'), findsOneWidget);
 
       await tester.tap(find.bySemanticsLabel('Remove one Kotmale Fresh Milk 1L'));
       await settle(tester);
@@ -292,8 +377,11 @@ void main() {
       // Never negative: the line is removed and the CTA returns.
       expect(cart.quantityOf(_milkId), 0);
       expect(cart.isEmpty, isTrue);
-      expect(find.text('Add to Cart'), findsOneWidget);
+      expect(find.text('Add to cart'), findsOneWidget);
       expect(find.textContaining('in cart'), findsNothing);
+      // Emptying the cart takes the View cart action away with it, so the
+      // add control gets the whole bar back.
+      expect(find.text('View cart'), findsNothing);
     });
 
     testWidgets('reflects a quantity already in the cart', (tester) async {
@@ -304,19 +392,47 @@ void main() {
       await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
       await settle(tester);
 
-      expect(find.text('Add to Cart'), findsNothing);
+      expect(find.text('Add to cart'), findsNothing);
       expect(find.text('3 in cart'), findsOneWidget);
     });
 
-    testWidgets('View cart on the floating bar opens the cart', (tester) async {
+    testWidgets('View cart in the bottom bar opens the cart', (tester) async {
       await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
       await settle(tester);
-      await tester.tap(find.text('Add to Cart'));
+      await tester.tap(find.text('Add to cart'));
       await settle(tester);
 
       await tester.tap(find.text('View cart'));
       await settle(tester);
       expect(find.text('route:/cart'), findsOneWidget);
+    });
+
+    testWidgets('one bottom bar, never a floating cart bar stacked on top',
+        (tester) async {
+      cart.add(_milkListing());
+      await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
+      await settle(tester);
+
+      // The reported defect: this screen already owns a bottom bar, and the
+      // global floating CartBar was being Stack-ed over the body on top of
+      // it — so it covered the "Product details" section rather than sitting
+      // above it. This screen must never render a CartBar.
+      expect(find.byType(CartBar), findsNothing);
+      expect(find.text('View cart'), findsOneWidget, reason: 'exactly one, in the bottom bar');
+    });
+
+    testWidgets('the bottom bar does not cover the content behind it',
+        (tester) async {
+      cart.add(_milkListing());
+      await pumpApp(tester, home: const ProductDetailsScreen(productId: _milkId));
+      await settle(tester);
+
+      // `bottomNavigationBar` occupies layout instead of overlaying it, so
+      // the scrollable body ends where the bar begins. Nothing in the body
+      // may extend under it.
+      final bar = tester.getRect(find.byType(AddToCartButton).last);
+      final body = tester.getRect(find.byType(Scrollable).first);
+      expect(body.bottom, lessThanOrEqualTo(bar.top));
     });
   });
 
@@ -329,13 +445,13 @@ void main() {
       );
       await settle(tester);
 
-      final image = tester.getRect(find.byType(ProductImage));
+      final image = tester.getRect(find.byType(ProductImageWell));
       final title = tester.getRect(find.text('Kotmale Fresh Milk 1L'));
       expect(title.left, greaterThan(image.right),
           reason: 'info column sits beside the image');
       // Price shown once (no pinned phone bar on desktop).
       expect(find.text('Rs. 540'), findsOneWidget);
-      expect(find.text('Add to Cart'), findsOneWidget);
+      expect(find.text('Add to cart'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -355,13 +471,13 @@ void main() {
           size: size,
         );
         await settle(tester);
-        await tester.tap(find.text('Add to Cart'));
+        await tester.tap(find.text('Add to cart'));
         await settle(tester);
 
         expect(tester.takeException(), isNull);
         expect(find.text('1 in cart'), findsOneWidget);
         // Phones stack (image above title); wider screens sit side by side.
-        final image = tester.getRect(find.byType(ProductImage));
+        final image = tester.getRect(find.byType(ProductImageWell));
         final title = tester.getRect(find.text('Kotmale Fresh Milk 1L'));
         if (size.width < 720) {
           expect(title.top, greaterThan(image.bottom));
@@ -388,7 +504,7 @@ void main() {
       expect(find.byType(ProductDetailsScreen), findsOneWidget);
       expect(catalog.detailCalls, [_milkId]);
 
-      await tester.tap(find.text('Add to Cart'));
+      await tester.tap(find.text('Add to cart'));
       await settle(tester);
 
       await tester.pageBack();

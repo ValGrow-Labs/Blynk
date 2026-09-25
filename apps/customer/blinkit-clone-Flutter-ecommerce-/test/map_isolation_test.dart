@@ -113,7 +113,7 @@ void main() {
     };
     final offenders = _dartFilesUnder('lib')
         .where((f) => !adapters.contains(_norm(f.path)))
-        .where((f) => RegExp(r'(GoogleMapController|MapLibreMapController|BitmapDescriptor)').hasMatch(f.readAsStringSync()))
+        .where((f) => RegExp(r'\b(GoogleMapController|MapLibreMapController|BitmapDescriptor)\b').hasMatch(f.readAsStringSync()))
         .map((f) => _norm(f.path))
         .toList();
     expect(offenders, isEmpty);

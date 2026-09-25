@@ -1,8 +1,5 @@
 import 'package:ecom/Services/Validation/app_validators.dart';
 
-const appCurrencySybmbol = "Rs.";
-const appCurrencySymbol = "LKR";
-
 // Both delegate to AppValidators so the app has exactly one definition of
 // a valid Sri Lankan mobile number, matching the backend's
 // normalizeSriLankanPhone (see lib/Services/Validation/app_validators.dart).

@@ -1,0 +1,701 @@
+import { apiRequest } from './client';
+import type {
+  AdjustmentType,
+  AdminAppointment,
+  AdminAppointmentListResult,
+  AdminProduct,
+  AuthUser,
+  BoardOrder,
+  Category,
+  ClinicDoctor,
+  ClinicDoctorRosterRow,
+  CodSettlement,
+  CustomerProduct,
+  DeliveryDetail,
+  DeliverySummary,
+  DentalAppointmentStatus,
+  DentalClinic,
+  DentalDoctor,
+  DoctorAvailability,
+  DoctorBlockedDate,
+  HomeOrder,
+  LedgerEntry,
+  ManualAdjustmentType,
+  MyDelivery,
+  OrderDetail,
+  OrderSourcing,
+  Paginated,
+  Pagination,
+  Promotion,
+  QueueOrder,
+  RiderOption,
+  StockDetail,
+  StockRow,
+  Supplier,
+  SupplierInput,
+  TrackingMode,
+} from './types';
+
+/**
+ * Typed wrappers over the existing Blynk endpoints, grouped by domain.
+ *
+ * DOMAIN-GROUPING CONVENTION (every later Operations task reads this before
+ * touching this file):
+ * - One `export const <domain> = { ... }` block per backend domain area,
+ *   named after the noun it wraps - `auth` (this task), then `orders`,
+ *   `delivery`, `catalog`, `inventory`, `riders`, `dental` as later tasks
+ *   add them. This exactly mirrors Admin's own `resources.ts` (`auth`,
+ *   `categories`, `products`, `promotions`, `orders`, `riders`,
+ *   `dentalClinics`, `dentalDoctors`, ...) - one block per noun, not one
+ *   block per screen.
+ * - Each function unwraps the endpoint's own inner envelope key (e.g.
+ *   `.then((d) => d.clinics)`) so callers get the actual value they need,
+ *   never the raw `{ clinics: [...] }` wrapper - `apiRequest<T>()` already
+ *   strips the outer `{success, data}` envelope; each wrapper here strips
+ *   the next noun-keyed layer underneath it, exactly as Admin's does.
+ * - **F1 built ONLY the `auth` block. F2 (Home) appended the `orders`,
+ *   `riders` and `dental` blocks; F3 (Orders board/detail) extended `orders`
+ *   and `riders`; F4 (Delivery Mode) added the `delivery` block; F5
+ *   (Catalog) added the `catalog` block; F6 (Inventory) added the new
+ *   `inventory` block below and widened `orders.needingPacking()`'s return
+ *   type (see that function's own doc comment); F7 (rider list, plan §14,
+ *   common.md rule 9) reused `riders.listActive()` exactly as-is - the roster
+ *   screen needs nothing `RiderOption` doesn't already carry, so no new
+ *   function was added here; F8 (Dental clinic management: clinics/doctors/
+ *   pairings/availability/blocked-dates, plan §15-19) extended F2's `dental`
+ *   block with `clinics`/`doctors`/`clinicDoctors`/`availability`/
+ *   `blockedDates` sub-objects, leaving `appointments` untouched for F9; F9
+ *   (Dental appointments + clinic location map, plan §20-21) then widened
+ *   `appointments` itself from a single function into a `list`/`cancel`
+ *   sub-object (see that block's own doc comment for why), the last piece
+ *   of this domain.** - each an OPEN domain a later task may extend with
+ *   more functions, but every new function must be a genuinely new call;
+ *   check the domain's existing functions first. Never edit or remove the
+ *   `auth` block.
+ * - The one deliberate exception: the rider-profile-probe call
+ *   (`GET /riders/deliveries`) used by `src/auth/riderProbe.ts` still calls
+ *   `apiRequest` directly rather than `riders.myDeliveries()` below - it
+ *   only needs the success/failure outcome, never the parsed list, so it
+ *   was left as-is per F1's report §2 ("not required, since the probe's
+ *   needs... are simpler... but worth a look at that point" - looked at,
+ *   left unchanged: the probe would gain nothing from the extra parsing
+ *   `myDeliveries()` does).
+ */
+
+// ---------------------------------------------------------------- auth
+export const auth = {
+  requestOtp: (phone: string) =>
+    apiRequest<{ dev_otp?: string; expires_in_minutes?: number }>('/auth/otp/request', {
+      method: 'POST',
+      body: { phone },
+      auth: false,
+    }),
+
+  verifyOtp: (phone: string, otp: string) =>
+    apiRequest<{ access_token: string; refresh_token: string; user: AuthUser }>('/auth/otp/verify', {
+      method: 'POST',
+      body: { phone, otp },
+      auth: false,
+    }),
+
+  me: () => apiRequest<AuthUser>('/auth/me'),
+
+  logout: () => apiRequest('/auth/logout', { method: 'POST' }),
+};
+
+// ---------------------------------------------------------------- orders
+// Task F2 (Home) built the four counting queries below; Task F3 (Orders
+// board/detail) appended `live`/`closedSince`/`detail`/`setStatus`/
+// `assignRider` - a distinct, broader query shape (the whole live board and
+// full order detail, not one narrow status count), so these are genuinely
+// new functions, not a duplicate of F2's. Same routes/query shape Admin's
+// own `orders` block uses (apps/admin/src/api/resources.ts) - `status` is
+// one value or a comma-separated list, `since` an ISO instant; the client's
+// own `query` support (Inventory's `buildUrl` pattern, see client.ts) builds
+// the querystring instead of each wrapper hand-assembling one.
+const LIVE_STATUSES = 'PLACED,ITEM_UNAVAILABLE,PACKED,OUT_FOR_DELIVERY,FAILED,CUSTOMER_UNAVAILABLE';
+
+export const orders = {
+  /**
+   * Packing queue - `PLACED` (just placed) and `ITEM_UNAVAILABLE` (needs a
+   * substitution decision before it can be packed). Task F6 (Inventory)
+   * reuses this exact call for its own Sourcing queue rather than duplicating
+   * it - its brief names it as "the `GET /admin/orders?status=
+   * PLACED,ITEM_UNAVAILABLE&limit=100` resource function F3 already added";
+   * verified against the real code before reusing it (matching F5's own
+   * "verify the brief against real working code" discipline): this function
+   * was actually added by **F2** (Home), not F3 - F3's own `live`/`closedSince`
+   * below use a different, broader status set. Documented here rather than
+   * silently corrected, per common.md's "report a genuine contradiction"
+   * instruction. Widened from `HomeOrder[]` (`{id}`-only) to `QueueOrder[]`
+   * by F6 - a structurally compatible superset (Home still only reads
+   * `.length`), the same widening precedent F3 used for `riders.listActive()`.
+   * The query itself is unchanged. */
+  needingPacking: () =>
+    apiRequest<{ orders: QueueOrder[] }>('/admin/orders', {
+      query: { status: 'PLACED,ITEM_UNAVAILABLE', limit: 100 },
+    }).then((d) => d.orders),
+
+  /** Packed, waiting for a rider to be assigned. */
+  readyForRider: () =>
+    apiRequest<{ orders: HomeOrder[] }>('/admin/orders', {
+      query: { status: 'PACKED', limit: 100 },
+    }).then((d) => d.orders),
+
+  onTheRoad: () =>
+    apiRequest<{ orders: HomeOrder[] }>('/admin/orders', {
+      query: { status: 'OUT_FOR_DELIVERY', limit: 100 },
+    }).then((d) => d.orders),
+
+  /** `since` is the moment to count from (Home passes the start of today,
+   * Asia/Colombo) - the same `since` semantics as Admin's `closedSince()`,
+   * scoped to `DELIVERED` only per this task's brief (Admin's own
+   * `closedSince` also includes `CANCELLED`; Home's "Completed today" figure
+   * deliberately does not). */
+  completedToday: (since: Date) =>
+    apiRequest<{ orders: HomeOrder[] }>('/admin/orders', {
+      query: { status: 'DELIVERED', since: since.toISOString(), limit: 100 },
+    }).then((d) => d.orders),
+
+  /** The Orders board's own live query (task F3) - every status that still
+   * needs staff attention, oldest first (mirrors Admin's `orders.live()`). */
+  live: () =>
+    apiRequest<{ orders: BoardOrder[] }>('/admin/orders', { query: { status: LIVE_STATUSES, limit: 100 } }).then(
+      (d) => d.orders
+    ),
+
+  /** Orders closed since a given moment (mirrors Admin's `orders.closedSince()`
+   * exactly, including `DELIVERED,CANCELLED` - unlike `completedToday` above,
+   * which this task's brief for F2 scoped to `DELIVERED` only). */
+  closedSince: (since: Date) =>
+    apiRequest<{ orders: BoardOrder[] }>('/admin/orders', {
+      query: { status: 'DELIVERED,CANCELLED', since: since.toISOString(), limit: 100 },
+    }).then((d) => d.orders),
+
+  /** One order's full detail - items, customer, rider, history. */
+  detail: (id: string) => apiRequest<{ order: OrderDetail }>(`/admin/orders/${id}`).then((d) => d.order),
+
+  /** One lifecycle step (pack / hand-over / deliver / fail / customer-
+   * unavailable / restage / cancel). The API is the only authority on
+   * whether this status change is legal from the order's current state -
+   * this call never decides that, only names the destination `lib/orders.ts`'s
+   * rule table offered. */
+  setStatus: (id: string, status: string, notes?: string) =>
+    apiRequest<{ order: unknown }>(`/admin/orders/${id}/status`, {
+      method: 'PATCH',
+      body: notes === undefined ? { status } : { status, notes },
+    }),
+
+  /** Manual dispatch - the rider's identity comes from the operator's own
+   * choice in the AssignRiderDialog (an active rider `GET /admin/riders`
+   * listed), never inferred or trusted from anywhere else. */
+  assignRider: (id: string, riderId: string) =>
+    apiRequest<{ delivery: unknown }>(`/admin/orders/${id}/assign-rider`, {
+      method: 'POST',
+      body: { rider_id: riderId },
+    }),
+};
+
+// ---------------------------------------------------------------- riders
+export const riders = {
+  /** `GET /admin/riders` - active riders only (the API filters), no
+   * availability flag exists (mirrors Admin's own `riders.listActive`).
+   * Widened from a `{id}`-only row to the full `RiderOption` shape by task
+   * F3 (the assign-rider dialog needs name/phone/vehicle/open-deliveries);
+   * Home (F2) only ever read `.length`, so this is a compatible superset,
+   * not a breaking change. */
+  listActive: () => apiRequest<{ riders: RiderOption[] }>('/admin/riders').then((d) => d.riders),
+
+  /**
+   * `GET /riders/deliveries` - the signed-in operator's own linked rider
+   * profile's deliveries, if any. Only meaningful when `AuthContext`'s
+   * `riderCapability` is `ADMIN_PLUS_RIDER`; a 403
+   * `RIDER_PROFILE_NOT_FOUND`/`RIDER_INACTIVE` means there is nothing to
+   * show, not a real error (see `auth/riderProbe.ts`). The rider identity is
+   * always resolved server-side from the bearer token - no rider id is ever
+   * sent by this call (common.md rule 4). This is the same endpoint
+   * `riderProbe.ts` calls directly (per F1's report §2, a deliberate
+   * exception it flagged for this task to revisit) - not refactored to
+   * share code here, since the probe only needs success/failure while this
+   * needs the parsed list; both stay simple as they are.
+   */
+  myDeliveries: () => apiRequest<{ deliveries: MyDelivery[] }>('/riders/deliveries').then((d) => d.deliveries),
+};
+
+// ---------------------------------------------------------------- delivery
+// Task F4 (Delivery Mode/live location, plan §11/§21). The exact rider
+// delivery endpoints (apps/rider/src/api/resources.ts's own `deliveriesApi`,
+// ported not imported - common.md rule 2), reachable by this ADMIN+linked-
+// rider operator only because B1 widened their route guards - see
+// task-B1-report.md. Rider identity is always resolved server-side from the
+// bearer token (`findRiderByUserId`) - no rider id is ever read from any
+// call below, and none of these functions accept one (common.md rule 4, the
+// single most important invariant in this task). Distinct from
+// `riders.myDeliveries()` above (F2's minimal `MyDelivery[]` for Home's
+// card): this block returns the full `DeliverySummary`/`DeliveryDetail`
+// shape Queue/Detail need to run `lib/delivery.ts`'s ported state-machine
+// rules - both call the same `GET /riders/deliveries`, left as two call
+// sites for the same reason F2's report gave for the probe (different
+// needs, both stay simple as they are).
+export const delivery = {
+  list: () => apiRequest<{ deliveries: DeliverySummary[] }>('/riders/deliveries').then((d) => d.deliveries),
+
+  detail: (id: string) =>
+    apiRequest<{ delivery: DeliveryDetail }>(`/riders/deliveries/${id}`).then((d) => d.delivery),
+
+  pickUp: (id: string) => setDeliveryStatus(id, { status: 'PICKED_UP' }),
+  arrive: (id: string) => setDeliveryStatus(id, { status: 'ARRIVED_AT_CUSTOMER' }),
+  fail: (id: string, reason: string) => setDeliveryStatus(id, { status: 'FAILED', failure_reason: reason }),
+
+  /** `amount` must be the total the API already reported for this delivery -
+   * the backend independently re-validates it under its own row lock
+   * regardless of what is sent (rider.schema.ts's `collectCodSchema`); this
+   * call never decides whether the amount is right, only restates it
+   * (common.md rule 8). */
+  collectCod: (id: string, amount: number) =>
+    apiRequest<{ settlement: CodSettlement }>(`/riders/deliveries/${id}/collect-cod`, {
+      method: 'POST',
+      body: { amount },
+    }).then((d) => d.settlement),
+
+  /** Foreground-only browser Geolocation (common.md rule 10; this task's
+   * brief) - no Capacitor, no background-location plugin; only sends while
+   * the Delivery Detail screen is open and the tab is foregrounded. Same
+   * payload shape the Rider app's native tracker sends
+   * (rider.location.schema.ts: latitude/longitude/accuracy/captured_at). */
+  sendLocation: (id: string, point: { latitude: number; longitude: number; accuracy: number; captured_at: string }) =>
+    apiRequest<{ accepted: boolean; reason?: string }>(`/riders/deliveries/${id}/location`, {
+      method: 'POST',
+      body: point,
+    }),
+};
+
+function setDeliveryStatus(id: string, body: Record<string, unknown>) {
+  return apiRequest<{ delivery: DeliveryDetail }>(`/riders/deliveries/${id}/status`, {
+    method: 'PATCH',
+    body,
+  }).then((d) => d.delivery);
+}
+
+// ----------------------------------------------------------------- dental
+// Task F8 (Dental clinic management: clinics, doctors, clinic-doctor
+// pairings, availability, blocked dates - plan §15-19) added every
+// sub-object below `appointments` (F2's). Every path/field verified
+// directly against the real backend route table
+// (`backend/api/src/modules/dental/index.ts`) and service
+// (`dental-admin.service.ts`), not just against task-F8-brief.md's own text
+// - see the DEVIATION note on `availability`/`blockedDates` below, the exact
+// kind of brief-vs-real-source mismatch F5/F6's own verification discipline
+// was carried forward to catch. No hard delete anywhere for
+// clinics/doctors/pairings (the backend genuinely has none - `is_active`
+// toggle only, preserves appointment-history integrity); availability rows
+// and blocked dates are this domain's only two genuine hard deletes
+// (configuration, not history - confirmed against
+// `dental-admin.service.ts`'s own doc comments on `deleteAvailability`/
+// `deleteBlockedDate`).
+export const dental = {
+  /**
+   * `GET /admin/dental/appointments` (list) / `POST .../:id/cancel` (task
+   * F9, plan §20-21). F2 (Home) originally defined `appointments` as a
+   * single function returning just the array (`{from,to}` only, `limit`
+   * fixed at 100, stripped to `.appointments`) - this task widens it into an
+   * object, matching the `clinics`/`doctors`/`clinicDoctors` sub-object
+   * convention every other function in this block already follows, so
+   * `cancel` has a natural home alongside `list`. `list` now carries the
+   * full `clinic_id`/`doctor_id`/`status`/`page`/`limit` filter set the
+   * Appointments screen needs, and returns the whole `{appointments,
+   * pagination}` envelope unstripped (like `inventory.stock.list`/
+   * `inventory.ledger.list` below, not the clinics/doctors sub-objects'
+   * stripped-array convention) since the screen's own pagination controls
+   * need the real `total`/`total_pages`. Home.tsx's two call sites were
+   * updated to `dental.appointments.list(...).then((r) => r.appointments)`
+   * for the count-only figures they need - a compatible change, not a
+   * behavioural one (same query, same response shape underneath).
+   * `from`/`to` are calendar dates (`YYYY-MM-DD`, Asia/Colombo), matching
+   * the backend's `dateOnlySchema` (dental-admin.schema.ts) - not full ISO
+   * instants.
+   */
+  appointments: {
+    list: (params: {
+      clinic_id?: string;
+      doctor_id?: string;
+      status?: DentalAppointmentStatus;
+      from?: string;
+      to?: string;
+      page?: number;
+      limit?: number;
+    }) =>
+      apiRequest<AdminAppointmentListResult>('/admin/dental/appointments', {
+        query: {
+          clinic_id: params.clinic_id,
+          doctor_id: params.doctor_id,
+          status: params.status,
+          from: params.from,
+          to: params.to,
+          page: params.page,
+          limit: params.limit,
+        },
+      }),
+
+    /** B3's admin-cancel endpoint (task-B3-report.md, not a B4/F8 endpoint -
+     * confirmed still not duplicated there). Reason is required (server
+     * enforces `min(1)`), allowed from `HELD` or `CONFIRMED` only - verified
+     * directly against `appointment.service.ts`'s `assertCancellable`
+     * (anything except the two terminal cancelled statuses and `EXPIRED`),
+     * no ownership restriction, no cutoff. */
+    cancel: (id: string, reason: string) =>
+      apiRequest<{ appointment: AdminAppointment }>(`/admin/dental/appointments/${id}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      }).then((d) => d.appointment),
+  },
+
+  clinics: {
+    /** Deliberately unpaginated (confirmed against the real repository, same
+     * deviation Admin's own resources.ts documents) - includes inactive
+     * clinics unless `isActive` is passed. */
+    list: (isActive?: boolean) =>
+      apiRequest<{ clinics: DentalClinic[] }>('/admin/dental/clinics', { query: { is_active: isActive } }).then(
+        (d) => d.clinics
+      ),
+
+    get: (id: string) => apiRequest<{ clinic: DentalClinic }>(`/admin/dental/clinics/${id}`).then((d) => d.clinic),
+
+    create: (input: Record<string, unknown>) =>
+      apiRequest<{ clinic: DentalClinic }>('/admin/dental/clinics', { method: 'POST', body: input }).then(
+        (d) => d.clinic
+      ),
+
+    /** Also the `is_active` toggle - the merge-then-validate
+     * `INVALID_CLINIC_HOURS` cross-check runs server-side even on a
+     * single-field PATCH (dental-admin.service.ts's own fix-round-1 note). */
+    update: (id: string, input: Record<string, unknown>) =>
+      apiRequest<{ clinic: DentalClinic }>(`/admin/dental/clinics/${id}`, { method: 'PATCH', body: input }).then(
+        (d) => d.clinic
+      ),
+  },
+
+  doctors: {
+    list: (isActive?: boolean) =>
+      apiRequest<{ doctors: DentalDoctor[] }>('/admin/dental/doctors', { query: { is_active: isActive } }).then(
+        (d) => d.doctors
+      ),
+
+    create: (input: Record<string, unknown>) =>
+      apiRequest<{ doctor: DentalDoctor }>('/admin/dental/doctors', { method: 'POST', body: input }).then(
+        (d) => d.doctor
+      ),
+
+    /** Also the `is_active` toggle. */
+    update: (id: string, input: Record<string, unknown>) =>
+      apiRequest<{ doctor: DentalDoctor }>(`/admin/dental/doctors/${id}`, { method: 'PATCH', body: input }).then(
+        (d) => d.doctor
+      ),
+  },
+
+  /** The `clinic_doctors` join table - one clinic's doctor roster. */
+  clinicDoctors: {
+    roster: (clinicId: string) =>
+      apiRequest<{ doctors: ClinicDoctorRosterRow[] }>(`/admin/dental/clinics/${clinicId}/doctors`).then(
+        (d) => d.doctors
+      ),
+
+    /** Rejects with `CLINIC_INACTIVE`/`DOCTOR_INACTIVE`/`CLINIC_NOT_FOUND`/
+     * `DOCTOR_NOT_FOUND`/`CLINIC_DOCTOR_PAIRING_EXISTS` (409/404) - every one
+     * surfaced verbatim by `lib/dental.ts`'s `dentalErrorMessage`, never a
+     * generic failure. */
+    attach: (clinicId: string, input: { doctor_id: string; consultation_fee?: number | null }) =>
+      apiRequest<{ clinic_doctor: ClinicDoctor }>(`/admin/dental/clinics/${clinicId}/doctors`, {
+        method: 'POST',
+        body: input,
+      }).then((d) => d.clinic_doctor),
+
+    /** Fee/active update - the same `is_active` toggle also powers a
+     * pairing's "deactivate/reactivate at this clinic" action. */
+    update: (id: string, input: { consultation_fee?: number | null; is_active?: boolean }) =>
+      apiRequest<{ clinic_doctor: ClinicDoctor }>(`/admin/dental/clinic-doctors/${id}`, {
+        method: 'PATCH',
+        body: input,
+      }).then((d) => d.clinic_doctor),
+  },
+
+  /**
+   * Weekly availability template rows for one clinic-doctor pairing.
+   *
+   * **DEVIATION from task-F8-brief.md's literal endpoint list.** The brief
+   * states PATCH/DELETE live at
+   * `/admin/dental/clinic-doctors/:id/availability[/:availId]`. The actual
+   * registered routes (`backend/api/src/modules/dental/index.ts`) are:
+   *   `PATCH /admin/dental/availability/:id`
+   *   `DELETE /admin/dental/availability/:id`
+   * - NOT nested under `clinic-doctors`. Only POST (create) and GET (list)
+   * are nested (`/clinic-doctors/:clinic_doctor_id/availability`). Verified
+   * directly against the router file and cross-checked against Admin's own
+   * working `resources.ts` (`dentalAvailability.update`/`.remove`), which
+   * already calls the un-nested form - this is a real brief error, not a
+   * judgment call, corrected here per common.md/F5/F6's verification
+   * discipline rather than silently followed.
+   */
+  availability: {
+    list: (clinicDoctorId: string) =>
+      apiRequest<{ availability: DoctorAvailability[] }>(
+        `/admin/dental/clinic-doctors/${clinicDoctorId}/availability`
+      ).then((d) => d.availability),
+
+    /** Rejects with `TEMPLATE_OUTSIDE_CLINIC_HOURS` (400) - the one
+     * genuinely cross-entity rule this domain enforces at write time; the
+     * backend's own message names both windows, surfaced verbatim. */
+    create: (clinicDoctorId: string, input: Record<string, unknown>) =>
+      apiRequest<{ availability: DoctorAvailability }>(
+        `/admin/dental/clinic-doctors/${clinicDoctorId}/availability`,
+        { method: 'POST', body: input }
+      ).then((d) => d.availability),
+
+    /** NOT nested under `clinic-doctors` - see this block's deviation note. */
+    update: (id: string, input: Record<string, unknown>) =>
+      apiRequest<{ availability: DoctorAvailability }>(`/admin/dental/availability/${id}`, {
+        method: 'PATCH',
+        body: input,
+      }).then((d) => d.availability),
+
+    /** NOT nested under `clinic-doctors` - see this block's deviation note.
+     * A hard delete (configuration row, not history - see this block's own
+     * doc comment). */
+    remove: (id: string) => apiRequest<void>(`/admin/dental/availability/${id}`, { method: 'DELETE' }),
+  },
+
+  /** Blocked dates for one clinic-doctor pairing - same nesting deviation as
+   * `availability` above (create/list nested under `clinic-doctors`, delete
+   * is not). */
+  blockedDates: {
+    list: (clinicDoctorId: string) =>
+      apiRequest<{ blocked_dates: DoctorBlockedDate[] }>(
+        `/admin/dental/clinic-doctors/${clinicDoctorId}/blocked-dates`
+      ).then((d) => d.blocked_dates),
+
+    /** Rejects with `BLOCKED_DATE_EXISTS` (409) on a duplicate date for this
+     * pairing, surfaced verbatim. */
+    create: (clinicDoctorId: string, input: { blocked_date: string; reason: string }) =>
+      apiRequest<{ blocked_date: DoctorBlockedDate }>(
+        `/admin/dental/clinic-doctors/${clinicDoctorId}/blocked-dates`,
+        { method: 'POST', body: input }
+      ).then((d) => d.blocked_date),
+
+    /** NOT nested under `clinic-doctors` (see `availability`'s deviation
+     * note - the same shape). "Unblocking" a date is this hard delete. */
+    remove: (id: string) => apiRequest<void>(`/admin/dental/blocked-dates/${id}`, { method: 'DELETE' }),
+  },
+};
+
+// ---------------------------------------------------------------- catalog
+// Task F5 (Catalog: products, categories, promotions, plan §12). Every
+// function below reuses an endpoint Admin already calls (verified directly
+// against `backend/api/src/modules/catalog/index.ts` and
+// `backend/api/src/modules/promotions/index.ts`, both already ADMIN-gated -
+// zero backend change needed, matching common.md's OPS-04 decision).
+//
+// **Products list endpoint - a deliberate departure from the brief's literal
+// wording.** The brief names `GET /catalog/products` ("the only paginated
+// product listing the backend exposes, per Admin's own code comment"). That
+// comment (`apps/admin/src/api/resources.ts`) is stale: Admin's own
+// `Products.tsx` page does not call it - it calls `GET /admin/products`
+// directly, which is *also* paginated (`catalogController.listProductsAdmin`,
+// verified by reading `catalog.controller.ts`/`catalog.schema.ts`), is
+// ADMIN-gated, and - unlike the customer endpoint - returns the fields the
+// admin table actually needs (`is_active`, `purchase_cost`,
+// `calculated_selling_price`, filterable by `category_id`/`is_active`). The
+// customer endpoint has no `is_active` concept at all (it only ever lists
+// active, available products), so building Products' "show inactive too"
+// requirement (matching Admin's own page description) against it would be
+// impossible. `products.list()` below therefore calls `/admin/products`,
+// exactly like Admin's real page does - not the resources.ts comment.
+// `products.listPublic()` still wraps `GET /catalog/products` (the brief's
+// named endpoint, kept available) since Admin's own resources.ts defines the
+// identical function and never calls it either - not wired into any screen,
+// documented rather than silently dropped.
+export const catalog = {
+  categories: {
+    list: (isActive?: boolean) =>
+      apiRequest<{ categories: Category[] }>('/admin/categories', {
+        query: { is_active: isActive },
+      }).then((d) => d.categories),
+
+    create: (input: Record<string, unknown>) =>
+      apiRequest<{ category: Category }>('/admin/categories', { method: 'POST', body: input }).then(
+        (d) => d.category
+      ),
+
+    update: (id: string, input: Record<string, unknown>) =>
+      apiRequest<{ category: Category }>(`/admin/categories/${id}`, { method: 'PATCH', body: input }).then(
+        (d) => d.category
+      ),
+  },
+
+  products: {
+    /** `GET /admin/products` - see the doc comment above for why this is
+     * used instead of the brief's literally-named customer endpoint. */
+    list: (params: { search?: string; category_id?: string; is_active?: boolean; limit?: number } = {}) =>
+      apiRequest<{ products: AdminProduct[]; pagination: unknown }>('/admin/products', {
+        query: { search: params.search, category_id: params.category_id, is_active: params.is_active, limit: params.limit ?? 200 },
+      }).then((d) => d.products),
+
+    getAdmin: (id: string) => apiRequest<{ product: AdminProduct }>(`/admin/products/${id}`).then((d) => d.product),
+
+    create: (input: Record<string, unknown>) =>
+      apiRequest<{ product: AdminProduct }>('/admin/products', { method: 'POST', body: input }).then((d) => d.product),
+
+    update: (id: string, input: Record<string, unknown>) =>
+      apiRequest<{ product: AdminProduct }>(`/admin/products/${id}`, { method: 'PATCH', body: input }).then(
+        (d) => d.product
+      ),
+
+    /** `GET /catalog/products` (customer-facing, paginated) - the endpoint
+     * named in the brief. Defined for completeness (mirrors Admin's own
+     * unused `listCustomerView`) but not called by any Operations screen -
+     * see the block's doc comment. */
+    listPublic: (params: { search?: string; category_slug?: string; limit?: number; page?: number } = {}) =>
+      apiRequest<Paginated<CustomerProduct>>('/catalog/products', {
+        auth: false,
+        query: { search: params.search, category_slug: params.category_slug, limit: params.limit ?? 100, page: params.page ?? 1 },
+      }),
+  },
+
+  promotions: {
+    list: (isActive?: boolean) =>
+      apiRequest<{ promotions: Promotion[] }>('/admin/promotions', { query: { is_active: isActive } }).then(
+        (d) => d.promotions
+      ),
+
+    create: (input: Record<string, unknown>) =>
+      apiRequest<{ promotion: Promotion }>('/admin/promotions', { method: 'POST', body: input }).then(
+        (d) => d.promotion
+      ),
+
+    update: (id: string, input: Record<string, unknown>) =>
+      apiRequest<{ promotion: Promotion }>(`/admin/promotions/${id}`, { method: 'PATCH', body: input }).then(
+        (d) => d.promotion
+      ),
+
+    reorder: (items: { id: string; display_order: number }[]) =>
+      apiRequest<{ promotions: Promotion[] }>('/admin/promotions/reorder', {
+        method: 'PATCH',
+        body: { items },
+      }).then((d) => d.promotions),
+
+    remove: (id: string) => apiRequest(`/admin/promotions/${id}`, { method: 'DELETE' }),
+
+    /** `GET /promotions` (public) - the exact payload the customer Home
+     * carousel receives right now, used by the Promotions screen's "What
+     * customers see" preview strip (real data, not the per-row editing
+     * draft `PromotionPreview` also renders). */
+    listPublic: () =>
+      apiRequest<{ promotions: Promotion[] }>('/promotions', { auth: false }).then((d) => d.promotions),
+  },
+};
+
+// -------------------------------------------------------------- inventory
+// Task F6 (Inventory: stock, ledger, sourcing, suppliers, plan §13,
+// common.md's OPS-04 scope decision). Every function below reuses an
+// endpoint Inventory already calls (verified directly against
+// `backend/api/src/modules/admin/index.ts`'s route table, the same
+// verification discipline F3/F5 each applied to their own domains) - all
+// already reachable by this ADMIN-role operator with zero backend change:
+// every read below is `requireRoles(['ADMIN','PACKING_STAFF'])`, every write
+// (`setMode`/`adjust`/`suppliers.create`/`suppliers.update`) is
+// `requireRoles('ADMIN')` alone. Unlike Inventory's own `resources.ts`
+// (`stockApi`/`ledgerApi`/`sourcingApi`/`suppliersApi`, four separate
+// exports), this follows Operations' own one-domain-block convention (see
+// this file's own doc comment) - one `inventory` object with
+// `stock`/`ledger`/`sourcing`/`suppliers` sub-objects, mirroring `catalog`'s
+// own `categories`/`products`/`promotions` shape (F5).
+export interface StockQuery {
+  search?: string;
+  tracking_mode?: TrackingMode;
+  low_stock_only?: boolean;
+  include_inactive?: boolean;
+  limit?: number;
+}
+
+export interface LedgerQuery {
+  product_id?: string;
+  type?: AdjustmentType;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Order statuses that can still have items waiting to be sourced (mirrors
+ * Inventory's own `SOURCEABLE_STATUSES` - the same two statuses
+ * `orders.needingPacking()` above already queries for, see its doc comment).
+ * Resolving an item as unavailable moves the whole order to
+ * `ITEM_UNAVAILABLE`, and its other items may still need sourcing, so both
+ * statuses feed the queue.
+ */
+export const inventory = {
+  stock: {
+    list: (query: StockQuery = {}) =>
+      apiRequest<{ inventory: StockRow[]; pagination: Pagination }>('/admin/inventory', { query: { ...query } }),
+
+    detail: (productId: string) => apiRequest<StockDetail>(`/admin/inventory/${productId}`),
+
+    setMode: (productId: string, tracking_mode: TrackingMode) =>
+      apiRequest(`/admin/inventory/${productId}/mode`, { method: 'PATCH', body: { tracking_mode } }),
+
+    adjust: (
+      productId: string,
+      body: { adjustment_type: ManualAdjustmentType; quantity_delta: number; notes: string }
+    ) =>
+      apiRequest<{ inventory: { quantity_on_hand: number; quantity_available: number } }>(
+        `/admin/inventory/${productId}/adjust`,
+        { method: 'POST', body }
+      ),
+  },
+
+  ledger: {
+    list: (query: LedgerQuery = {}) =>
+      apiRequest<{ adjustments: LedgerEntry[]; pagination: Pagination }>('/admin/inventory/adjustments', {
+        query: { ...query },
+      }),
+  },
+
+  sourcing: {
+    /** `GET /admin/orders/:id/sourcing` - one order's sourcing detail. */
+    detail: (orderId: string) => apiRequest<OrderSourcing>(`/admin/orders/${orderId}/sourcing`),
+
+    /** Records what an item actually cost to source; never touches the
+     * customer's price, the markup or the catalog cost (backend invariant -
+     * this call only ever restates what the operator paid). */
+    source: (
+      orderId: string,
+      itemId: string,
+      body: { actual_unit_cost: number; quantity: number; supplier_id?: string; notes?: string }
+    ) => apiRequest(`/admin/orders/${orderId}/items/${itemId}/source`, { method: 'POST', body }),
+
+    /** The existing order-item-resolution flow: removes the item, recalculates
+     * the order total, notifies the customer (all server-side). */
+    markUnavailable: (orderId: string, itemId: string) =>
+      apiRequest(`/admin/orders/${orderId}/resolve-item`, {
+        method: 'POST',
+        body: { item_id: itemId, item_status: 'UNAVAILABLE' },
+      }),
+  },
+
+  suppliers: {
+    list: (activeOnly: boolean) =>
+      apiRequest<{ suppliers: Supplier[] }>('/admin/suppliers', {
+        query: { active_only: String(activeOnly) },
+      }).then((d) => d.suppliers),
+
+    create: (body: SupplierInput) =>
+      apiRequest<{ supplier: Supplier }>('/admin/suppliers', { method: 'POST', body: { ...body } }).then(
+        (d) => d.supplier
+      ),
+
+    update: (id: string, body: SupplierInput) =>
+      apiRequest<{ supplier: Supplier }>(`/admin/suppliers/${id}`, { method: 'PATCH', body: { ...body } }).then(
+        (d) => d.supplier
+      ),
+  },
+};

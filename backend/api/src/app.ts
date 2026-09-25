@@ -26,6 +26,7 @@ import { promotionsRouter } from './modules/promotions/index.js';
 import { auditRouter } from './modules/audit/index.js';
 import { configurationRouter } from './modules/configuration/index.js';
 import { mapTilesRouter } from './modules/map-tiles/index.js';
+import { dentalRouter } from './modules/dental/index.js';
 
 export function createApp(): Express {
   const app = express();
@@ -136,6 +137,7 @@ export function createApp(): Express {
   apiRouter.use('/admin', adminRouter);
   apiRouter.use('/audit', auditRouter);
   apiRouter.use('/configuration', configurationRouter);
+  apiRouter.use('/dental', dentalRouter);
 
   // Admin-uploaded media (product photos, promotion visuals). Served from
   // the same origin as the API so the customer app and admin UI need no

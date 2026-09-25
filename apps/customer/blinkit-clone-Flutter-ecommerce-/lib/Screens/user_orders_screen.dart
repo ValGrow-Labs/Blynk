@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:ecom/app_colors.dart';
-import 'package:ecom/app_design.dart';
+import 'package:ecom/app_design.dart' show appCardDecoration, AppRadius;
 import '../Models/order_format.dart';
 import '../Models/order_model.dart';
 import '../Models/order_status_labels.dart';
 import '../Services/Providers/auth.provider.dart';
 import '../Services/Providers/order.provider.dart';
 import '../Services/store_info.dart';
+import '../UI/Widgets/Atoms/app_skeleton.dart';
 import '../UI/Widgets/Atoms/app_state_views.dart';
+import '../UI/Widgets/Atoms/blynk_spinner.dart';
 import '../UI/Widgets/Atoms/failure_states.dart';
-import '../UI/Widgets/Atoms/order_status_chip.dart';
+import '../UI/Widgets/Atoms/image_well.dart';
+import '../UI/Widgets/Atoms/money_text.dart';
+import '../UI/Widgets/Atoms/status_badge.dart';
 import '../app_responsive.dart';
+import '../design/tokens.dart';
 
 /// How close to the end of the list (in pixels) a scroll has to get before
 /// the next page is requested.
@@ -77,7 +82,7 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
       backgroundColor: AppColors.greyWhiteColor,
       appBar: AppBar(
         automaticallyImplyLeading: true,
-        title: const Text("Your Orders"),
+        title: const Text("Your orders"),
       ),
       body: !context.watch<AuthProvider>().isAuthenticated
           ? AppStateView.empty(
@@ -128,8 +133,31 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                 itemCount: itemCount,
                 itemBuilder: (context, index) {
                   if (isInitialLoading) {
-                    return const PullableState(
-                      child: AppStateView.loading('Loading your orders'),
+                    // W9: skeleton rows, not a centred spinner. Every other
+                    // list in the app (addresses, clinics, appointments) loads
+                    // with `ListRowSkeleton` - whose own doc names orders
+                    // first - and holds the shape the real rows will take.
+                    // Orders was the one list that blanked to a spinner.
+                    //
+                    // The skeleton is decoration to an assistive technology,
+                    // so the whole block carries the announcement the spinner
+                    // used to make as visible text - as a live region, the
+                    // way `AppStateView` announces its error and offline
+                    // states.
+                    return Semantics(
+                      label: 'Loading your orders',
+                      liveRegion: true,
+                      container: true,
+                      excludeSemantics: true,
+                      child: const SkeletonScope(
+                        child: Column(
+                          children: [
+                            ListRowSkeleton(),
+                            ListRowSkeleton(),
+                            ListRowSkeleton(),
+                          ],
+                        ),
+                      ),
                     );
                   }
                   if (hasError) {
@@ -144,6 +172,7 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                     return const PullableState(
                       child: AppStateView.empty(
                         title: "You haven't placed any orders yet.",
+                        message: 'Everything you order appears here, with its status.',
                       ),
                     );
                   }
@@ -179,14 +208,8 @@ class _ListFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     if (provider.isLoadingMore) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-        ),
+        padding: EdgeInsets.symmetric(vertical: BlynkSpace.s16),
+        child: Center(child: BlynkSpinner(size: BlynkIcons.md, strokeWidth: 2.5)),
       );
     }
     if (provider.loadMoreError != null) {
@@ -198,26 +221,55 @@ class _ListFooter extends StatelessWidget {
         child: InkWell(
           onTap: provider.loadMoreOrders,
           child: Container(
-            constraints: const BoxConstraints(minHeight: 48),
+            constraints: const BoxConstraints(minHeight: BlynkControl.minHeight),
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg, horizontal: AppSpacing.lg),
-            child: const Text(
+            padding: const EdgeInsets.symmetric(vertical: BlynkSpace.s16, horizontal: BlynkSpace.s16),
+            child: Text(
               "Couldn't load more orders. Tap to retry.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppTextColors.onBackground, fontSize: 12),
+              style: BlynkText.caption.copyWith(color: BlynkColors.ink3),
             ),
           ),
         ),
       );
     }
-    return const SizedBox(height: AppSpacing.lg);
+    return const SizedBox(height: BlynkSpace.s16);
   }
 }
 
+/// The orders list uses the shared [StatusBadge] rather than a second status
+/// system, so an order reads the same here as anywhere else in the app. The
+/// tone comes from the backend's own status through [orderStatusTone]; the
+/// glyph is the same one [orderStatusIcon] already pairs with that status, so
+/// colour is never the only signal and no new status wording is invented.
+BadgeTone badgeToneFor(OrderTone tone) {
+  switch (tone) {
+    case OrderTone.success:
+      return BadgeTone.positive;
+    case OrderTone.problem:
+      return BadgeTone.problem;
+    case OrderTone.active:
+      return BadgeTone.notice;
+    case OrderTone.neutral:
+      return BadgeTone.neutral;
+  }
+}
+
+/// One order as an identity block rather than a table row: a thumbnail well,
+/// the order number, the real status as a [StatusBadge], what was in it, when
+/// it was placed and what it cost.
+///
+/// Every value comes from the list payload the backend already sends. There is
+/// no ETA, no delivery estimate, no rider and no progress state beyond the
+/// status the backend recorded. Order items carry no image field, so the
+/// thumbnail is the shared no-image well — the app's default product
+/// appearance — and never a fabricated picture.
 class _OrderRow extends StatelessWidget {
   const _OrderRow({required this.order});
 
   final OrderModel order;
+
+  static const double _thumb = 56;
 
   @override
   Widget build(BuildContext context) {
@@ -236,102 +288,125 @@ class _OrderRow extends StatelessWidget {
     // one the eye lands on first.
     final tone = orderStatusTone(order.status);
     final isClosed = tone == OrderTone.success || tone == OrderTone.neutral;
-    final bodyColor = isClosed ? AppTextColors.secondary : AppTextColors.primary;
-    const metaStyle = TextStyle(fontSize: 12, color: AppTextColors.secondary);
+    final bodyColor = isClosed ? BlynkColors.ink2 : BlynkColors.ink;
+    final metaStyle = BlynkText.caption.copyWith(color: BlynkColors.ink2);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: BlynkSpace.s16, vertical: BlynkSpace.s8),
       child: Semantics(
         button: true,
         label: '${order.orderNumber}, $statusLabel, $total',
         excludeSemantics: true,
-        child: Material(
-          color: Colors.white,
-          borderRadius: AppRadius.cardBorder,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => Navigator.of(context).pushNamed('/order', arguments: order.id),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 48),
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppSurfaces.border),
-                borderRadius: AppRadius.cardBorder,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Wrap (not Row+Spacer) so a long status label on a narrow
-                  // screen drops the total to its own line instead of
-                  // overflowing - the chip's own text never gets squeezed.
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      OrderStatusChip(status: order.status),
-                      Text(
-                        total,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: bodyColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (namesLine.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      namesLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: bodyColor),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.xs),
-                  // Wrap, like the chip+total row above: every fact keeps its
-                  // intrinsic width, so nothing is force-split by a flex
-                  // share. The reference code stays - as meta rather than as
-                  // the first thing the eye lands on - and at 360px it is the
-                  // timestamp that drops to a second line rather than any
-                  // label losing its tail.
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      Text(order.orderNumber, style: metaStyle),
-                      const Text('·', style: metaStyle),
-                      Text(
-                        '$itemQty ${itemQty == 1 ? 'item' : 'items'} · $paymentLabel',
-                        style: metaStyle,
-                      ),
-                      if (order.placedAt != null) ...[
-                        const Text('·', style: metaStyle),
-                        Text(formatOrderTime(order.placedAt!), style: metaStyle),
-                      ],
-                    ],
-                  ),
-                  if (order.showsScheduleNotice) ...[
-                    const SizedBox(height: AppSpacing.xs),
+        child: DecoratedBox(
+          // The app's one card recipe (paper, radius 16, soft elevation, an
+          // outside hairline that takes no layout space) rather than a second
+          // one invented here.
+          decoration: appCardDecoration(),
+          child: Material(
+            color: BlynkColors.clear,
+            borderRadius: AppRadius.cardBorder,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Navigator.of(context).pushNamed('/order', arguments: order.id),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: BlynkControl.minHeight),
+                padding: const EdgeInsets.all(BlynkSpace.s16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.schedule, size: 14, color: AppTextColors.secondary),
-                        const SizedBox(width: AppSpacing.xs),
+                        // Order items carry no image on the backend, so this is
+                        // the shared no-image well at the card's own radius:
+                        // identical geometry to a real photo, decorative only.
+                        const SizedBox(
+                          width: _thumb,
+                          height: _thumb,
+                          child: BlynkImageWell(glyph: BlynkIcons.product),
+                        ),
+                        const SizedBox(width: BlynkSpace.s12),
                         Expanded(
-                          child: Text(
-                            'Scheduled · ${formatScheduled(order.scheduledFor!)}',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, color: AppTextColors.secondary),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Wrap (not Row+Spacer) so a long status label on
+                              // a narrow screen drops the badge to its own line
+                              // instead of overflowing - neither the order
+                              // number nor the badge text gets squeezed.
+                              Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: BlynkSpace.s8,
+                                runSpacing: BlynkSpace.s4,
+                                children: [
+                                  Text(order.orderNumber, style: BlynkText.label.copyWith(color: bodyColor)),
+                                  StatusBadge(
+                                    tone: badgeToneFor(tone),
+                                    label: statusLabel,
+                                    icon: orderStatusIcon(order.status),
+                                  ),
+                                ],
+                              ),
+                              if (namesLine.isNotEmpty) ...[
+                                const SizedBox(height: BlynkSpace.s4),
+                                Text(
+                                  namesLine,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: BlynkText.caption.copyWith(color: bodyColor),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: BlynkSpace.s12),
+                    // Wrap, like the number+badge row above: every fact keeps
+                    // its intrinsic width, so nothing is force-split by a flex
+                    // share, and at 360px it is the timestamp that drops to a
+                    // second line rather than any label losing its tail.
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: BlynkSpace.s4,
+                      runSpacing: BlynkSpace.s4,
+                      children: [
+                        Text(
+                          '$itemQty ${itemQty == 1 ? 'item' : 'items'} · $paymentLabel',
+                          style: metaStyle,
+                        ),
+                        if (order.placedAt != null) ...[
+                          Text('·', style: metaStyle),
+                          Text(formatOrderTime(order.placedAt!), style: metaStyle),
+                        ],
+                      ],
+                    ),
+                    if (order.showsScheduleNotice) ...[
+                      const SizedBox(height: BlynkSpace.s4),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule, size: BlynkIcons.xs, color: BlynkColors.ink2),
+                          const SizedBox(width: BlynkSpace.s4),
+                          Expanded(
+                            child: Text(
+                              'Scheduled · ${formatScheduled(order.scheduledFor!)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: BlynkSpace.s12),
+                    MoneyText(
+                      order.totalAmount,
+                      style: BlynkText.price.copyWith(color: bodyColor),
+                    ),
                   ],
-                ],
+                ),
               ),
             ),
           ),

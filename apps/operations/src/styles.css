@@ -1,0 +1,2048 @@
+/*
+ * Blynk Operations styling.
+ *
+ * Shares the brand colours and Catamaran typeface with Admin/Inventory/
+ * Rider (Blynk Yellow #ffe141, Green #0c831f, 4px/10px radius), but its own
+ * layout: a mobile-first, bottom-tab-navigated tool - never a sidebar
+ * dashboard shrunk onto a phone (plan §8, §23, §24). No file here is
+ * imported from or copied out of `apps/admin`/`apps/inventory`/`apps/rider`
+ * - only the brand tokens are shared by convention, exactly as those three
+ * apps already share them with each other.
+ */
+
+:root {
+  --yellow: #ffe141;
+  --green: #0c831f;
+  --ink: #12151f;
+  --ink-2: #4b5364;
+  --ink-3: #79808f;
+  --line: #e3e6ec;
+  --line-strong: #cdd3dd;
+  --surface: #ffffff;
+  --canvas: #f6f7f9;
+  --danger: #b3261e;
+
+  /* Radius is a hierarchy, not a default - controls are nearly square. */
+  --radius: 4px;
+  --radius-lg: 10px;
+
+  /* Type scale. */
+  --text-display: 26px;
+  --text-title: 19px;
+  --text-body: 15px;
+  --text-meta: 13px;
+  --text-label: 11px;
+
+  --tabbar-height: 60px;
+  --topbar-height: 52px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Catamaran', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: var(--text-body);
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+/* ------------------------------------------------------------------ boot */
+.boot {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  font-size: var(--text-body);
+}
+
+/* ------------------------------------------------------------------ shell */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--ink);
+  color: #fff;
+}
+
+.topbar__brand {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.topbar__user {
+  font-size: var(--text-meta);
+  color: #d7dae3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50vw;
+}
+
+.content {
+  flex: 1;
+  padding: 16px;
+  padding-bottom: calc(var(--tabbar-height) + 16px);
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ----------------------------------------------------------------- tabbar */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  height: var(--tabbar-height);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.tabbar__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink-3);
+  text-decoration: none;
+  font-size: var(--text-label);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tabbar__item--active {
+  color: var(--ink);
+}
+
+.tabbar__item--active::before {
+  content: '';
+  width: 22px;
+  height: 3px;
+  border-radius: var(--radius);
+  background: var(--yellow);
+  margin-bottom: 2px;
+}
+
+.tabbar__item--disabled {
+  color: var(--line-strong);
+}
+
+.tabbar__badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------------- page */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page__note {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 800;
+}
+
+.page-header__description {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* `PageHeader`'s optional actions slot (components/Layout.tsx). It was used
+   from F2 onward but never declared, so a header with two actions (e.g.
+   Dental's clinic detail) rendered them flush against each other. */
+.page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------- card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card__row {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card__label {
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.card__value {
+  font-weight: 700;
+}
+
+.card__note {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* -------------------------------------------------------------- home page */
+.loading {
+  color: var(--ink-2);
+  font-size: var(--text-body);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-label {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.figure {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  text-decoration: none;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.figure__value {
+  font-size: var(--text-display);
+  font-weight: 800;
+}
+
+.figure__label {
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+}
+
+.attention {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attention__clear {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.attention__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attention__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  font-size: var(--text-meta);
+}
+
+.link {
+  color: var(--green);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.delivery-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delivery-card__status {
+  align-self: flex-start;
+  font-size: var(--text-label);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--green);
+}
+
+.delivery-card__dest {
+  margin: 0;
+  font-weight: 700;
+}
+
+.delivery-card__meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* ------------------------------------------------------------------- misc */
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* A single inline error/refusal line - Home (F2) already uses this class
+   for its own load/refresh errors; task F3 defines it (it was missing) and
+   reuses it for the Orders board/detail's own notices/refusals instead of
+   inventing a second banner style. */
+.field__error {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--ink);
+  color: #fff;
+  border-left: 4px solid var(--yellow);
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: var(--text-meta);
+}
+
+.field__error-dismiss {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.button--ink {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.button--ink-outline {
+  background: transparent;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* ----------------------------------------------------------------- orders */
+.orders__empty {
+  margin: 24px 0;
+  font-size: var(--text-title);
+  font-weight: 800;
+  color: var(--ink-2);
+}
+
+.lane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lane__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  scroll-margin-top: 12px;
+}
+
+.lane__count {
+  color: var(--ink);
+}
+
+.lane--attention .lane__title {
+  color: var(--danger);
+}
+
+.lane__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lane__summary {
+  margin: 0;
+  font-weight: 700;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.ticket {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.ticket--exception {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.ticket__open {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ticket__open:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.ticket__top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ticket__number {
+  font-weight: 700;
+}
+
+.ticket__flag {
+  color: var(--danger);
+  font-weight: 800;
+  font-size: var(--text-label);
+  text-transform: uppercase;
+}
+
+.ticket__age {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
+.ticket__where {
+  display: flex;
+  flex-direction: column;
+}
+
+.ticket__place {
+  font-weight: 700;
+}
+
+.ticket__who {
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.ticket__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.ticket__rider {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.ticket__scheduled {
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.ticket__total {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.ticket__action {
+  padding: 0 14px 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ticket__hint {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* -------------------------------------------------------------- order detail */
+.order-detail {
+  gap: 14px;
+}
+
+.order-detail__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.order-detail__number {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.order-detail__status {
+  margin: 2px 0 0;
+  font-weight: 800;
+}
+
+.order-detail__section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.order-detail__section p {
+  margin: 0;
+}
+
+.order-detail__label {
+  margin: 0 0 4px;
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.order-detail__strong {
+  font-weight: 800;
+}
+
+.order-detail__note {
+  padding-left: 8px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-2);
+}
+
+.order-detail__meta {
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.order-detail__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0 calc(var(--tabbar-height) + 12px);
+  margin-top: 4px;
+  background: var(--canvas);
+  border-top: 1px solid var(--line);
+}
+
+/* These are the one-handed, on-the-road taps (Delivery Mode's pick-up/
+   arrive/collect and the order's own lifecycle steps), so they get a full
+   44px target rather than `.button`'s denser default. */
+.order-detail__actions .button {
+  min-height: 44px;
+}
+
+.order-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  border-top: 1px solid var(--line);
+}
+
+.order-items__row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.order-items__qty {
+  font-weight: 700;
+}
+
+.order-items__status {
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.order-items__row--pending .order-items__status {
+  color: var(--ink);
+}
+
+.order-items__row--unavailable .order-items__name {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+
+.order-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.order-history__row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 4px 0;
+}
+
+.order-history__time {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.order-history__status {
+  font-weight: 700;
+}
+
+.order-history__note {
+  grid-column: 2;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* -------------------------------------------------------------- dialogs */
+.rider-pick {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rider-pick__option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.rider-pick__option--on {
+  border-color: var(--ink);
+  box-shadow: inset 4px 0 0 var(--yellow);
+}
+
+.rider-pick__option input {
+  grid-row: span 2;
+  accent-color: var(--ink);
+}
+
+.rider-pick__name {
+  font-weight: 800;
+}
+
+.rider-pick__meta {
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* --------------------------------------------------------------- delivery */
+/* Task F4 (Delivery Mode). Reuses existing primitives (.card, .ticket,
+   .order-detail*, .modal, .field, .button) wherever they already fit;
+   these are the few genuinely new looks: a status/tone word on a queue row,
+   the passive location-sharing readout (TrackingStatus.tsx - never a raw
+   coordinate), and the "delivered" settlement panel. */
+.queue-tone--go {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.queue-tone--wait {
+  color: var(--ink-3);
+}
+
+.queue-tone--stop {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.queue-tone--done {
+  color: var(--green);
+  font-weight: 700;
+}
+
+/* Four looks so the location-sharing state reads at a glance:
+   active - healthy, a green rule; retrying - a send failed but the tracker
+   is retrying on its own, an outlined warning, never the inverted "stop"
+   look; error - blocked (permission/GPS), inverted like a hard refusal. */
+.tracking-status {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--canvas);
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.tracking-status--active {
+  background: #eaf6ec;
+  color: var(--ink-2);
+  box-shadow: inset 4px 0 0 var(--green);
+  padding-left: 14px;
+}
+
+.tracking-status--retrying {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  box-shadow: inset 4px 0 0 var(--yellow);
+  padding-left: 14px;
+}
+
+.tracking-status--error {
+  background: var(--ink);
+  color: #fff;
+}
+
+.settled {
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: #eaf6ec;
+  border-left: 4px solid var(--green);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ----------------------------------------------------------------- banner */
+.banner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: #fff7d6;
+  border: 1px solid #f0dd8f;
+  font-size: var(--text-meta);
+}
+
+.banner--muted {
+  background: var(--canvas);
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------------- button */
+.button {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button--ghost {
+  background: transparent;
+}
+
+.primary {
+  border: none;
+  background: var(--ink);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-weight: 800;
+  cursor: pointer;
+  width: 100%;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.text-button {
+  border: none;
+  background: none;
+  color: var(--ink-2);
+  text-decoration: underline;
+  font-size: var(--text-meta);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+/* ------------------------------------------------------------------- modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 21, 31, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.modal__panel {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  width: min(480px, 100%);
+  display: grid;
+  gap: 12px;
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.modal__message {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* The same voice as `.modal__message`, for the two dialogs that need more
+   than one block to explain a consequence (Inventory's tracking-mode switch
+   and mark-unavailable). It was used before it was declared, so those
+   paragraphs kept the browser's default 1em margins. */
+.modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.modal__body p {
+  margin: 0;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ------------------------------------------------------------------- form */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+  font-weight: 700;
+}
+
+.input {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: var(--text-body);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.input--code {
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-weight: 800;
+}
+
+.input--mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------- login */
+.login {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+}
+
+.login__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 0;
+  color: #fff;
+}
+
+.login__brand {
+  font-weight: 900;
+  font-size: var(--text-title);
+}
+
+.login__app {
+  font-size: var(--text-meta);
+  color: #d7dae3;
+  border-left: 1px solid #3a3f4d;
+  padding-left: 10px;
+}
+
+.login__skip {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login__skip-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--yellow);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+
+.login__skip-button {
+  border: 1px solid #3a3f4d;
+  background: transparent;
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+
+.login__body {
+  flex: 1;
+  background: var(--canvas);
+  border-radius: 20px 20px 0 0;
+  margin-top: 20px;
+  padding: 28px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login__title {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: 900;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login__dev {
+  margin: 0;
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+}
+
+.login__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-meta);
+}
+
+/* ----------------------------------------------------------------- catalog */
+/* Task F5 (Products/Categories/Promotions, plan §12). Reuses every existing
+   primitive that already fits (.page, .page-header, .modal, .field, .input,
+   .button, .toggle-less form controls, .field__error for page-level
+   notices) - these are the genuinely new looks: a small shared UI kit
+   (Badge/Spinner/EmptyState - components/ui.tsx), the mobile card-list rows
+   that replace Admin's desktop <table> (matching F3's own table→ticket-list
+   departure for the same 720px-max, bottom-tab shell), the image uploader,
+   the promotion background picker/preview, and the Catalog hub cards. */
+
+/* A small inline error under one field - distinct from the page-level
+   .field__error banner (inverted, dark, used for load/save notices): this
+   one sits directly under an input, so it needs to read at a glance without
+   the banner's heavier styling. */
+.field__error-text {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.field__hint {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.button--sm {
+  padding: 6px 10px;
+  font-size: var(--text-meta);
+}
+
+.button--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.page__note {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------- status badge */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.status--active .status__dot {
+  background: var(--green);
+}
+
+.status--inactive .status__dot {
+  background: var(--danger);
+}
+
+.status--muted {
+  color: var(--ink-3);
+}
+
+.status--muted .status__dot {
+  background: var(--ink-3);
+}
+
+/* ------------------------------------------------------------------ spinner */
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.spinner__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--ink);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -------------------------------------------------------------- empty state */
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--ink-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty__title {
+  margin: 0;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.empty__message {
+  margin: 0;
+  font-size: var(--text-meta);
+}
+
+/* ------------------------------------------------------------------ uploader */
+.uploader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uploader__row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.uploader__preview {
+  width: 84px;
+  height: 84px;
+  flex: none;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.uploader__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.uploader__placeholder {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.uploader__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.uploader__hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.thumb__empty {
+  color: var(--ink-3);
+}
+
+/* ------------------------------------------------------- focal point (009) */
+/* The crop anchor control. The preview to the right of the image is the whole
+   reason the feature is worth having: it is drawn at the REAL target shape,
+   so the operator sees what a product tile or a carousel card will actually
+   keep, rather than guessing from the uncropped picture. */
+.focal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+}
+
+.focal__intro {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.focal__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.focal__surface {
+  position: relative;
+  flex: 1 1 200px;
+  max-width: 280px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  overflow: hidden;
+  cursor: crosshair;
+  line-height: 0;
+}
+
+.focal__surface-image {
+  width: 100%;
+  height: auto;
+  max-height: 200px;
+  object-fit: contain;
+}
+
+/* A ring, not a dot: it has to stay findable on a light image and on a dark
+   one, so it carries both inks at once. */
+.focal__marker {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 2px var(--ink);
+  pointer-events: none;
+}
+
+.focal__preview-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+
+.focal__preview {
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background-color: var(--surface);
+}
+
+/* The two shapes the app really crops to. */
+.focal__preview--square {
+  width: 132px;
+  height: 132px;
+}
+
+.focal__preview--wide {
+  width: 232px;
+  /* The carousel card's own proportion, not a guess: _HeroMetrics' phone band
+     is a 202 dp tall card inside a 360-420 dp wide screen, i.e. roughly 7:4. */
+  height: 132px;
+}
+
+.focal__caption {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.focal__sliders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.focal__slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  /* 44 px minimum target, per the platform guidance the rest of this app
+     follows. */
+  min-height: 44px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.focal__range {
+  flex: 1;
+  min-width: 120px;
+  min-height: 44px;
+  accent-color: var(--green);
+}
+
+.focal__range:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.focal__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.focal__readout {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* ------------------------------------------------------------- bg picker */
+.bg-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.segmented__item {
+  border: 0;
+  background: var(--surface);
+  color: var(--ink-2);
+  padding: 8px 14px;
+  font-weight: 700;
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+
+.segmented__item.is-selected {
+  background: var(--ink);
+  color: #fff;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  cursor: pointer;
+  padding: 0;
+}
+
+.swatch--wide {
+  width: 56px;
+  border-radius: var(--radius);
+}
+
+.swatch.is-selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
+}
+
+/* -------------------------------------------------------------- promo preview */
+.promo-preview {
+  position: relative;
+  border-radius: var(--radius-lg);
+  min-height: 120px;
+  padding: 16px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.promo-preview--compact {
+  width: 72px;
+  height: 72px;
+  min-height: 0;
+  flex: none;
+  padding: 0;
+  border-radius: var(--radius);
+}
+
+.promo-preview__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 65%;
+}
+
+.promo-preview__title {
+  margin: 0;
+  font-weight: 800;
+  font-size: var(--text-title);
+}
+
+.promo-preview__subtitle {
+  margin: 0;
+  font-size: var(--text-meta);
+}
+
+.promo-preview__cta {
+  margin-top: 6px;
+  display: inline-block;
+  align-self: flex-start;
+  background: var(--yellow);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: var(--text-label);
+}
+
+.promo-preview__foreground {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  max-width: 45%;
+  object-fit: contain;
+}
+
+.promo-live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.promo-live__row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.promo-live__item {
+  flex: none;
+  width: 260px;
+}
+
+.promo-live__item .promo-preview {
+  min-height: 96px;
+}
+
+/* ------------------------------------------------------------------ cat list */
+.cat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cat-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+}
+
+.cat-row--flat {
+  align-items: flex-start;
+}
+
+.cat-row--promo {
+  align-items: center;
+}
+
+.cat-row__thumb {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.cat-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Category images are drawn in a CIRCLE by the customer app, so the operator
+   sees the real shape here rather than a rounded square that flatters a
+   picture whose subject the circle would cut off. The base .cat-row__thumb
+   stays a rounded square because that IS the shape a promotion uses. */
+.cat-row__thumb--circle {
+  border-radius: 999px;
+}
+
+.cat-row__thumb-empty {
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+  text-align: center;
+  line-height: 1.1;
+  padding: 0 4px;
+}
+
+.cat-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cat-row__title {
+  margin: 0;
+  font-weight: 800;
+}
+
+.cat-row__meta {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-row__price {
+  margin: 2px 0 0;
+  font-weight: 800;
+}
+
+.cat-row__badges {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cat-row__order {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.cat-row__actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.order-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* --------------------------------------------------------------- editor */
+.editor__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor__legend {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+/* ----------------------------------------------------------------- forms */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+
+.form__section-title {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.form__row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form__note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.form__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 0 calc(var(--tabbar-height) + 12px);
+  background: var(--canvas);
+  border-top: 1px solid var(--line);
+}
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--text-meta);
+}
+
+.toggle input {
+  margin-top: 3px;
+  accent-color: var(--ink);
+}
+
+.toggle strong {
+  display: block;
+}
+
+.toggle em {
+  display: block;
+  font-style: normal;
+  color: var(--ink-2);
+}
+
+.modal__panel--wide {
+  width: min(640px, 100%);
+}
+
+/* -------------------------------------------------------------- catalog hub */
+.cat-hub {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cat-hub__card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.cat-hub__title {
+  font-weight: 800;
+  font-size: var(--text-title);
+}
+
+.cat-hub__count {
+  font-weight: 800;
+  color: var(--ink-2);
+  font-size: var(--text-title);
+}
+
+/* --------------------------------------------------------------- inventory */
+/* Task F6 (Stock/Ledger/Sourcing/Suppliers, plan §13). Reuses every existing
+   primitive that already fits (.page, .page-header, .filters, .segmented,
+   .cat-list/.cat-row for every list screen's rows, .card, .attention__list,
+   .figures, .modal/.form/.field/.input/.button, .field__error for every
+   dialog's own error line - the same reuse-first approach F5 took for
+   Catalog) - these are the genuinely new looks this domain needs. */
+
+/* A wider tone vocabulary than Badge's active/inactive/muted (components/
+   ui.tsx's new `Status` component) - item status, order status, supplier
+   status. */
+.status--tone-ok {
+  color: var(--green);
+}
+
+.status--tone-ok .status__dot {
+  background: var(--green);
+}
+
+.status--tone-warn {
+  color: var(--ink);
+}
+
+.status--tone-warn .status__dot {
+  background: var(--yellow);
+}
+
+.status--tone-bad {
+  color: var(--danger);
+}
+
+.status--tone-bad .status__dot {
+  background: var(--danger);
+}
+
+.status--tone-info {
+  color: var(--ink-2);
+}
+
+.status--tone-info .status__dot {
+  background: var(--ink-3);
+}
+
+.status--tone-muted {
+  color: var(--ink-3);
+}
+
+.status--tone-muted .status__dot {
+  background: var(--ink-3);
+}
+
+/* Stock state as word + count - the word carries the meaning, colour only
+   reinforces it (mirrors Inventory's own StockStatus). */
+.stock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.stock--out {
+  color: var(--danger);
+}
+
+.stock--low {
+  color: var(--ink);
+}
+
+.stock--in_stock {
+  color: var(--green);
+}
+
+.stock--untracked {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.stock__units {
+  font-weight: 500;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.quiet--ok {
+  color: var(--green);
+}
+
+/* Sourcing queue - orders grouped, each with its own pending items. */
+.src-order {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.src-order__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.src-order__number {
+  font-weight: 800;
+}
+
+.src-order__meta {
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.src-order__progress {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+/* A labelled radio choice (AdjustDialog's adjustment type) - the same
+   strong/em shape .toggle already uses, in a bordered, selectable row. */
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice__option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: var(--text-meta);
+}
+
+.choice__option.is-selected {
+  border-color: var(--ink);
+  box-shadow: inset 4px 0 0 var(--yellow);
+}
+
+.choice__option input {
+  margin-top: 3px;
+  accent-color: var(--ink);
+}
+
+.choice__option strong {
+  display: block;
+}
+
+.choice__option em {
+  display: block;
+  font-style: normal;
+  color: var(--ink-2);
+}
+
+/* A computed preview line (adjustment result, sourcing cost variance) - never
+   the number actually sent, only a preview of what the backend will show
+   after it responds (common.md rule 8). */
+.preview {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--canvas);
+  border-radius: var(--radius);
+  font-weight: 700;
+}
+
+.delta {
+  font-weight: 700;
+}
+
+.delta--up {
+  color: var(--green);
+}
+
+.delta--down {
+  color: var(--danger);
+}
+
+/* A small label/value fact grid (SourceItemDialog's order/quantity/estimate/
+   stock summary). */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.facts dt {
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+}
+
+.consequences {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A `.cat-row__main` that is itself the tap target (Stock's list, instead of
+   a separate "Edit" link) - reset the anchor's default look, additive to the
+   existing `<div>` usage (Products/Categories/Promotions, F5). */
+a.cat-row__main {
+  text-decoration: none;
+  color: inherit;
+}
+
+.cat-row.is-muted {
+  opacity: 0.6;
+}
+
+.mode {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  font-size: var(--text-label);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-2);
+}
+
+.mode--tracked {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.flag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  font-size: var(--text-label);
+  font-weight: 700;
+}
+
+.flag--bad {
+  background: #fbe9e7;
+  color: var(--danger);
+}
+
+/* --------------------------------------------------------------- clinic map
+   Task F9's single-pin clinic location display (ClinicLocationMap.tsx) -
+   both the real image and the "Map unavailable" fallback share the same
+   bordered frame so the layout doesn't jump depending on whether a key is
+   configured. */
+.clinic-map {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+.clinic-map__img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.clinic-map--unavailable {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+/* --------------------------------------------------------------- motion
+   Motion here is state feedback only (the spinner), and it is optional -
+   the same guard Admin/Inventory/Rider's own stylesheets already carry. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

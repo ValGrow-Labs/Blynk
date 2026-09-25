@@ -10,9 +10,11 @@ import 'package:ecom/Models/address_model.dart';
 import 'package:ecom/Models/product_model.dart';
 import 'package:ecom/Screens/Auth/login_screen.dart';
 import 'package:ecom/Screens/Auth/otp_verification_screen.dart';
+import 'package:ecom/Screens/dental_my_appointments_screen.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
 import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
+import 'package:ecom/Services/Providers/dental.provider.dart';
 import 'package:ecom/UI/Widgets/Atoms/card_product_cart_screen.dart';
 import 'package:ecom/UI/Widgets/Organisms/cart_screen_address_container.dart';
 import 'package:ecom/UI/Widgets/Organisms/login_screen_otp_sheet.dart';
@@ -205,7 +207,7 @@ void main() {
       expect(source, isNot(contains('MaterialTapTargetSize.shrinkWrap')));
     });
 
-    testWidgets('OTP screen: app bar Skip and "Skip & Explore Store" are >= 48 x 48', (tester) async {
+    testWidgets('OTP screen: app bar Skip and "Skip & explore store" are >= 48 x 48', (tester) async {
       tester.view.physicalSize = const Size(400, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -220,7 +222,7 @@ void main() {
       );
       await tester.pump();
       _expect48(tester, find.widgetWithText(TextButton, 'Skip'), reason: 'app bar Skip');
-      _expect48(tester, find.widgetWithText(TextButton, 'Skip & Explore Store'), reason: 'Skip & Explore Store');
+      _expect48(tester, find.widgetWithText(TextButton, 'Skip & explore store'), reason: 'Skip & explore store');
       // Dispose the screen so its resend timer is cancelled.
       await tester.pumpWidget(const SizedBox());
     });
@@ -323,5 +325,39 @@ void main() {
         _expect48(tester, find.widgetWithText(TextButton, 'Change'));
       });
     }
+  });
+
+  group('Dental My Appointments Upcoming/Past toggle', () {
+    // Empty list is enough - this group only cares about the toggle's own
+    // tap-target size, not the rows below it.
+    Future<dynamic> emptyAppointments(String method, String url, {Object? body, Map<String, dynamic>? query}) async {
+      return {
+        'success': true,
+        'data': {'appointments': <Object>[], 'pagination': {}},
+      };
+    }
+
+    Future<void> pumpScreen(WidgetTester tester) async {
+      await tester.pumpWidget(
+        ChangeNotifierProvider<DentalProvider>(
+          create: (_) => DentalProvider(request: emptyAppointments),
+          child: const MaterialApp(home: DentalMyAppointmentsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Upcoming and Past segments are each >= 48 x 48 (review-F4 fix round 1)', (tester) async {
+      await pumpScreen(tester);
+      _expect48(tester, find.byKey(const Key('appt-tab-upcoming')), reason: 'Upcoming toggle segment');
+      _expect48(tester, find.byKey(const Key('appt-tab-past')), reason: 'Past toggle segment');
+    });
+
+    testWidgets('meets the Android, iOS and labelled tap-target guidelines', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpScreen(tester);
+      await _guidelines(tester);
+      handle.dispose();
+    });
   });
 }

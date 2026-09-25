@@ -15,6 +15,10 @@ export class PromotionRepository {
         'background_color',
         'background_color_end',
         'background_image_url',
+        // Migration 009: which point of the banner must survive the card's
+        // `cover` crop. 50/50 is the centre, i.e. today's behaviour.
+        'background_focal_x',
+        'background_focal_y',
         'cta_label',
         'cta_destination_type',
         'cta_destination_value',
@@ -60,6 +64,8 @@ export class PromotionRepository {
         background_color: input.background_color ?? null,
         background_color_end: input.background_color_end ?? null,
         background_image_url: input.background_image_url ?? null,
+        background_focal_x: input.background_focal_x ?? 50,
+        background_focal_y: input.background_focal_y ?? 50,
         cta_label: input.cta_label ?? null,
         cta_destination_type: input.cta_destination_type ?? null,
         cta_destination_value: input.cta_destination_value ?? null,
@@ -88,6 +94,12 @@ export class PromotionRepository {
           : {}),
         ...(input.background_image_url !== undefined
           ? { background_image_url: input.background_image_url }
+          : {}),
+        ...(input.background_focal_x !== undefined
+          ? { background_focal_x: input.background_focal_x }
+          : {}),
+        ...(input.background_focal_y !== undefined
+          ? { background_focal_y: input.background_focal_y }
           : {}),
         ...(input.cta_label !== undefined ? { cta_label: input.cta_label } : {}),
         ...(input.cta_destination_type !== undefined

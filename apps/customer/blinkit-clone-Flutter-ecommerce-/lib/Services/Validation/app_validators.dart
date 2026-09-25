@@ -33,6 +33,15 @@ class AppValidators {
   static const int quantityMin = 1; // matches backend order item schema
   static const int quantityMax = 100;
 
+  // Dental booking (task F3) - matches
+  // backend/api/src/modules/dental/appointment.schema.ts confirmAppointmentSchema
+  // exactly (not tightened): patient_name .min(2).max(128), patient_notes
+  // .max(500). patient_phone reuses the existing `phone`/`normalizePhone`
+  // pair (sriLankanPhoneSchema on the backend is the same rule).
+  static const int patientNameMin = 2;
+  static const int patientNameMax = 128;
+  static const int patientNotesMax = 500;
+
   // --------------------------------------------------------- normalization
   /// Trims the ends and collapses runs of whitespace:
   /// "  Mohammed   Jaasir  " -> "Mohammed Jaasir".
@@ -123,6 +132,27 @@ class AppValidators {
 
   static String? phone(String? value) =>
       isValidPhone(value) ? null : 'Enter a valid Sri Lankan mobile number';
+
+  /// Who the appointment is for - may not be the account holder, so this is
+  /// a plain name field, not tied to the signed-in customer's own name.
+  static String? patientName(String? value) {
+    final text = normalizeText(value);
+    if (text.isEmpty ||
+        text.length < patientNameMin ||
+        text.length > patientNameMax ||
+        !_nameChars.hasMatch(text)) {
+      return 'Enter a valid name';
+    }
+    return null;
+  }
+
+  /// Optional free text ("reason for visit," plan §16) - empty is fine,
+  /// anything present just can't exceed the backend's cap.
+  static String? patientNotes(String? value) {
+    final text = normalizeText(value);
+    if (text.isEmpty) return null;
+    return text.length > patientNotesMax ? 'Keep this under $patientNotesMax characters' : null;
+  }
 
   static String? addressLine1(String? value) {
     final text = normalizeText(value);

@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.sarthakag.blinkit" "\0"
+            VALUE "CompanyName", "Blynk" "\0"
             VALUE "FileDescription", "ecom" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "ecom" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2023 dev.sarthakag.blinkit. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Blynk. All rights reserved." "\0"
             VALUE "OriginalFilename", "ecom.exe" "\0"
             VALUE "ProductName", "ecom" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

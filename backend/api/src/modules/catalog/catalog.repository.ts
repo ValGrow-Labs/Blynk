@@ -143,6 +143,10 @@ export class CatalogRepository {
         'unit',
         'pack_size',
         'image_url',
+        // Migration 009: the crop anchor travels with the image, so a tile
+        // that crops it knows which point to keep. 50/50 is the centre.
+        'image_focal_x',
+        'image_focal_y',
         'calculated_selling_price',
         'is_available',
         'is_active',
@@ -245,6 +249,10 @@ export class CatalogRepository {
         'unit',
         'pack_size',
         'image_url',
+        // Migration 009: the crop anchor travels with the image, so a tile
+        // that crops it knows which point to keep. 50/50 is the centre.
+        'image_focal_x',
+        'image_focal_y',
         'calculated_selling_price',
         'is_available',
         'is_active',
@@ -353,6 +361,8 @@ export class CatalogRepository {
     pack_size?: string | null;
     description?: string | null;
     image_url?: string | null;
+    image_focal_x?: number;
+    image_focal_y?: number;
     purchase_cost: number;
     custom_markup_percent?: number | null;
     is_available?: boolean;
@@ -370,6 +380,10 @@ export class CatalogRepository {
         pack_size: data.pack_size ?? null,
         description: data.description ?? null,
         image_url: data.image_url ?? null,
+        // Omitted means the column default, 50 - the centre, exactly where
+        // `cover` cropped from before migration 009.
+        image_focal_x: data.image_focal_x ?? 50,
+        image_focal_y: data.image_focal_y ?? 50,
         purchase_cost: data.purchase_cost,
         custom_markup_percent: data.custom_markup_percent ?? null,
         is_available: data.is_available ?? true,
@@ -396,6 +410,8 @@ export class CatalogRepository {
       pack_size?: string | null;
       description?: string | null;
       image_url?: string | null;
+      image_focal_x?: number;
+      image_focal_y?: number;
       purchase_cost?: number;
       custom_markup_percent?: number | null;
       is_available?: boolean;

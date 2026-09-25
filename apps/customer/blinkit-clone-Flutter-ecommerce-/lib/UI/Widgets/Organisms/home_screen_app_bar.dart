@@ -1,22 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../Models/address_model.dart';
 import '../../../Services/Providers/address.provider.dart';
 import '../../../Services/Providers/auth.provider.dart';
+import '../../../Services/Providers/cart.provider.dart';
 import '../../../Services/store_info.dart';
-import '../../../app_design.dart';
+import '../../../app_responsive.dart';
 import '../../../design/tokens.dart';
 import '../../../Screens/customer_shell.dart';
+import '../Atoms/blynk_logo.dart';
+import '../Atoms/circular_icon_button.dart';
 
-/// Home header. Shows where we're delivering to using the customer's real
-/// default address.
+/// Home's header: the Blynk lockup on the left, and the circular chrome
+/// controls on the right — the cart with its **real** line count, and the way
+/// into the account.
 ///
-/// This used to show a hardcoded "DELIVERY IN 25 Minutes / HOME- Floor 9,
-/// Delhi" - both invented. There is no ETA field anywhere in the backend,
-/// so no delivery-time promise is made here; what's shown instead is the
-/// real service window and the real saved address (or a prompt to add one).
+/// Under that brand row sits the **address block**, which the reference
+/// composition gives a whole row of its own rather than a cramped strip: a
+/// quiet caption naming the hub we deliver from and the real service window,
+/// then, one step up the type scale, where this order is actually going —
+/// `Home · 12 Galle Road, Dharga Town` — with a chevron, because tapping it
+/// opens the address list.
+///
+/// 2026-09-24: the two facts used to share one 12 px line with the auth link,
+/// and a real address truncated to `…` the moment one existed. They are two
+/// lines now, with the destination allowed to wrap rather than be cut.
+///
+/// Nothing here is invented. The reference puts a **delivery ETA** ("8
+/// minutes") and a **distance** ("720 m away") in this slot; the backend has
+/// neither field, and a customer who plans around a made-up delivery time is a
+/// real-world failure, not a cosmetic one. Our truthful equivalent is the
+/// service window, so that is what the caption carries. The badge is
+/// `CartProvider.itemCount` rather than a decoration.
+///
+/// The circular **search** button that briefly lived in the brand row is gone:
+/// Home carries a full-width search field again ([HomeScreenSearchBar]), and
+/// two paths to the same screen a finger apart is duplicate chrome.
 class HomeScreenAppBar extends StatefulWidget {
   const HomeScreenAppBar({super.key});
+
+  /// The Blynk mark's height in the header. The wordmark is sized against it
+  /// by [BlynkLogo].
+  static const double markHeight = 30;
 
   @override
   State<HomeScreenAppBar> createState() => _HomeScreenAppBarState();
@@ -42,120 +68,238 @@ class _HomeScreenAppBarState extends State<HomeScreenAppBar> {
   Widget build(BuildContext context) {
     final address = context.watch<AddressProvider>().defaultAddress;
     final isAuthenticated = context.watch<AuthProvider>().isAuthenticated;
+    final gutter = BlynkSpace.gutterFor(Responsive.of(context).width);
 
     return SliverToBoxAdapter(
       child: SafeArea(
         bottom: false,
-        child: Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.sm,
-            AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  borderRadius: AppRadius.buttonBorder,
-                  // A guest's row is the way to log in; the row is the target.
-                  onTap: () => Navigator.of(context)
-                      .pushNamed(isAuthenticated ? '/user/address' : '/login'),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.xs,
-                      horizontal: AppSpacing.xs,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              BlynkIcons.shop,
-                              size: 15,
-                              color: BlynkColors.ink2,
-                            ),
-                            SizedBox(width: AppSpacing.xs + 1),
-                            Flexible(
-                              child: Text(
-                              // The real Phase 1 service window, not an ETA.
-                              'Delivering ${StoreInfo.deliveryHoursLabel}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              // A service window, not a state, so it is not green.
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                color: BlynkColors.ink2,
-                              ),
-                            ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 1),
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                address?.label ?? StoreInfo.hubName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 19,
-                                  color: AppTextColors.primary,
-                                ),
-                              ),
-                            ),
-                            if (isAuthenticated)
-                              const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 20,
-                                color: AppTextColors.secondary,
-                              ),
-                          ],
-                        ),
-                        Text(
-                          address?.displaySummary ??
-                              (isAuthenticated
-                                  ? 'Add a delivery address'
-                                  : 'Log in to set your delivery address'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w400,
-                            fontSize: 13,
-                            color: AppTextColors.secondary,
+        child: ColoredBox(
+          color: BlynkColors.paper,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              gutter,
+              BlynkSpace.s8,
+              BlynkSpace.s8,
+              BlynkSpace.s4,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Row(
+                  children: [
+                    // Scales down rather than overflowing: the wordmark's
+                    // intrinsic width is artwork, not a layout constant.
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: BlynkLogo(
+                            height: HomeScreenAppBar.markHeight,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    _CartButton(),
+                    _ProfileButton(),
+                  ],
+                ),
+                const SizedBox(height: BlynkSpace.s4),
+                Padding(
+                  padding: const EdgeInsets.only(right: BlynkSpace.s8),
+                  child: _AddressBlock(
+                    address: address,
+                    isAuthenticated: isAuthenticated,
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Profile',
-                icon: Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: const BoxDecoration(
-                    color: AppSurfaces.subtle,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.person_outline_rounded,
-                    size: 20,
-                    color: AppTextColors.primary,
-                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The cart, with the real number of lines in it. The badge is
+/// [BlynkNav.countBadgeFill] ink — never a second yellow, so the screen's one
+/// yellow action stays with the action.
+class _CartButton extends StatelessWidget {
+  const _CartButton();
+
+  @override
+  Widget build(BuildContext context) {
+    // Nullable on purpose: this header is also rendered on its own by the
+    // component tests, which host it without a CartProvider. A missing cart
+    // means no badge, never a crash and never an invented count.
+    final count = context.watch<CartProvider?>()?.itemCount ?? 0;
+
+    return Tooltip(
+      message: 'Cart',
+      child: CircularIconButton(
+        icon: BlynkIcons.cart,
+        semanticLabel: 'Cart',
+        badgeCount: count,
+        onPressed: () => Navigator.of(context).pushNamed('/cart'),
+      ),
+    );
+  }
+}
+
+/// The account entry: circular chrome, never the screen's yellow.
+class _ProfileButton extends StatelessWidget {
+  const _ProfileButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Profile',
+      child: CircularIconButton(
+        icon: BlynkIcons.profile,
+        semanticLabel: 'Profile',
+        onPressed: () => CustomerShell.selectTab(context, 3),
+      ),
+    );
+  }
+}
+
+/// Where this order is going — its **own** block under the brand row, with
+/// room to breathe, mirroring the reference's stacked caption-over-destination
+/// hierarchy.
+///
+/// Two lines, and the split is the point:
+///
+/// * the **caption** is the service: the hub we deliver from and the real
+///   window we deliver in, at [BlynkText.microLabel] in [BlynkColors.ink2].
+///   This is the slot the reference fills with a delivery ETA and a distance.
+///   Blynk has **no** ETA field and **no** distance field, so it carries
+///   neither; the service window is the true fact that belongs there.
+/// * the **destination** is a step up the scale ([BlynkText.heading]): the
+///   real [AddressModel.label] in emphasis, then the real summary — and when
+///   there is no address yet, the action that creates one, because that *is*
+///   the destination's state. It wraps rather than truncating: a Sri Lankan
+///   street address does not fit one phone line and an elided address is
+///   worse than a taller header.
+///
+/// The whole block is one 48 dp target and one semantics node: a guest lands
+/// on login, a signed-in customer on the address book.
+class _AddressBlock extends StatelessWidget {
+  const _AddressBlock({required this.address, required this.isAuthenticated});
+
+  final AddressModel? address;
+  final bool isAuthenticated;
+
+  /// The destination line's spans. Signed in with an address this is the
+  /// label in emphasis then the summary; otherwise it is the one action that
+  /// would fill the slot. Never a placeholder address, never a guessed one.
+  List<TextSpan> get _destinationSpans {
+    final current = address;
+    if (current == null) {
+      return [
+        TextSpan(
+          text: isAuthenticated
+              ? 'Add a delivery address'
+              : 'Log in to set your delivery address',
+          style: BlynkText.heading,
+        ),
+      ];
+    }
+    return [
+      // The reference shouts this label; Blynk sets no label in capitals
+      // anywhere, and `design_hygiene_ratchet_test` enforces that app-wide.
+      // The emphasis comes from weight instead, and the word is the
+      // customer's own — `Home`, `Work`, or whatever they typed — exactly as
+      // the address book shows it.
+      TextSpan(text: current.label, style: BlynkText.heading),
+      TextSpan(
+        text: ' · ${current.displaySummary}',
+        // Same size, lighter weight: the label leads, the street follows.
+        style: BlynkText.heading.copyWith(fontWeight: FontWeight.w500),
+      ),
+    ];
+  }
+
+  String get _spokenLabel {
+    if (!isAuthenticated) return 'Log in to set your delivery address';
+    final current = address;
+    if (current == null) return 'Add a delivery address';
+    return 'Delivering to ${current.label}, ${current.displaySummary}. '
+        'Change delivery address';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    void open() => Navigator.of(context)
+        .pushNamed(isAuthenticated ? '/user/address' : '/login');
+
+    return Semantics(
+      button: true,
+      label: _spokenLabel,
+      // The block's own node carries the action, because its fragments are
+      // excluded below: one target, one spoken sentence.
+      onTap: open,
+      excludeSemantics: true,
+      child: InkWell(
+        borderRadius: BlynkRadius.mdAll,
+        onTap: open,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: BlynkControl.minHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: BlynkSpace.s8,
+              horizontal: BlynkSpace.s4,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      BlynkIcons.shop,
+                      size: BlynkIcons.xs,
+                      color: BlynkColors.ink2,
+                    ),
+                    const SizedBox(width: BlynkSpace.s4),
+                    Flexible(
+                      child: Text(
+                        '${StoreInfo.hubName} · '
+                        '${StoreInfo.deliveryHoursLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BlynkText.microLabel
+                            .copyWith(color: BlynkColors.ink2),
+                      ),
+                    ),
+                  ],
                 ),
-                onPressed: () => CustomerShell.selectTab(context, 3),
-              ),
-            ],
+                const SizedBox(height: BlynkSpace.s4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(children: _destinationSpans),
+                        // Deliberately unbounded: no `maxLines`, no ellipsis.
+                        // A real address must never be cut, at any text scale.
+                        style: BlynkText.heading,
+                      ),
+                    ),
+                    const SizedBox(width: BlynkSpace.s4),
+                    // Points at the address list this opens. Not a down-caret:
+                    // the block pushes a screen, it does not drop a menu.
+                    const Icon(
+                      BlynkIcons.chevron,
+                      size: BlynkIcons.sm,
+                      color: BlynkColors.ink2,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

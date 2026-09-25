@@ -64,3 +64,16 @@ flutter:
           weight: 500
         - asset: Assets/Fonts/Catamaran-SemiBold.ttf
           weight: 600
+    # Poppins (SIL Open Font License) — the geometric rounded sans the
+    # reference design uses. Latin subset from Google Fonts.
+    - family: Poppins
+      fonts:
+        - asset: Assets/Fonts/Poppins-Regular.ttf
+        - asset: Assets/Fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: Assets/Fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: Assets/Fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: Assets/Fonts/Poppins-ExtraBold.ttf
+          weight: 800

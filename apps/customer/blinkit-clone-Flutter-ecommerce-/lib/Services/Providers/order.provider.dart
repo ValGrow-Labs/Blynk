@@ -91,6 +91,11 @@ class OrderProvider extends ChangeNotifier {
 
   List<OrderModel> get orders => _orders;
   bool get isLoadingOrders => _isLoadingOrders;
+
+  /// Whether the first page of orders has been fetched in this session.
+  /// Home reads it so it asks for the customer's history exactly once
+  /// instead of on every rebuild.
+  bool get hasLoadedOrders => _hasLoadedFirstPage;
   String? get ordersError => _ordersFailure?.message;
   CustomerError? get ordersFailure => _ordersFailure;
 

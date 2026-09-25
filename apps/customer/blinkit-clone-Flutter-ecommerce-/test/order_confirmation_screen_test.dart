@@ -6,6 +6,7 @@ import 'package:ecom/Models/order_format.dart';
 import 'package:ecom/Models/order_model.dart';
 import 'package:ecom/Screens/order_confirmation_screen.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
 import 'package:ecom/design/tokens.dart';
 import 'package:lottie/lottie.dart';
 
@@ -96,8 +97,16 @@ void main() {
         (tester) async {
       await pumpScreen(tester, null);
 
-      final button = tester.widget<ElevatedButton>(find.byKey(const Key('view-order')));
+      // W4: "View order" is now the shared BlynkButton.cta (flat Blynk Yellow)
+      // instead of an ElevatedButton wearing appPrimaryButtonStyle. Same
+      // assertion, same strength: with no order there is nothing to open, so
+      // the button must be genuinely disabled, not merely styled as such.
+      final button = tester.widget<BlynkButton>(find.byKey(const Key('view-order')));
       expect(button.onPressed, isNull);
+      // ...and it is genuinely inert, not merely styled grey.
+      await tester.tap(find.byKey(const Key('view-order')));
+      await tester.pump();
+      expect(pushed.map((s) => s.name), isNot(contains('/order')));
       expect(find.byKey(const Key('confirmation-amount')), findsNothing);
       expect(find.byKey(const Key('confirmation-schedule')), findsNothing);
     });

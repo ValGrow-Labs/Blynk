@@ -258,6 +258,13 @@ erDiagram
 | `deliveries` | Delivery | Assignment link pairing an order to a rider, tracking delivery progression, cash collected on delivery, and timestamps. Supports reassignment via partial index. |
 | `notifications` | Messaging | Outbound omnichannel communication dispatch log (SMS / WhatsApp), delivery statuses, provider reference IDs, and failure payloads. |
 | `audit_logs` | Operations/Audit | Unified administrative event log capturing who changed what across sensitive business records (prices, inventory, orders). |
+| `dental_clinics` *(2026-09-22)* | Dental | Physical dental clinic locations (mirrors `dark_stores`): name, city, address, coordinates, contact phone, operating hours, `is_active`. |
+| `doctors` *(2026-09-22)* | Dental | Practitioner identity, independent of any clinic: name, specialty enum, photo, bio, `is_active`. |
+| `clinic_doctors` *(2026-09-22)* | Dental | The working relationship between one clinic and one doctor — consultation fee and active/paused flag live here, since the same doctor can work multiple clinics with different fees/hours at each. |
+| `doctor_availability` *(2026-09-22)* | Dental | Recurring weekly availability template per clinic-doctor pairing; availability is computed on read from this table, never materialized into per-slot rows. |
+| `doctor_blocked_dates` *(2026-09-22)* | Dental | Specific-date exceptions (leave, holiday, closure) layered on top of a clinic-doctor's weekly template. |
+| `appointments` *(2026-09-22)* | Dental | The booking itself: slot, status, hold fields, patient details, an indicative fee snapshot (`consultation_fee_snapshot` — no online payment), and idempotency key. Double-booking is prevented by the partial unique index `uq_appointments_active_slot` (see SECTION F). |
+| `appointment_status_history` *(2026-09-22)* | Dental/Audit | Immutable log of every appointment status transition, mirroring `order_status_history`'s shape. |
 
 ---
 
@@ -763,6 +770,147 @@ CREATE TABLE audit_logs (
 );
 ```
 
+### Addendum (2026-09-22): Dental Clinic Appointments Domain (Migration 007)
+
+A separate domain, added additively — it does not modify any table above. Booking only, no online payment: `appointments.consultation_fee_snapshot` is the only payment-adjacent column (indicative, "payable at the clinic" — see ADR-005), and there is deliberately no `PAYMENT_PENDING` status and no payment table for this domain.
+
+```sql
+-- ============================================================================
+-- 11. DENTAL CLINIC APPOINTMENTS DOMAIN (Migration 007, 2026-09-22)
+-- ============================================================================
+
+CREATE TYPE dental_specialty_enum AS ENUM (
+    'GENERAL_DENTIST', 'ORTHODONTIST', 'PERIODONTIST',
+    'ENDODONTIST', 'ORAL_SURGEON', 'PEDIATRIC_DENTIST'
+);
+
+CREATE TYPE dental_appointment_status_enum AS ENUM (
+    'HELD', 'EXPIRED', 'CONFIRMED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_CLINIC'
+);
+
+CREATE TABLE dental_clinics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(128) NOT NULL,
+    city VARCHAR(64) NOT NULL,
+    address_line TEXT NOT NULL,
+    latitude NUMERIC(9, 6) NOT NULL,
+    longitude NUMERIC(9, 6) NOT NULL,
+    contact_phone VARCHAR(20) NOT NULL,
+    operating_start_time TIME NOT NULL,
+    operating_end_time TIME NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_dental_clinic_lat CHECK (latitude BETWEEN -90.0 AND 90.0),
+    CONSTRAINT chk_dental_clinic_lon CHECK (longitude BETWEEN -180.0 AND 180.0),
+    CONSTRAINT chk_dental_clinic_hours CHECK (operating_end_time > operating_start_time)
+);
+
+CREATE TABLE doctors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name VARCHAR(128) NOT NULL,
+    specialty dental_specialty_enum NOT NULL,
+    photo_url TEXT,
+    bio TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The working relationship: fee, hours and blocked dates are scoped to this
+-- pairing, not to the doctor globally, since a doctor may keep different
+-- hours/fee per clinic.
+CREATE TABLE clinic_doctors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_id UUID NOT NULL REFERENCES dental_clinics(id) ON DELETE RESTRICT,
+    doctor_id UUID NOT NULL REFERENCES doctors(id) ON DELETE RESTRICT,
+    consultation_fee NUMERIC(10, 2),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_clinic_doctors_pairing UNIQUE (clinic_id, doctor_id),
+    CONSTRAINT chk_clinic_doctors_fee CHECK (consultation_fee IS NULL OR consultation_fee >= 0.00)
+);
+
+-- Weekly availability template; availability is computed on read from this
+-- table (plus doctor_blocked_dates below) — no materialized per-slot rows.
+CREATE TABLE doctor_availability (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_doctor_id UUID NOT NULL REFERENCES clinic_doctors(id) ON DELETE CASCADE,
+    day_of_week SMALLINT NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    slot_duration_minutes SMALLINT NOT NULL,
+    buffer_minutes SMALLINT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_doctor_availability_dow CHECK (day_of_week BETWEEN 0 AND 6),
+    CONSTRAINT chk_doctor_availability_window CHECK (end_time > start_time),
+    CONSTRAINT chk_doctor_availability_duration CHECK (slot_duration_minutes > 0),
+    CONSTRAINT chk_doctor_availability_buffer CHECK (buffer_minutes >= 0)
+);
+
+CREATE INDEX idx_doctor_availability_clinic_doctor_dow
+    ON doctor_availability (clinic_doctor_id, day_of_week);
+
+CREATE TABLE doctor_blocked_dates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_doctor_id UUID NOT NULL REFERENCES clinic_doctors(id) ON DELETE CASCADE,
+    blocked_date DATE NOT NULL,
+    reason VARCHAR(128) NOT NULL,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_doctor_blocked_dates UNIQUE (clinic_doctor_id, blocked_date)
+);
+
+CREATE TABLE appointments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_doctor_id UUID NOT NULL REFERENCES clinic_doctors(id) ON DELETE RESTRICT,
+    customer_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    start_at TIMESTAMPTZ NOT NULL,
+    end_at TIMESTAMPTZ NOT NULL,
+    status dental_appointment_status_enum NOT NULL DEFAULT 'HELD',
+    held_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    held_until TIMESTAMPTZ,
+    patient_name VARCHAR(128),
+    patient_phone VARCHAR(20),
+    patient_notes VARCHAR(500),
+    consultation_fee_snapshot NUMERIC(10, 2),      -- indicative only; not a payment amount
+    cancellation_reason VARCHAR(255),
+    cancelled_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    idempotency_key VARCHAR(128) NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_appointments_window CHECK (end_at > start_at),
+    CONSTRAINT chk_appointments_fee CHECK (consultation_fee_snapshot IS NULL OR consultation_fee_snapshot >= 0.00)
+);
+
+-- THE double-booking guarantee: exactly one HELD/CONFIRMED row per
+-- (clinic_doctor_id, start_at). A cancelled/expired row's slot reopens
+-- immediately since it falls outside this predicate — no separate release
+-- step. Same partial-unique-index shape as uq_deliveries_active_assignment.
+CREATE UNIQUE INDEX uq_appointments_active_slot
+    ON appointments (clinic_doctor_id, start_at)
+    WHERE status IN ('HELD', 'CONFIRMED');
+
+-- "My appointments" queries (by customer, not by clinic-doctor).
+CREATE INDEX idx_appointments_customer_status
+    ON appointments (customer_id, status);
+
+CREATE TABLE appointment_status_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+    old_status dental_appointment_status_enum,
+    new_status dental_appointment_status_enum NOT NULL,
+    changed_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_appointment_status_history_appointment
+    ON appointment_status_history (appointment_id);
+```
+
 ---
 
 ## SECTION D: Primary Keys and Foreign Keys Matrix
@@ -858,6 +1006,12 @@ WHERE is_deleted = FALSE;
    - `actual_unit_cost IS NULL OR actual_unit_cost >= 0.00` (recorded at fulfillment).
 4. **Idempotent Order Placement (`orders.idempotency_key UNIQUE`)**:
    - Blocks duplicate checkout charges if a customer double-taps "Place Order" under unstable mobile connections.
+5. **Dental Double-Booking Guard (`uq_appointments_active_slot`, added 2026-09-22)**:
+   - `UNIQUE (clinic_doctor_id, start_at) WHERE status IN ('HELD', 'CONFIRMED')`.
+   - **Guarantees**: a given doctor, at a given clinic, at a given start time, can **never** have two active (held or confirmed) appointments simultaneously — enforced by Postgres itself, the same partial-unique-index shape as `uq_deliveries_active_assignment` above.
+   - **Enables slot reopening**: once an appointment is cancelled or expires, its row falls outside the `WHERE` predicate and the slot is immediately bookable again — no separate "release" step.
+6. **Idempotent Appointment Holding (`appointments.idempotency_key UNIQUE`, added 2026-09-22)**:
+   - Blocks a duplicate hold from a client retry after a network timeout, the same pattern as `orders.idempotency_key`.
 
 ---
 

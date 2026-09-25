@@ -4,6 +4,7 @@ import type { RiderDeliveryStatus } from './rider.schema.js';
 import { runTransition } from '../orders/lifecycle/engine.js';
 import type { ActionName } from '../orders/lifecycle/catalogue.js';
 import type { CodSettlement } from '../orders/lifecycle/settlement.js';
+import type { Actor } from '../orders/lifecycle/types.js';
 
 const RIDER_STEP: Record<RiderDeliveryStatus, ActionName> = {
   PICKED_UP: 'RIDER_PICKUP',
@@ -11,6 +12,14 @@ const RIDER_STEP: Record<RiderDeliveryStatus, ActionName> = {
   FAILED: 'RIDER_FAIL',
 };
 
+/**
+ * Who may be doing rider work: a RIDER, or the Operations app's ADMIN
+ * operator (operations plan §2, §7). The role is carried through to the
+ * lifecycle engine as the caller's *real* role, so the engine's own role
+ * check stays a genuine second gate rather than a fabricated 'RIDER'.
+ * The rider *identity* is never taken from here - it is always looked up
+ * from the authenticated user's own riders row below.
+ */
 export class RiderService {
   private async getRiderOrThrow(userId: string) {
     const rider = await riderRepository.findRiderByUserId(userId);
@@ -44,13 +53,13 @@ export class RiderService {
    */
   async updateDeliveryStatus(
     deliveryId: string,
-    userId: string,
+    actor: Actor,
     newStatus: RiderDeliveryStatus,
     failureReason?: string
   ) {
-    const rider = await this.getRiderOrThrow(userId);
+    const rider = await this.getRiderOrThrow(actor.id);
     await runTransition(RIDER_STEP[newStatus], {
-      actor: { id: userId, role: 'RIDER' },
+      actor,
       deliveryId,
       riderId: rider.id,
       input: { failure_reason: failureReason },
@@ -59,10 +68,10 @@ export class RiderService {
   }
 
   /** Lifecycle #9 RIDER_COLLECT_COD, settled by the shared COD settlement. */
-  async collectCod(deliveryId: string, userId: string, amount: number) {
-    const rider = await this.getRiderOrThrow(userId);
+  async collectCod(deliveryId: string, actor: Actor, amount: number) {
+    const rider = await this.getRiderOrThrow(actor.id);
     return await runTransition<CodSettlement>('RIDER_COLLECT_COD', {
-      actor: { id: userId, role: 'RIDER' },
+      actor,
       deliveryId,
       riderId: rider.id,
       input: { amount },

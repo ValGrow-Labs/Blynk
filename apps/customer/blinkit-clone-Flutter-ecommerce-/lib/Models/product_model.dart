@@ -4,6 +4,10 @@
 // strips them before the customer-facing endpoint returns, and this model
 // has no fields for them either, so there is nothing here to accidentally
 // expose.
+import 'package:flutter/material.dart';
+
+import 'image_focal.dart';
+
 class ProductModel {
   final String id;
   final String categoryId;
@@ -16,6 +20,18 @@ class ProductModel {
   final String unit;
   final String? packSize;
   final String? imageUrl;
+
+  /// Where the crop anchors when [imageUrl] is drawn into a fixed shape, as a
+  /// percentage of the image's own width and height (backend migration 009).
+  ///
+  /// Every tile in the app draws the photo with [BoxFit.cover], which crops
+  /// whatever does not fit; this is the point the operator chose to keep.
+  /// **50/50 is the centre** - what `cover` already did - and is what the app
+  /// uses whenever the API omits these fields, so an older backend changes
+  /// nothing. See [imageAlignment].
+  final int imageFocalX;
+  final int imageFocalY;
+
   final double sellingPrice;
   final bool isAvailable;
 
@@ -31,6 +47,8 @@ class ProductModel {
     required this.unit,
     this.packSize,
     this.imageUrl,
+    this.imageFocalX = kFocalCentrePercent,
+    this.imageFocalY = kFocalCentrePercent,
     required this.sellingPrice,
     required this.isAvailable,
   });
@@ -48,12 +66,22 @@ class ProductModel {
       unit: (json['unit'] ?? '').toString(),
       packSize: (json['pack_size'] ?? json['packSize'])?.toString(),
       imageUrl: (json['image_url'] ?? json['imageUrl'])?.toString(),
+      // Absent, null or unparseable all mean the centre: a response from a
+      // backend that predates migration 009 must not break the app, and the
+      // centre is exactly the crop that pairing already produced.
+      imageFocalX: parseFocalPercent(json['image_focal_x'] ?? json['imageFocalX']),
+      imageFocalY: parseFocalPercent(json['image_focal_y'] ?? json['imageFocalY']),
       sellingPrice:
           double.tryParse((json['selling_price'] ?? json['sellingPrice'] ?? 0).toString()) ??
               0.0,
       isAvailable: json['is_available'] == true || json['isAvailable'] == true,
     );
   }
+
+  /// The stored focal point as a Flutter [Alignment], ready to hand to a
+  /// `cover` image. Defaults to [Alignment.center] for every product that has
+  /// never had one set.
+  Alignment get imageAlignment => focalAlignment(imageFocalX, imageFocalY);
 }
 
 class ProductPage {

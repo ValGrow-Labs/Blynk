@@ -1,44 +1,55 @@
 import 'package:flutter/material.dart';
 
 import '../Atoms/app_skeleton.dart';
+import '../Atoms/app_state_views.dart';
 import '../Atoms/card_product.dart';
 import '../../../Models/product_model.dart';
 import '../../../app_responsive.dart';
+import '../../../design/tokens.dart';
+
+/// The responsive product grid, built on the one rule in [BlynkProductGrid]:
+/// 2 columns compact, 3 medium, 4 expanded, 5 at 1440 and above, with the
+/// gutter and tile spacing decided there too.
+///
+/// The tile height is **measured**, not a fixed aspect ratio: a product card
+/// is a square image plus a text-scale-dependent chrome block, so a ratio
+/// either squashes the image on a wide column or clips the text at 2.0×.
+SliverGridDelegate productGridDelegate(BuildContext context, double width) {
+  final columns = BlynkProductGrid.columnsFor(width);
+  final spacing = BlynkProductGrid.spacingFor(width);
+  return SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: columns,
+    mainAxisSpacing: spacing,
+    crossAxisSpacing: spacing,
+    mainAxisExtent: ProductCard.heightFor(context, BlynkProductGrid.tileWidthFor(width)),
+  );
+}
+
+/// The grid's page padding: the shared gutter on both sides, a little air at
+/// the top, and enough at the bottom that the last row clears the floating
+/// cart bar instead of hiding behind it.
+EdgeInsets _gridPadding(double width) {
+  final gutter = BlynkProductGrid.gutterFor(width);
+  return EdgeInsets.fromLTRB(gutter, BlynkSpace.s12, gutter, BlynkSpace.s48);
+}
 
 Widget buildProductsGrid(BuildContext context, List<ProductModel> products) {
-  // Fixed at 2 columns regardless of viewport made this grid look identical
-  // (and increasingly sparse/oversized) from a 375px phone up to a 1920px
-  // desktop monitor - scale with the shared breakpoints instead.
-  final crossAxisCount = Responsive.of(context).gridColumns;
-
   if (products.isEmpty) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24.0),
-        child: Text('No products in this category yet.'),
-      ),
+    // An empty category is not an error: no glyph of failure, no retry, and
+    // no invented "check back soon" promise about restocking.
+    return const AppStateView.empty(
+      title: 'No products in this category',
+      message: 'Try another category, or search for what you need.',
     );
   }
 
-  const padding = 4.0;
-  const spacing = 8.0;
-
-  // A fixed aspect ratio made tiles grow ever taller as columns widen and
-  // ignored the user's text size; the card's own height (square image plus
-  // its scaled text and 48 dp control) is measured from the tile width instead.
   return LayoutBuilder(
     builder: (context, constraints) {
-      final tileWidth =
-          (constraints.maxWidth - padding * 2 - spacing * (crossAxisCount - 1)) / crossAxisCount;
+      final width = constraints.maxWidth;
       return GridView.builder(
-        padding: const EdgeInsets.all(padding),
+        padding: _gridPadding(width),
         physics: const BouncingScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          mainAxisSpacing: spacing,
-          crossAxisSpacing: spacing,
-          mainAxisExtent: ProductCard.heightFor(context, tileWidth),
-        ),
+        gridDelegate: productGridDelegate(context, width),
         itemCount: products.length,
         itemBuilder: (BuildContext context, int index) {
           return ProductCard(product: products[index]);
@@ -48,28 +59,18 @@ Widget buildProductsGrid(BuildContext context, List<ProductModel> products) {
   );
 }
 
-/// The grid's loading state: the same columns and tile height as
+/// The grid's loading state: the same columns, gutter and tile height as
 /// [buildProductsGrid], with one shared pulse for all the skeleton cards.
 Widget buildProductsSkeletonGrid(BuildContext context) {
-  final crossAxisCount = Responsive.of(context).gridColumns;
-  const padding = 4.0;
-  const spacing = 8.0;
-
   return LayoutBuilder(
     builder: (context, constraints) {
-      final tileWidth =
-          (constraints.maxWidth - padding * 2 - spacing * (crossAxisCount - 1)) / crossAxisCount;
-      return SkeletonScope(
+      final width = constraints.maxWidth;
+      return SkeletonScope.ensure(
         child: GridView.builder(
-          padding: const EdgeInsets.all(padding),
+          padding: _gridPadding(width),
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: spacing,
-            crossAxisSpacing: spacing,
-            mainAxisExtent: ProductCard.heightFor(context, tileWidth),
-          ),
-          itemCount: crossAxisCount * 3,
+          gridDelegate: productGridDelegate(context, width),
+          itemCount: BlynkProductGrid.columnsFor(width) * 3,
           itemBuilder: (_, __) => const ProductCardSkeleton(),
         ),
       );

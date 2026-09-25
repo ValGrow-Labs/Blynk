@@ -38,8 +38,12 @@ Widget _host(Widget child, {double textScale = 1.0, bool disableAnimations = fal
   );
 }
 
-GoogleTrackingMapView _tracking(Set<MapMarkerSpec> markers) =>
-    GoogleTrackingMapView(initialCenter: _destination, initialZoom: 14, markers: markers);
+GoogleTrackingMapView _tracking(Set<MapMarkerSpec> markers, {String? semanticsLabel}) => GoogleTrackingMapView(
+      initialCenter: _destination,
+      initialZoom: 14,
+      markers: markers,
+      semanticsLabel: semanticsLabel,
+    );
 
 void main() {
   late FakeGoogleMapsPlatform platform;
@@ -297,6 +301,32 @@ void main() {
       await settle(tester);
 
       expect(find.bySemanticsLabel('Map showing the rider and your delivery address'), findsOneWidget);
+      handle.dispose();
+    });
+
+    // Task-F1 review-fix round 1 (Important finding): ClinicLocationMap's
+    // `label` is defeated unless GoogleTrackingMapView's own hardcoded
+    // Semantics node can be overridden. These two tests exercise the REAL
+    // adapter directly (not clinic_location_map_test.dart's fake, which has
+    // no Semantics node of its own and could not have caught this).
+    testWidgets('semanticsLabel, when given, replaces the default rider/delivery phrase entirely', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_host(_tracking({_dest()}, semanticsLabel: 'Smile Dental Clinic')));
+      await settle(tester);
+
+      expect(find.bySemanticsLabel('Smile Dental Clinic'), findsOneWidget);
+      expect(find.bySemanticsLabel('Map showing the rider and your delivery address'), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('no semanticsLabel given: falls back to the exact original rider/delivery phrase, unchanged',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_host(_tracking({_dest(), _rider(_riderA)})));
+      await settle(tester);
+
+      expect(find.bySemanticsLabel('Map showing the rider and your delivery address'), findsOneWidget,
+          reason: 'every existing OrderTrackingMap call site must announce exactly what it did before this fix');
       handle.dispose();
     });
 
