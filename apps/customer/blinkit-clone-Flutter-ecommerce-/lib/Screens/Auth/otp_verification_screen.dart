@@ -169,6 +169,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     final devCode = _devCode(auth);
 
     return Scaffold(
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(
         title: const Text('OTP verification'),
         actions: [
@@ -181,45 +182,62 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               );
             },
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: BlynkSpace.s8),
         ],
       ),
-      body: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 16,
-        ),
-        child: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          // A form, not a stretched phone layout: one centred column.
+          constraints: const BoxConstraints(maxWidth: _kColumnMaxWidth),
           child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              BlynkSpace.s16,
+              BlynkSpace.s24,
+              BlynkSpace.s16,
+              BlynkSpace.s32,
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text("We've sent a verification code to "),
-                Text(
-                  displayPhone,
-                  style: BlynkText.label,
+                Semantics(
+                  header: true,
+                  child: const Text(
+                    'Enter your verification code',
+                    style: BlynkText.title,
+                  ),
                 ),
-                const SizedBox(
-                  height: 10,
+                const SizedBox(height: BlynkSpace.s8),
+                Text.rich(
+                  TextSpan(
+                    text: "We've sent a 6-digit code to ",
+                    children: [
+                      TextSpan(text: displayPhone, style: BlynkText.label),
+                    ],
+                  ),
+                  style: BlynkText.body.copyWith(color: BlynkColors.ink2),
                 ),
-                const Text("Enter the code below to verify your account"),
                 if (devCode != null) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: const BoxDecoration(
-                      color: BlynkColors.well,
-                      borderRadius: BlynkRadius.smAll,
-                    ),
-                    child: Text(
-                      "Dev Code: $devCode (auto-filled)",
-                      style: BlynkText.caption,
+                  const SizedBox(height: BlynkSpace.s12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: BlynkSpace.s12,
+                        vertical: BlynkSpace.s4,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: BlynkColors.well,
+                        borderRadius: BlynkRadius.smAll,
+                      ),
+                      child: Text(
+                        "Dev Code: $devCode (auto-filled)",
+                        style: BlynkText.caption,
+                      ),
                     ),
                   ),
                 ],
-                const SizedBox(
-                  height: 10,
-                ),
+                const SizedBox(height: BlynkSpace.s24),
                 BlynkTextField(
                   label: 'Verification code',
                   hintText: 'Enter 6-digit OTP',
@@ -234,38 +252,44 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     if (value.isNotEmpty) _verifyOTP(context, value);
                   },
                 ),
-                const SizedBox(
-                  height: 15,
-                ),
+                const SizedBox(height: BlynkSpace.s24),
                 BlynkButton.primary(
                   label: 'Verify',
+                  expand: true,
                   loading: _isLoading,
                   onPressed: () => _verifyOTP(context, _otpController.text),
                 ),
-                const SizedBox(
-                  height: 8,
+                const SizedBox(height: BlynkSpace.s8),
+                // The countdown is a read-out, not a control, so it keeps the
+                // resend button's slot instead of shifting the column.
+                Align(
+                  child: (_timer != null && _timer!.isActive && _secondsRemaining > 0)
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: BlynkSpace.s16,
+                          ),
+                          child: Text(
+                            'Resend OTP in $_secondsRemaining s',
+                            style: BlynkText.body.copyWith(color: BlynkColors.ink2),
+                          ),
+                        )
+                      : BlynkButton.tertiary(
+                          label: 'Resend OTP',
+                          onPressed: _restartTimer,
+                        ),
                 ),
-                BlynkButton.tertiary(
-                  label: 'Skip & Explore Store',
-                  onPressed: () {
-                    Navigator.of(context).pushNamedAndRemoveUntil(
-                      '/home',
-                      (route) => false,
-                    );
-                  },
+                const SizedBox(height: BlynkSpace.s8),
+                Align(
+                  child: BlynkButton.tertiary(
+                    label: 'Skip & explore store',
+                    onPressed: () {
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/home',
+                        (route) => false,
+                      );
+                    },
+                  ),
                 ),
-                const SizedBox(
-                  height: 10,
-                ),
-                (_timer != null && _timer!.isActive && _secondsRemaining > 0)
-                    ? Text(
-                        'Resend OTP in $_secondsRemaining s',
-                        style: BlynkText.label,
-                      )
-                    : BlynkButton.tertiary(
-                        label: 'Resend OTP',
-                        onPressed: _restartTimer,
-                      ),
               ],
             ),
           ),
@@ -274,3 +298,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     );
   }
 }
+
+/// The OTP column's cap: a code field and one action never need more.
+/// W8: the number is now [BlynkForm.narrowMaxWidth] — same 480, named once.
+const double _kColumnMaxWidth = BlynkForm.narrowMaxWidth;

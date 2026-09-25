@@ -143,11 +143,21 @@ class _BlynkTextFieldState extends State<BlynkTextField> {
               horizontal: BlynkSpace.s16,
               vertical: BlynkSpace.s12,
             ),
+            // 2026-09-24: `prefixIconConstraints` stretches this box to 48 dp,
+            // and `Padding` does not centre its child — so a text prefix like
+            // "+94" sat at the TOP of the box while the input text is centred,
+            // which read as two stacked lines inside one field. `Center` with
+            // `widthFactor: 1` keeps the box hugging the prefix horizontally
+            // while centring it on the input's baseline row.
             prefixIcon: widget.prefix == null
                 ? null
-                : Padding(
-                    padding: const EdgeInsetsDirectional.only(start: BlynkSpace.s12, end: BlynkSpace.s8),
-                    child: widget.prefix,
+                : Center(
+                    widthFactor: 1,
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                          start: BlynkSpace.s12, end: BlynkSpace.s8),
+                      child: widget.prefix,
+                    ),
                   ),
             prefixIconConstraints: const BoxConstraints(minHeight: 48),
             suffixIcon: suffix,
@@ -186,7 +196,7 @@ class _BlynkTextFieldState extends State<BlynkTextField> {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(top: 2),
-                    child: Icon(BlynkIcons.error, size: 16, color: BlynkColors.problem),
+                    child: Icon(BlynkIcons.error, size: BlynkIcons.xs, color: BlynkColors.problem),
                   ),
                   const SizedBox(width: BlynkSpace.s4),
                   Expanded(

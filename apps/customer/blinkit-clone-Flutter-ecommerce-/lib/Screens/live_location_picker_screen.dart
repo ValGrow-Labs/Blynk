@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../Services/Location/device_location_source.dart';
 import '../Services/Location/geolocator_location_source.dart';
+import '../UI/Widgets/Atoms/blynk_button.dart';
+import '../UI/Widgets/Atoms/blynk_spinner.dart';
 import '../UI/Widgets/Organisms/map_provider.dart';
-import '../app_colors.dart';
-import '../app_design.dart';
 import '../design/tokens.dart';
 
 /// "Use my current location" for the address form (plan section 12): explains
@@ -160,11 +160,11 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppSurfaces.subtle,
+      backgroundColor: BlynkColors.well,
       appBar: AppBar(
         title: const Text('Pin your location'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: BlynkColors.paper,
+        surfaceTintColor: BlynkColors.paper,
         elevation: 0,
         scrolledUnderElevation: 0.5,
       ),
@@ -177,7 +177,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
       case _Phase.explain:
         return _Message(
           key: const Key('picker-explain'),
-          icon: Icons.my_location_rounded,
+          icon: Icons.my_location,
           title: 'Use your current location',
           paragraphs: const [
             'Blynk reads your location once, only to pin your delivery address. '
@@ -196,7 +196,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-denied'),
           icon: Icons.location_disabled_outlined,
-          iconColor: AppTextColors.problem,
+          iconColor: BlynkColors.problem,
           title: 'Location permission is off',
           paragraphs: const [
             "Without it we can't pin your address automatically. You can try again, "
@@ -210,7 +210,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-denied-forever'),
           icon: Icons.location_disabled_outlined,
-          iconColor: AppTextColors.problem,
+          iconColor: BlynkColors.problem,
           title: 'Location is blocked for Blynk',
           paragraphs: const [
             'Your phone will not ask again. You can allow location for Blynk in '
@@ -226,7 +226,7 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
         return _Message(
           key: const Key('picker-services-off'),
           icon: Icons.location_off_outlined,
-          iconColor: AppTextColors.problem,
+          iconColor: BlynkColors.problem,
           title: 'Location services are off',
           paragraphs: const [
             'Turn on location services on your phone to pin your address '
@@ -241,8 +241,8 @@ class _LiveLocationPickerScreenState extends State<LiveLocationPickerScreen> {
       case _Phase.error:
         return _Message(
           key: const Key('picker-error'),
-          icon: Icons.error_outline_rounded,
-          iconColor: AppTextColors.problem,
+          icon: Icons.error_outline,
+          iconColor: BlynkColors.problem,
           title: "Couldn't get your location",
           paragraphs: const [
             "Your phone didn't return a position in time. A clearer view of the sky or "
@@ -288,7 +288,7 @@ class _Message extends StatelessWidget {
   const _Message({
     super.key,
     required this.icon,
-    this.iconColor = AppColors.primaryGreenColor,
+    this.iconColor = BlynkColors.positive,
     required this.title,
     required this.paragraphs,
     required this.primaryLabel,
@@ -315,34 +315,35 @@ class _Message extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.xl),
+        padding: const EdgeInsets.all(BlynkSpace.s24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(icon, size: 44, color: iconColor),
-              const SizedBox(height: AppSpacing.lg),
+              // The same hero glyph size every state view in the app uses.
+              Icon(icon, size: BlynkIcons.lg, color: iconColor),
+              const SizedBox(height: BlynkSpace.s16),
               Semantics(
                 header: true,
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTextColors.primary),
+                  style: BlynkText.title,
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: BlynkSpace.s12),
               for (final paragraph in paragraphs)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  padding: const EdgeInsets.only(bottom: BlynkSpace.s8),
                   child: Text(
                     paragraph,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14, height: 1.4, color: AppTextColors.secondary),
+                    style: BlynkText.body.copyWith(color: BlynkColors.ink2),
                   ),
                 ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: BlynkSpace.s16),
               // minHeight, not a fixed height: at a large system font the label
               // wraps and the button grows instead of clipping it.
               ElevatedButton(
@@ -351,14 +352,14 @@ class _Message extends StatelessWidget {
                 child: Text(primaryLabel, textAlign: TextAlign.center),
               ),
               if (secondaryLabel != null) ...[
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: BlynkSpace.s8),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(minimumSize: const Size(64, _kButtonMinHeight)),
                   onPressed: onSecondary,
                   child: Text(secondaryLabel!, textAlign: TextAlign.center),
                 ),
               ],
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: BlynkSpace.s8),
               TextButton(onPressed: onManual, child: const Text('Enter manually')),
             ],
           ),
@@ -378,9 +379,10 @@ class _Progress extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(color: AppColors.primaryGreenColor),
-          const SizedBox(height: AppSpacing.lg),
-          Text(text, style: const TextStyle(fontSize: 14, color: AppTextColors.secondary)),
+          // Waiting is not a positive state: the shared ink spinner, not green.
+          const BlynkSpinner(size: BlynkIcons.lg, strokeWidth: 3),
+          const SizedBox(height: BlynkSpace.s16),
+          Text(text, style: BlynkText.body.copyWith(color: BlynkColors.ink2)),
         ],
       ),
     );
@@ -420,11 +422,11 @@ class _Ready extends StatelessWidget {
         ),
         DecoratedBox(
           decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: AppSurfaces.border)),
+            color: BlynkColors.paper,
+            border: Border(top: BorderSide(color: BlynkColors.line)),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.all(BlynkSpace.s16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -433,32 +435,27 @@ class _Ready extends StatelessWidget {
                   'Delivery location',
                   style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
                 ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: BlynkSpace.s4),
                 // The instruction is what the customer acts on, so it leads;
                 // the raw coordinate pair is only a secondary read-out.
                 Text(
                   mapUnavailable ? _kMapUnavailableHint : 'Move the map to put the pin on your exact delivery spot.',
                   key: const Key('picker-instruction'),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    height: 1.35,
-                    fontWeight: FontWeight.w700,
-                    color: AppTextColors.primary,
-                  ),
+                  style: BlynkText.rowLabel.copyWith(height: 1.35, color: BlynkColors.ink),
                 ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: BlynkSpace.s4),
                 Semantics(
                   liveRegion: true,
                   child: Text(
                     _coordinateLabel(selected),
                     key: const Key('picker-coordinates'),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTextColors.secondary),
+                    style: BlynkText.caption.copyWith(fontWeight: FontWeight.w500, color: BlynkColors.ink2),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: BlynkSpace.s12),
                 // Buttons are at least 50 dp tall and grow with a large font;
-                // the pair stacks when the text scale is large (AppButtonPair).
-                AppButtonPair(
+                // the pair stacks when the text scale is large (BlynkButtonPair).
+                BlynkButtonPair(
                   secondary: OutlinedButton(
                     style: OutlinedButton.styleFrom(minimumSize: const Size(64, _kButtonMinHeight)),
                     onPressed: onCancel,

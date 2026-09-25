@@ -84,10 +84,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onNextPressed() {
     if (_currentPage < _slides.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
+      // W9: was a raw 350 ms with no reduced-motion path, so the onboarding
+      // was the one place in the app that animated regardless of the setting.
+      //
+      // The explicit zero branch is load-bearing, not defensive:
+      // `ScrollPosition.animateTo` ASSERTS a non-zero duration, so handing it
+      // `BlynkMotion.resolve`'s zero throws. `product_details_screen.dart`
+      // guards its entrance the same way.
+      final duration = BlynkMotion.resolve(context, BlynkMotion.slow);
+      if (duration == Duration.zero) {
+        _pageController.jumpToPage(_currentPage + 1);
+      } else {
+        _pageController.nextPage(duration: duration, curve: BlynkMotion.easeOut);
+      }
     } else {
       _openAuthSheet(context);
     }
@@ -155,6 +164,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
+                    // 2026-09-24: `Flexible` (flex 1) plus a `Spacer` (flex 1)
+                    // split the leftover width evenly, which parked Skip in the
+                    // middle of the row instead of the corner. spaceBetween
+                    // pins the logo left and Skip hard right; the Flexible stays
+                    // so a squeezed header still scales the logo down rather
+                    // than overflowing.
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       // FittedBox keeps the logo from overflowing when the
                       // header is squeezed narrow.
@@ -165,7 +181,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: BlynkLogo(height: isDesktop ? 36 : 30),
                         ),
                       ),
-                      const Spacer(),
                       // Skip Action Button
                       TextButton(
                         onPressed: () {
@@ -191,11 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         child: Text(
                           'Skip',
-                          style: TextStyle(
-                            color: BlynkColors.ink,
-                            fontSize: isDesktop ? 18 : 16,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: isDesktop ? BlynkText.sectionHeader : BlynkText.heading,
                         ),
                       ),
                     ],
@@ -286,19 +297,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                               repeat: !MediaQuery.disableAnimationsOf(context),
                                             ),
                                           )
+                                        // A soft tinted well, rounded, with no
+                                        // border - the same treatment every
+                                        // image surface in the app wears.
                                         : Container(
                                             width: cardWidth,
                                             height: cardHeight,
-                                            decoration: BoxDecoration(
-                                              color: BlynkColors.paper,
-                                              borderRadius:
-                                                  BorderRadius.circular(32.0),
-                                              border: Border.all(
-                                                  color: BlynkColors.line),
+                                            decoration: const BoxDecoration(
+                                              color: BlynkWell.tint,
+                                              borderRadius: BlynkWell.radius,
                                             ),
                                             child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(32.0),
+                                              borderRadius: BlynkWell.radius,
                                               child: Image.asset(
                                                 slide.assetPath,
                                                 fit: BoxFit.contain,
@@ -341,30 +351,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             // 5. Dynamic Headline
                             AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
+                              duration: BlynkMotion.resolve(context, BlynkMotion.base),
                               child: Column(
                                 key: ValueKey<int>(_currentPage),
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     _slides[_currentPage].titleLine1,
-                                    style: TextStyle(
-                                      fontSize: isDesktop ? 36 : 32,
-                                      fontWeight: FontWeight.w800,
-                                      color: BlynkColors.ink,
-                                      letterSpacing: -0.5,
-                                      height: 1.15,
-                                    ),
+                                    style: BlynkText.heroTitle(isDesktop ? 36 : 32)
+                                        .copyWith(letterSpacing: -0.5, height: 1.15),
                                   ),
                                   Text(
                                     _slides[_currentPage].titleLine2,
-                                    style: TextStyle(
-                                      fontSize: isDesktop ? 36 : 32,
-                                      fontWeight: FontWeight.w800,
-                                      color: BlynkColors.ink,
-                                      letterSpacing: -0.5,
-                                      height: 1.15,
-                                    ),
+                                    style: BlynkText.heroTitle(isDesktop ? 36 : 32)
+                                        .copyWith(letterSpacing: -0.5, height: 1.15),
                                   ),
                                 ],
                               ),
@@ -374,16 +374,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             // 6. Dynamic Supporting Description
                             AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
+                              duration: BlynkMotion.resolve(context, BlynkMotion.base),
                               child: Text(
                                 _slides[_currentPage].description,
                                 key: ValueKey<int>(_currentPage),
-                                style: TextStyle(
-                                  fontSize: isDesktop ? 16.5 : 15.0,
-                                  fontWeight: FontWeight.w500,
-                                  color: BlynkColors.ink2,
-                                  height: 1.4,
-                                ),
+                                style: BlynkText.heroSubtitle(isDesktop ? 16.5 : 15.0)
+                                    .copyWith(color: BlynkColors.ink2, height: 1.4),
                               ),
                             ),
 

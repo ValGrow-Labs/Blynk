@@ -10,7 +10,10 @@ import 'package:ecom/Screens/user_orders_screen.dart';
 import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/Services/app_errors.dart';
+import 'package:ecom/Models/order_status_labels.dart';
 import 'package:ecom/UI/Widgets/Atoms/card_order_details.dart';
+import 'package:ecom/UI/Widgets/Atoms/image_well.dart';
+import 'package:ecom/UI/Widgets/Atoms/status_badge.dart';
 
 import 'fixtures/order_fixtures.dart';
 import 'fixtures/session_fakes.dart';
@@ -392,6 +395,108 @@ void main() {
       await tester.fling(find.byType(ListView), const Offset(0, -3000), 8000);
       await tester.pumpAndSettle();
       expect(provider.loadMoreOrdersCalls, greaterThan(0));
+    });
+
+    // --- 2026-09 premium redesign (W5) ------------------------------------
+    //
+    // An order is an identity block: a thumbnail, the number, the real status
+    // as the SHARED StatusBadge, what was in it, when, and what it cost.
+
+    testWidgets('the status is the shared StatusBadge, not a second status system', (tester) async {
+      await pumpList(tester, [_order(id: 'o1', number: 'BL-20260919-0001', status: 'OUT_FOR_DELIVERY')]);
+
+      final badge = find.byType(StatusBadge);
+      expect(badge, findsOneWidget);
+
+      final widget = tester.widget<StatusBadge>(badge);
+      // Both the word and the glyph come from the backend's own status.
+      expect(widget.label, orderStatusLabel(OrderStatus.outForDelivery));
+      expect(widget.icon, orderStatusIcon(OrderStatus.outForDelivery));
+      expect(widget.tone, badgeToneFor(orderStatusTone(OrderStatus.outForDelivery)));
+    });
+
+    test('every backend tone maps to a badge tone, and green stays a genuine positive', () {
+      expect(badgeToneFor(OrderTone.success), BadgeTone.positive);
+      expect(badgeToneFor(OrderTone.problem), BadgeTone.problem);
+      expect(badgeToneFor(OrderTone.active), BadgeTone.notice);
+      expect(badgeToneFor(OrderTone.neutral), BadgeTone.neutral);
+      // Only a delivered order is allowed the positive (green) tone.
+      for (final status in OrderStatus.values) {
+        final positive = badgeToneFor(orderStatusTone(status)) == BadgeTone.positive;
+        expect(positive, status == OrderStatus.delivered, reason: status.name);
+      }
+    });
+
+    testWidgets('each row carries the shared no-image well, never a broken-image glyph', (tester) async {
+      await pumpList(tester, [_order(id: 'o1', number: 'BL-20260919-0001', status: 'PLACED')]);
+
+      expect(find.byType(BlynkImageWell), findsOneWidget);
+      for (final glyph in [Icons.broken_image, Icons.image_not_supported, Icons.hide_image]) {
+        expect(find.byIcon(glyph), findsNothing, reason: '$glyph');
+      }
+      expect(find.textContaining('image'), findsNothing);
+    });
+
+    testWidgets('a row invents no delivery data: no ETA, distance, route or rider', (tester) async {
+      await pumpList(tester, [
+        _order(id: 'o1', number: 'BL-20260919-0001', status: 'OUT_FOR_DELIVERY'),
+        _order(id: 'o2', number: 'BL-20260919-0002', status: 'PLACED', scheduledFor: '2026-09-20T08:00:00.000Z'),
+      ]);
+
+      // Written as patterns rather than plain substrings so "Cash on
+      // delivery" and a product name are not false positives.
+      final fabricated = [
+        RegExp(r'\bETA\b'),
+        RegExp(r'estimat', caseSensitive: false),
+        RegExp(r'arriv', caseSensitive: false),
+        RegExp(r'rider', caseSensitive: false),
+        RegExp(r'\bkm\b', caseSensitive: false),
+        RegExp(r'distance', caseSensitive: false),
+        RegExp(r'\broute\b', caseSensitive: false),
+        RegExp(r'\baway\b', caseSensitive: false),
+      ];
+      for (final text in tester.widgetList<Text>(find.byType(Text))) {
+        final data = text.data ?? '';
+        for (final pattern in fabricated) {
+          expect(pattern.hasMatch(data), isFalse, reason: '"$data" matched ${pattern.pattern}');
+        }
+      }
+    });
+
+    testWidgets('no overflow at 1.3x and 2.0x text scale', (tester) async {
+      for (final scale in [1.3, 2.0]) {
+        tester.view.physicalSize = const Size(360, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final provider = _FixedOrders([
+          _order(id: 'o1', number: 'BL-20260919-0001', status: 'CUSTOMER_UNAVAILABLE', quantities: [1, 1, 1]),
+          _order(
+            id: 'o2',
+            number: 'BL-20260919-0002',
+            status: 'PLACED',
+            scheduledFor: '2026-09-20T08:00:00.000Z',
+          ),
+        ]);
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AuthProvider>.value(value: SignedInAuth()),
+              ChangeNotifierProvider<OrderProvider>.value(value: provider),
+            ],
+            child: MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: const OrdersScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'text scale $scale');
+      }
     });
 
     testWidgets('does not overflow at 360x800', (tester) async {

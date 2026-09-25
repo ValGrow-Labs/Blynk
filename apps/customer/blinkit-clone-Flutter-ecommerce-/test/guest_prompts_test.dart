@@ -218,9 +218,13 @@ void main() {
       return log;
     }
 
-    testWidgets('a guest\'s "Log in to set your delivery address" is a tap target for /login', (tester) async {
+    testWidgets("a guest's log-in prompt is a tap target for /login", (tester) async {
       final log = await pumpHomeBar(tester, AuthProvider());
 
+      // 2026-09-24: the address block got its own row with real vertical
+      // space (the reference composition), so the destination line carries
+      // the whole sentence again rather than a clipped 'Log in' link beside
+      // a caption. Same target, same route, same spoken label.
       final prompt = find.text('Log in to set your delivery address');
       expect(prompt, findsOneWidget);
       final target = find.ancestor(of: prompt, matching: find.byType(InkWell)).first;

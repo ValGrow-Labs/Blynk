@@ -8,7 +8,7 @@
 PRODUCT_NAME = ecom
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = dev.sarthakag.blinkit.ecom
+PRODUCT_BUNDLE_IDENTIFIER = lk.blynk.customer
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2023 dev.sarthakag.blinkit. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Blynk. All rights reserved.

@@ -35,6 +35,7 @@ import 'map_provider.dart';
 import 'map_tile_config.dart';
 import 'map_unavailable_card.dart';
 import 'order_tracking_map.dart' show mapAttributionText;
+import '../../../design/tokens.dart';
 
 /// Padding (logical px) around the two markers when the camera fits them.
 const double _fitPadding = 48;
@@ -454,9 +455,9 @@ class _PickerAttribution extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(4),
         ),
-        child: const Text(
+        child: Text(
           mapAttributionText,
-          style: TextStyle(color: AppTextColors.primary, fontSize: 10.5, fontWeight: FontWeight.w500),
+          style: BlynkText.caption.copyWith(color: AppTextColors.primary, fontWeight: FontWeight.w500),
         ),
       ),
     );

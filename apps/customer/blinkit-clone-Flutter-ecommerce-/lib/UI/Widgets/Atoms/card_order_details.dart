@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../../Models/order_model.dart';
-import '../../../app_design.dart';
+import '../../../design/tokens.dart';
 
 /// Section 5 of the order detail: where the order is going.
 ///
 /// Status, payment and the cancel action live in their own sections now -
 /// this card is only the delivery details the customer gave us, written as
 /// an address is written rather than as a grid of label/value pairs.
+///
+/// W8 re-skin: the last order-detail card on the legacy `AppSpacing` /
+/// `AppTextColors` / `AppSurfaces` shims now names the same tokens as the
+/// sections above it. Identical rendered values, identical layout, identical
+/// conditional sections.
 class OrderDetailsCard extends StatelessWidget {
   const OrderDetailsCard({super.key, required this.order});
 
@@ -21,69 +26,61 @@ class OrderDetailsCard extends StatelessWidget {
 
     return Container(
       key: const Key('order-delivery-to'),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(BlynkSpace.s16),
       // Reference detail, not an answer: no border and a quieter fill, so it
       // recedes behind the bill above it.
-      decoration: BoxDecoration(
-        color: AppSurfaces.subtle,
-        borderRadius: AppRadius.cardBorder,
+      decoration: const BoxDecoration(
+        color: BlynkColors.well,
+        borderRadius: BlynkWell.radius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Delivery to',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppTextColors.primary,
-            ),
+            style: BlynkText.heading.copyWith(fontWeight: FontWeight.w800, color: BlynkColors.ink),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: BlynkSpace.s12),
           if (order.deliveryRecipientName.isNotEmpty)
             Text(
               order.deliveryRecipientName,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTextColors.primary,
-              ),
+              style: BlynkText.rowLabel.copyWith(color: BlynkColors.ink),
             ),
           if (order.deliveryRecipientPhone.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
               order.deliveryRecipientPhone,
-              style: const TextStyle(fontSize: 14, color: AppTextColors.secondary),
+              style: BlynkText.body.copyWith(color: BlynkColors.ink2),
             ),
           ],
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: BlynkSpace.s8),
           if (order.deliveryAddressLine1.isNotEmpty)
             Text(
               order.deliveryAddressLine1,
-              style: const TextStyle(fontSize: 14, color: AppTextColors.primary),
+              style: BlynkText.body.copyWith(color: BlynkColors.ink),
             ),
           if (line2 != null && line2.trim().isNotEmpty)
             Text(
               line2,
-              style: const TextStyle(fontSize: 14, color: AppTextColors.primary),
+              style: BlynkText.body.copyWith(color: BlynkColors.ink),
             ),
           if (order.deliveryCity.isNotEmpty)
             Text(
               order.deliveryCity,
-              style: const TextStyle(fontSize: 14, color: AppTextColors.primary),
+              style: BlynkText.body.copyWith(color: BlynkColors.ink),
             ),
           if (instructions != null && instructions.trim().isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: BlynkSpace.s8),
             Text(
               'Instructions: $instructions',
-              style: const TextStyle(fontSize: 13, color: AppTextColors.secondary),
+              style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
             ),
           ],
           if (notes != null && notes.trim().isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.xs),
+            const SizedBox(height: BlynkSpace.s4),
             Text(
               'Your note: $notes',
-              style: const TextStyle(fontSize: 13, color: AppTextColors.secondary),
+              style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
             ),
           ],
         ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'primitives.dart';
 
+export 'components.dart';
 export 'motion.dart';
 export 'typography.dart';
 
@@ -10,6 +11,13 @@ export 'typography.dart';
 abstract final class BlynkColors {
   static const Color signal = BlynkPalette.signal;
   static const Color signalPressed = BlynkPalette.signalPressed;
+
+  /// The quietest step on the signal ramp: a selected-state wash, never a
+  /// fill that competes with a real yellow action.
+  static const Color signalWash = BlynkPalette.signalWash;
+
+  /// [signalWash] while pressed.
+  static const Color signalWashPressed = BlynkPalette.signalWashPressed;
   static const Color ink = BlynkPalette.ink;
   static const Color ink2 = BlynkPalette.ink2;
   static const Color ink3 = BlynkPalette.ink3;
@@ -29,6 +37,23 @@ abstract final class BlynkColors {
 
   static const Color onSignal = ink;
   static const Color onPositive = paper;
+
+  /// Label colour on an [ink] fill (snackbars, the cart bar, the count badge
+  /// and the promo pill that sits on a yellow or photographic surface).
+  static const Color onInk = paper;
+
+  /// The quieter second line on an [ink] fill — the cart bar's item count
+  /// beneath its total. 9.09:1 on [ink], so it is muted by contrast *ramp*,
+  /// not by dropping under the 4.5:1 floor.
+  static const Color onInkMuted = BlynkPalette.paperMuted;
+
+  /// Struck-through original price. Only ever used where the backend
+  /// actually returns an original price.
+  static const Color strike = BlynkPalette.strike;
+
+  // 2026-09-24: `categoryTints` was DELETED. See the note in primitives.dart —
+  // the category tile no longer paints decorative colour, so the deviation it
+  // represented is closed.
 }
 
 abstract final class BlynkSpace {
@@ -60,10 +85,22 @@ abstract final class BlynkRadius {
 
   /// Stepper and badge pills only.
   static const BorderRadius full = BorderRadius.all(Radius.circular(999));
+
+  // 2026-09 redesign radii. `lg` (20) already matches the spec's card/CTA
+  // radius, so it is reused rather than duplicated.
+  /// Product-image tiles and chips.
+  static const double chip = 16;
+  /// Small pills/badges and the product-card "+" button.
+  static const double pill = 10;
+
+  static const BorderRadius chipAll = BorderRadius.all(Radius.circular(chip));
+  static const BorderRadius pillAll = BorderRadius.all(Radius.circular(pill));
 }
 
-/// Flat everywhere except the floating cart bar ([raised]) and modal
-/// sheets/dialogs ([overlayDp] and [overlayShadow]).
+/// [none] for flat surfaces, [raised] for the floating cart bar, [overlayDp]/
+/// [overlayShadow] for modal sheets/dialogs, and [soft] (2026-09 redesign)
+/// for every card — `appCardDecoration()` and `ProductCard` both use it, so
+/// cards float on a soft shadow app-wide rather than being flat.
 abstract final class BlynkElevation {
   static const List<BoxShadow> none = <BoxShadow>[];
 
@@ -75,11 +112,29 @@ abstract final class BlynkElevation {
   /// elevation level plus a colour rather than a [BoxShadow] list.
   static const double overlayDp = 3;
   static const Color overlayShadow = BlynkPalette.shadowOverlay;
+
+  /// 2026-09 redesign: the one card-elevation token. Cards float on a soft,
+  /// wide, low-opacity shadow instead of a hairline border. Screens and
+  /// organisms must use this token, never an ad-hoc [BoxShadow] literal.
+  static const List<BoxShadow> soft = <BoxShadow>[
+    BoxShadow(color: BlynkPalette.shadowSoft, blurRadius: 18, offset: Offset(0, 6)),
+  ];
 }
+
+// There is deliberately no `BlynkGradients`. Plan §5: "no gradients as
+// decoration; the CTA is a flat `signal` fill". The previous pass added a
+// lime -> green CTA gradient and a signal -> signalSoft promo gradient; both
+// are gone, so the design layer now defines no gradient at all and
+// design_hygiene_ratchet_test.dart asserts that (a gradient anywhere outside
+// the ratcheted carousel file fails immediately).
 
 /// One family: Material outlined. Filled glyphs only for selected nav items
 /// and state icons (check, warning).
 abstract final class BlynkIcons {
+  /// 16 — the inline glyph that pairs with 12 px caption text (status pill,
+  /// inline field error, order status row). [sm] is 20 and reads as a second
+  /// heading next to a caption.
+  static const double xs = BlynkScale.iconXs;
   static const double sm = BlynkScale.iconSm;
   static const double md = BlynkScale.iconMd;
   static const double lg = BlynkScale.iconLg;
@@ -116,10 +171,28 @@ abstract final class BlynkIcons {
   static const IconData pending = Icons.schedule;
   static const IconData info = Icons.info_outline;
 
+  // No-image fallback glyphs (not part of the `distinct` set below). These
+  // are decoration inside the image well, never a label and never a control:
+  // the product's real `category_name` picks one, and anything unrecognised
+  // gets [product]. Nothing here is inferred about the product itself.
+  static const IconData product = Icons.shopping_basket_outlined;
+  static const IconData groupDairy = Icons.egg_outlined;
+  static const IconData groupBakery = Icons.bakery_dining_outlined;
+  static const IconData groupProduce = Icons.eco_outlined;
+  static const IconData groupDrinks = Icons.local_drink_outlined;
+  static const IconData groupSnacks = Icons.cookie_outlined;
+  static const IconData groupMeat = Icons.set_meal_outlined;
+  static const IconData groupPantry = Icons.rice_bowl_outlined;
+  static const IconData groupHousehold = Icons.cleaning_services_outlined;
+  static const IconData groupPersonalCare = Icons.spa_outlined;
+  static const IconData groupBaby = Icons.child_friendly_outlined;
+  static const IconData groupHealth = Icons.medical_services_outlined;
+
   // Account rows (not part of the `distinct` set below).
   static const IconData chevron = Icons.chevron_right;
   static const IconData share = Icons.share_outlined;
   static const IconData logout = Icons.logout;
+  static const IconData dental = Icons.medical_services_outlined;
 
   /// The icons that must read as different things from each other.
   static const List<IconData> distinct = <IconData>[

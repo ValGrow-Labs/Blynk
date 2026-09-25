@@ -31,7 +31,7 @@ export const imageUpload = multer({
 });
 
 /** Only these folders can be written to - the value is never free text. */
-const ALLOWED_FOLDERS = ['products', 'promotions'] as const;
+const ALLOWED_FOLDERS = ['products', 'promotions', 'categories'] as const;
 type MediaFolder = (typeof ALLOWED_FOLDERS)[number];
 
 export class MediaController {

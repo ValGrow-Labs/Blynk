@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../Models/order_format.dart';
 import '../../../Models/order_model.dart';
-import '../../../app_colors.dart';
-import '../../../app_design.dart';
+import '../../../app_design.dart' show appCardDecoration;
+import '../../../design/tokens.dart';
 
 /// The bill card: subtotal / delivery fee / total, then the one payment
 /// line (`paymentLine`). Pure - it renders exactly what `OrderModel` holds.
@@ -21,75 +21,54 @@ class OrderBillCard extends StatelessWidget {
     final isPaid = order.paymentStatus == 'PAID' && order.status != OrderStatus.cancelled;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      // The only card on the detail page with a shadow: money gets the lift,
-      // the reference detail below it recedes.
+      padding: const EdgeInsets.all(BlynkSpace.s16),
       decoration: appCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Bill',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTextColors.primary),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          const Text('Bill', style: BlynkText.sectionHeader),
+          const SizedBox(height: BlynkSpace.s16),
           _row('Subtotal', formatLkr(order.subtotalAmount)),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: BlynkSpace.s8),
           _row('Delivery fee', formatLkr(order.deliveryFee)),
-          const SizedBox(height: AppSpacing.md),
-          // The rule separates the itemisation from the answer.
-          Container(height: 1, color: AppSurfaces.border),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: BlynkSpace.s16),
+          // The one rule on the page: it separates the itemisation from the
+          // answer, which is a different job from decorating a section break.
+          const SizedBox(
+            height: 1,
+            child: DecoratedBox(decoration: BoxDecoration(color: BlynkColors.line)),
+          ),
+          const SizedBox(height: BlynkSpace.s16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              const Expanded(
-                child: Text(
-                  'Total',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppTextColors.primary,
-                  ),
-                ),
-              ),
-              Text(
-                formatLkr(order.totalAmount),
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTextColors.primary,
-                ),
-              ),
+              const Expanded(child: Text('Total', style: BlynkText.sectionHeader)),
+              Text(formatLkr(order.totalAmount), style: BlynkType.priceTotal),
             ],
           ),
           Container(
-            margin: const EdgeInsets.only(top: AppSpacing.md),
+            margin: const EdgeInsets.only(top: BlynkSpace.s16),
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
+              horizontal: BlynkSpace.s12,
+              vertical: BlynkSpace.s8,
             ),
             decoration: BoxDecoration(
-              borderRadius: AppRadius.fieldBorder,
-              color: isPaid
-                  ? AppColors.primaryGreenColor.withValues(alpha: 0.08)
-                  : AppSurfaces.subtle,
+              borderRadius: BlynkRadius.full,
+              color: isPaid ? BlynkColors.positiveTint : BlynkColors.well,
             ),
             child: Row(
               key: const Key('order-payment-line'),
               children: [
                 if (isPaid) ...[
-                  const Icon(Icons.check_circle, size: 16, color: AppColors.primaryGreenColor),
-                  const SizedBox(width: AppSpacing.xs),
+                  const Icon(BlynkIcons.check, size: BlynkIcons.xs, color: BlynkColors.positiveInk),
+                  const SizedBox(width: BlynkSpace.s4),
                 ],
                 Flexible(
                   child: Text(
                     line,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isPaid ? AppColors.primaryGreenColor : AppTextColors.primary,
+                    style: BlynkText.caption.copyWith(
+                      color: isPaid ? BlynkColors.positiveInk : BlynkColors.ink,
                     ),
                   ),
                 ),
@@ -102,11 +81,6 @@ class OrderBillCard extends StatelessWidget {
   }
 
   Widget _row(String label, String value) {
-    const style = TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w500,
-      color: AppTextColors.primary,
-    );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -114,10 +88,10 @@ class OrderBillCard extends StatelessWidget {
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
-            style: style.copyWith(color: AppTextColors.secondary),
+            style: BlynkText.body.copyWith(color: BlynkColors.ink2),
           ),
         ),
-        Text(value, style: style),
+        Text(value, style: BlynkText.body),
       ],
     );
   }

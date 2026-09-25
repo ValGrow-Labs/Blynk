@@ -71,6 +71,20 @@ export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 // ----------------------------------------------------------------------------
 // 3. PRODUCT ADMIN SCHEMAS
 // ----------------------------------------------------------------------------
+/**
+ * A crop anchor, as a percentage of the image's own width or height
+ * (migration 009). Product tiles draw the photo with `cover`, which crops
+ * whatever does not fit; this says which point must survive that crop.
+ *
+ * 50 is the centre, which is what `cover` anchored at before this existed -
+ * so an omitted value leaves the image rendering exactly as it does today.
+ */
+const focalPercent = z
+  .number()
+  .int('Focal point must be a whole percentage')
+  .min(0, 'Focal point must be between 0 and 100')
+  .max(100, 'Focal point must be between 0 and 100');
+
 export const createProductSchema = z.object({
   category_id: z.string().uuid('category_id must be a valid UUID'),
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(255),
@@ -87,6 +101,8 @@ export const createProductSchema = z.object({
   pack_size: z.string().trim().max(64).nullable().optional(),
   description: z.string().trim().max(2000).nullable().optional(),
   image_url: z.string().trim().url('Must be a valid URL').nullable().optional(),
+  image_focal_x: focalPercent.default(50).optional(),
+  image_focal_y: focalPercent.default(50).optional(),
   purchase_cost: z.number().min(0, 'Purchase cost cannot be negative'),
   custom_markup_percent: z
     .number()

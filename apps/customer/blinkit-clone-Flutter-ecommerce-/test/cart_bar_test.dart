@@ -170,11 +170,49 @@ void main() {
       }
     });
 
-    testWidgets('has one separator dot between the count and the total', (tester) async {
+    testWidgets('the total outranks the count: bigger, bolder, brighter, below it',
+        (tester) async {
       cart.add(_product('a', 540));
       await pumpBar(tester);
       await settle(tester);
-      expect(find.text('·'), findsOneWidget);
+
+      final countStyle = tester.widget<Text>(find.text('1 item')).style!;
+      final totalStyle = tester.widget<Text>(find.text('Rs. 540')).style!;
+
+      // Hierarchy is three ramps at once, not one. If any of them collapses
+      // the bar goes back to reading as one flat run of text, which is the
+      // defect this replaced a separator-dot assertion to catch.
+      expect(totalStyle.fontSize!, greaterThan(countStyle.fontSize!));
+      expect(totalStyle.fontWeight!.value, greaterThan(countStyle.fontWeight!.value));
+      expect(
+        contrastRatio(totalStyle.color!, BlynkColors.ink),
+        greaterThan(contrastRatio(countStyle.color!, BlynkColors.ink)),
+      );
+
+      // ...and the quiet line is still legible on its own: muted by ramp,
+      // never by dropping under the 4.5:1 floor.
+      expect(contrastRatio(countStyle.color!, BlynkColors.ink),
+          greaterThanOrEqualTo(4.5));
+
+      // Count above, total below.
+      expect(
+        tester.getTopLeft(find.text('1 item')).dy,
+        lessThan(tester.getTopLeft(find.text('Rs. 540')).dy),
+      );
+    });
+
+    testWidgets('the View cart pill carries a forward arrow, not a "→" character',
+        (tester) async {
+      cart.add(_product('a', 540));
+      await pumpBar(tester);
+      await settle(tester);
+
+      expect(
+        find.descendant(of: find.byType(BlynkButton), matching: find.byIcon(Icons.arrow_forward)),
+        findsOneWidget,
+      );
+      final texts = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? '');
+      expect(texts.any((t) => t.contains('→')), isFalse);
     });
   });
 

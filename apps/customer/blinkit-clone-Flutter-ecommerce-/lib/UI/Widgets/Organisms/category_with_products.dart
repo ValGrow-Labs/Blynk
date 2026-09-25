@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../Atoms/app_skeleton.dart';
-import '../Atoms/app_state_views.dart';
 import '../Atoms/blynk_button.dart';
-import '../Atoms/card_product.dart';
+import '../Atoms/section_header.dart';
+import 'product_rail.dart';
 import '../../../app_design.dart';
 import '../../../design/tokens.dart';
-import '../../../app_responsive.dart';
 import '../../../Services/Providers/product.provider.dart';
 
 /// A horizontal rail of real products for one category. Renders the same
@@ -41,13 +39,6 @@ class _CatgorywithProductsState extends State<CatgorywithProducts> {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = Responsive.of(context);
-    final cardWidth =
-        responsive.isDesktop ? 190.0 : (responsive.isTablet ? 175.0 : 152.0);
-    // The card lays out a square image plus its text and 48 dp control block
-    // (all text-scale aware); the rail viewport is exactly that tall.
-    final railHeight = ProductCard.heightFor(context, cardWidth);
-
     return Consumer<ProductProvider>(
       builder: (context, productProvider, _) {
         final products = productProvider.productsFor(widget.categorySlug);
@@ -61,7 +52,7 @@ class _CatgorywithProductsState extends State<CatgorywithProducts> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppSectionHeader(title: widget.title),
+              BlynkSectionHeader(title: widget.title),
               _RailRetryRow(
                 slug: widget.categorySlug,
                 title: widget.title,
@@ -82,7 +73,7 @@ class _CatgorywithProductsState extends State<CatgorywithProducts> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AppSectionHeader(
+            BlynkSectionHeader(
               title: widget.title,
               actionLabel: 'See all',
               onAction: () => Navigator.of(context).pushNamed(
@@ -90,26 +81,7 @@ class _CatgorywithProductsState extends State<CatgorywithProducts> {
                 arguments: widget.categorySlug,
               ),
             ),
-            SizedBox(
-              height: railHeight,
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                itemCount: isLoading ? 4 : products.length,
-                physics: const BouncingScrollPhysics(),
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.md),
-                    child: SizedBox(
-                      width: cardWidth,
-                      child: isLoading
-                          ? const ProductCardSkeleton()
-                          : ProductCard(product: products[index]),
-                    ),
-                  );
-                },
-              ),
-            ),
+            ProductRail(products: products, loading: isLoading),
           ],
         );
       },

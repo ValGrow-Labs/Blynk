@@ -36,10 +36,13 @@ const EXPECTED: Record<ActionName, { from: OrderStatus[]; to: OrderStatus | null
   PACK: { from: ['PLACED', 'ITEM_UNAVAILABLE'], to: 'PACKED', roles: ['ADMIN', 'PACKING_STAFF'] },
   ASSIGN_RIDER: { from: ['PACKED'], to: null, roles: ['ADMIN'] },
   HAND_TO_RIDER: { from: ['PACKED'], to: 'OUT_FOR_DELIVERY', roles: ['ADMIN', 'PACKING_STAFF'] },
-  RIDER_PICKUP: { from: ['PACKED'], to: 'OUT_FOR_DELIVERY', roles: ['RIDER'] },
-  RIDER_ARRIVE: { from: ['OUT_FOR_DELIVERY'], to: null, roles: ['RIDER'] },
-  RIDER_FAIL: { from: ['OUT_FOR_DELIVERY'], to: 'FAILED', roles: ['RIDER'] },
-  RIDER_COLLECT_COD: { from: ['OUT_FOR_DELIVERY'], to: 'DELIVERED', roles: ['RIDER'] },
+  // The Operations app's operator is an ADMIN linked to a riders row and runs
+  // the same four rider steps (operations plan §2, §7). The `riderDelivery`
+  // lock still scopes every one of them to the caller's own rider profile.
+  RIDER_PICKUP: { from: ['PACKED'], to: 'OUT_FOR_DELIVERY', roles: ['RIDER', 'ADMIN'] },
+  RIDER_ARRIVE: { from: ['OUT_FOR_DELIVERY'], to: null, roles: ['RIDER', 'ADMIN'] },
+  RIDER_FAIL: { from: ['OUT_FOR_DELIVERY'], to: 'FAILED', roles: ['RIDER', 'ADMIN'] },
+  RIDER_COLLECT_COD: { from: ['OUT_FOR_DELIVERY'], to: 'DELIVERED', roles: ['RIDER', 'ADMIN'] },
   ADMIN_MARK_DELIVERED: { from: ['OUT_FOR_DELIVERY'], to: 'DELIVERED', roles: ['ADMIN'] },
   ADMIN_MARK_FAILED: { from: ['OUT_FOR_DELIVERY'], to: 'FAILED', roles: ['ADMIN'] },
   ADMIN_MARK_CUSTOMER_UNAVAILABLE: { from: ['OUT_FOR_DELIVERY'], to: 'CUSTOMER_UNAVAILABLE', roles: ['ADMIN'] },

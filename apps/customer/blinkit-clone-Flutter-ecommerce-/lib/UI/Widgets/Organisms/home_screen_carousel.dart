@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
@@ -5,18 +8,26 @@ import 'package:provider/provider.dart';
 
 import '../../../Models/promotion_model.dart';
 import '../../../Services/Providers/product.provider.dart';
-import '../../../app_design.dart';
 import '../../../app_responsive.dart';
-import '../../../design/tokens.dart' show BlynkColors, BlynkMotion;
+import '../../../design/contrast.dart';
+import '../../../design/tokens.dart';
 import '../Atoms/blynk_button.dart';
+
+/// The hero's rounded card, and the focus ring drawn around it. One radius,
+/// from the token layer, so the ring can never drift off the card.
+const BorderRadius _slideRadius = BlynkRadius.lgAll;
 
 /// Home's promotional hero.
 ///
-/// Composition is a poster: the background layer (solid, gradient or image -
-/// chosen in Blynk Ops), then quiet depth, then the headline block, then the
-/// foreground product visual overlapping it. Every value comes from
+/// Composition is a poster: the operator's background (a flat colour or a
+/// scrimmed photograph, chosen in Blynk Ops), then the headline block, then
+/// the foreground product visual over it. Every value comes from
 /// GET /promotions; this widget invents no campaign content and picks no
 /// colours of its own. With nothing active it renders nothing at all.
+///
+/// **There is no fallback hero.** If the backend returns no active promotion
+/// - which is the case on a catalogue with nothing scheduled - Home simply
+/// has no hero. Nothing here is hardcoded, placeheld or copied from a mock.
 class HomeScreenCarousel extends StatefulWidget {
   const HomeScreenCarousel({super.key});
 
@@ -54,6 +65,9 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
   }
 
   void _step(int delta) {
+    // Arrow keys and the screen-reader adjust gesture are both the shopper
+    // steering. Once they do, the carousel stops driving itself.
+    _stopAutoAdvance();
     if (!_canStep(delta) || !_pageController.hasClients) return;
     final target = _currentPage + delta;
     final duration = BlynkMotion.resolve(context, BlynkMotion.base);
@@ -68,6 +82,45 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
     }
   }
 
+  /// How long each promotion is shown before the carousel moves on.
+  ///
+  /// Deliberately unhurried: a shopper must be able to read the slide and
+  /// decide to tap it. A fast carousel is one that moves the target out from
+  /// under the finger reaching for it.
+  static const Duration _autoAdvanceEvery = Duration(seconds: 6);
+
+  Timer? _autoAdvance;
+
+  /// True once the shopper has touched, dragged, focused or keyed the
+  /// carousel. Auto-advance then stops **for good** rather than resuming a few
+  /// seconds later and yanking the slide away again — WCAG 2.2.2 wants moving
+  /// content pausable, and "pauses, then restarts itself" is not pausable.
+  bool _userTookOver = false;
+
+  void _startAutoAdvance() {
+    _autoAdvance?.cancel();
+    if (_userTookOver) return;
+    _autoAdvance = Timer.periodic(_autoAdvanceEvery, (_) {
+      if (!mounted) return;
+      final count = context.read<ProductProvider>().promotions.length;
+      // One slide has nowhere to go; a missing controller means no viewport.
+      if (count < 2 || !_pageController.hasClients) return;
+      _pageController.animateToPage(
+        (_currentPage + 1) % count,
+        duration: BlynkMotion.base,
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  /// Called the moment the shopper interacts. Idempotent.
+  void _stopAutoAdvance() {
+    if (_userTookOver) return;
+    _userTookOver = true;
+    _autoAdvance?.cancel();
+    _autoAdvance = null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -75,15 +128,23 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
     // The ring marks the carousel itself; a focused slide button has its own.
     _focusNode.addListener(() {
       if (mounted) setState(() {});
+      // Keyboard focus is a shopper taking over: stop moving under them.
+      if (_focusNode.hasFocus) _stopAutoAdvance();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ProductProvider>().loadPromotions();
+      // Honour the OS "reduce motion" setting: a carousel that advances on its
+      // own is exactly the motion that setting exists to switch off. Read here
+      // rather than in initState because it needs a MediaQuery.
+      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+      _startAutoAdvance();
     });
   }
 
   @override
   void dispose() {
+    _autoAdvance?.cancel();
     _pageController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -108,8 +169,13 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
     final multiple = promotions.length > 1;
 
     Widget pager = SizedBox(
-      height: metrics.height,
-      child: ScrollConfiguration(
+      height: metrics.heightFor(context),
+      // A touch anywhere on the pager is the shopper taking over. Listener
+      // (not GestureDetector) so it sees the press without competing with the
+      // PageView's drag or the slide's own tap.
+      child: Listener(
+        onPointerDown: (_) => _stopAutoAdvance(),
+        child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(
           dragDevices: _dragDevices,
           scrollbars: false,
@@ -122,7 +188,7 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
             return Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: metrics.sideMargin,
-                vertical: AppSpacing.xs,
+                vertical: BlynkSpace.s4,
               ),
               child: _PromoSlide(
                 promotion: promotions[index],
@@ -131,6 +197,7 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
               ),
             );
           },
+        ),
         ),
       ),
     );
@@ -170,7 +237,7 @@ class _HomeScreenCarouselState extends State<HomeScreenCarousel> {
         children: [
           pager,
           if (multiple) ...[
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: BlynkSpace.s12),
             _SlideIndicator(
               key: const ValueKey('promo-pager'),
               count: promotions.length,
@@ -215,24 +282,22 @@ class _FocusRing extends StatelessWidget {
 
   final double margin;
 
-  static const double _radius = AppRadius.sheet + 4;
-
   @override
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('carousel-focus-ring'),
-      padding: EdgeInsets.symmetric(horizontal: margin, vertical: AppSpacing.xs),
+      padding: EdgeInsets.symmetric(horizontal: margin, vertical: BlynkSpace.s4),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(_radius),
-          border: Border.all(color: BlynkColors.ink, width: 2),
+          borderRadius: _slideRadius,
+          border: Border.all(color: BlynkColors.ink, width: BlynkCta.focusRingWidth),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(2),
+          padding: const EdgeInsets.all(BlynkCta.focusRingWidth),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(_radius - 2),
-              border: Border.all(color: BlynkColors.paper, width: 2),
+              borderRadius: BorderRadius.circular(BlynkRadius.lg - BlynkCta.focusRingWidth),
+              border: Border.all(color: BlynkColors.paper, width: BlynkCta.focusRingWidth),
             ),
           ),
         ),
@@ -266,14 +331,59 @@ class _HeroMetrics {
   final int contentFlex;
   final int visualFlex;
 
+  /// The card's height at the current text scale.
+  ///
+  /// [height] is the designed height of the band and is what a 1.0x screen
+  /// gets. A [PageView] page cannot size itself to its child, so at 1.3x and
+  /// 2.0x the headline and the CTA grow inside a box that used to stay put -
+  /// which overflowed the slide's [Column] by a few pixels on a phone. This
+  /// measures what the slide's content really needs (the same blocks
+  /// [_SlideContent] lays out, at the live [TextScaler]) and takes whichever
+  /// is larger, so the designed proportions are untouched at 1.0x and the
+  /// card grows rather than clipping above it.
+  double heightFor(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final titleStyle = BlynkText.heroTitle(titleSize);
+    final title =
+        scaler.scale(titleStyle.fontSize!) * titleStyle.height! * titleMaxLines;
+
+    var subtitle = 0.0;
+    if (showSubtitle) {
+      final style = BlynkText.heroSubtitle(subtitleSize);
+      subtitle =
+          titleSize * 0.3 + scaler.scale(style.fontSize!) * style.height! * 2;
+    }
+
+    // The CTA is optional per slide, but the carousel is one box: size for
+    // the slide that has one.
+    const label = BlynkText.label;
+    final cta = titleSize * 0.55 +
+        math.max(
+          BlynkCta.promoMinHeight,
+          scaler.scale(label.fontSize!) * label.height! +
+              BlynkCta.promoPadding.vertical,
+        );
+
+    // The vertical padding [_SlideContent] sits in, plus the PageView page's
+    // own vertical inset, plus one step of slack so a font whose metrics are
+    // a shade taller than its declared line height cannot re-open this.
+    final content = padding * 0.72 * 2 +
+        BlynkSpace.s4 * 2 +
+        BlynkSpace.s8 +
+        title +
+        subtitle +
+        cta;
+    return math.max(height, content);
+  }
+
   factory _HeroMetrics.of(Responsive responsive) {
     final width = responsive.width;
 
     if (width < 360) {
       return const _HeroMetrics(
         height: 190,
-        sideMargin: AppSpacing.md,
-        padding: AppSpacing.md + 2,
+        sideMargin: BlynkSpace.s12,
+        padding: BlynkSpace.s12 + 2,
         titleSize: 16,
         subtitleSize: 12,
         showSubtitle: false,
@@ -285,8 +395,8 @@ class _HeroMetrics {
     if (width < 420) {
       return const _HeroMetrics(
         height: 202,
-        sideMargin: AppSpacing.lg,
-        padding: AppSpacing.lg,
+        sideMargin: BlynkSpace.s16,
+        padding: BlynkSpace.s16,
         titleSize: 19,
         subtitleSize: 12,
         showSubtitle: false,
@@ -298,8 +408,8 @@ class _HeroMetrics {
     if (width < AppBreakpoints.tablet) {
       return const _HeroMetrics(
         height: 214,
-        sideMargin: AppSpacing.lg,
-        padding: AppSpacing.xl,
+        sideMargin: BlynkSpace.s16,
+        padding: BlynkSpace.s16 + BlynkSpace.s4,
         titleSize: 22,
         subtitleSize: 12,
         showSubtitle: true,
@@ -311,8 +421,8 @@ class _HeroMetrics {
     if (width < 900) {
       return const _HeroMetrics(
         height: 238,
-        sideMargin: AppSpacing.xl,
-        padding: AppSpacing.xxl,
+        sideMargin: BlynkSpace.s16 + BlynkSpace.s4,
+        padding: BlynkSpace.s24,
         titleSize: 26,
         subtitleSize: 13,
         showSubtitle: true,
@@ -324,8 +434,8 @@ class _HeroMetrics {
     if (width < 1440) {
       return const _HeroMetrics(
         height: 268,
-        sideMargin: AppSpacing.xxl,
-        padding: AppSpacing.xxxl,
+        sideMargin: BlynkSpace.s24,
+        padding: BlynkSpace.s32,
         titleSize: 31,
         subtitleSize: 14,
         showSubtitle: true,
@@ -336,8 +446,8 @@ class _HeroMetrics {
     }
     return const _HeroMetrics(
       height: 300,
-      sideMargin: AppSpacing.xxl,
-      padding: 44,
+      sideMargin: BlynkSpace.s24,
+      padding: BlynkSpace.s48 - BlynkSpace.s4,
       titleSize: 35,
       subtitleSize: 15,
       showSubtitle: true,
@@ -376,23 +486,40 @@ class _PromoSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Text colour follows the background's luminance so an operator can pick
-    // a dark background without the headline disappearing.
-    final onDark = _isDarkBackground(promotion);
+    // Text colour is measured against the operator's background, so a dark
+    // background never swallows the headline - and a light one never bleaches
+    // it. See [_onDark].
+    final onDark = _onDark(promotion);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-        ],
+    // ARTWORK: a finished banner, uploaded as-is. The card is the operator's
+    // file - no scrim, no headline, no subtitle - so [_SlideContent] is
+    // replaced by a CTA-only column. Everything else (the radius, the shadow,
+    // the Row's flexes, the foreground slot, the card's measured height) is
+    // the same as every other type, so the carousel does not resize or
+    // reshape as the reader swipes between slide types.
+    final content = promotion.hasArtwork
+        ? _ArtworkContent(
+            promotion: promotion,
+            isActive: isActive,
+            onCta: () => _onCtaPressed(context),
+          )
+        : _SlideContent(
+            promotion: promotion,
+            metrics: metrics,
+            isActive: isActive,
+            onDark: onDark,
+            onCta: () => _onCtaPressed(context),
+          );
+
+    final Widget card = DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: _slideRadius,
+        // The one card-elevation token, exactly as every other card in the
+        // app; the hero does not invent a shadow of its own.
+        boxShadow: BlynkElevation.soft,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
+        borderRadius: _slideRadius,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -405,16 +532,10 @@ class _PromoSlide extends StatelessWidget {
                     padding: EdgeInsets.fromLTRB(
                       metrics.padding,
                       metrics.padding * 0.72,
-                      AppSpacing.sm,
+                      BlynkSpace.s8,
                       metrics.padding * 0.72,
                     ),
-                    child: _SlideContent(
-                      promotion: promotion,
-                      metrics: metrics,
-                      isActive: isActive,
-                      onDark: onDark,
-                      onCta: () => _onCtaPressed(context),
-                    ),
+                    child: content,
                   ),
                 ),
                 Expanded(
@@ -430,94 +551,177 @@ class _PromoSlide extends StatelessWidget {
         ),
       ),
     );
+
+    if (!promotion.hasArtwork) return card;
+
+    // Accessibility is the whole risk of this slide type. The campaign's
+    // words are baked into a picture, so without a label a screen-reader user
+    // gets silence where every other slide reads out its headline. The
+    // promotion's `title` is required by the backend precisely so it can be
+    // spoken here.
+    if (promotion.isTappableCard) {
+      // No button label, but somewhere to go: the operator drew the call to
+      // action into the artwork, so the card itself is the target. One node -
+      // labelled, announced as a button, with a tap action - rather than a
+      // labelled container wrapping an unlabelled one.
+      return Semantics(
+        container: true,
+        button: true,
+        label: promotion.title,
+        onTap: () => _onCtaPressed(context),
+        excludeSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _onCtaPressed(context),
+          child: card,
+        ),
+      );
+    }
+
+    // Either purely decorative or carrying its own CTA button; the button
+    // keeps its own node and stays reachable by keyboard and screen reader.
+    return Semantics(
+      container: true,
+      image: true,
+      label: promotion.title,
+      child: card,
+    );
   }
 }
 
-/// True when the admin-chosen background is dark enough that light text
-/// reads better. Image backgrounds carry a scrim, so they count as dark.
-bool _isDarkBackground(PromotionModel promotion) {
+/// Whether this slide's words should be [BlynkColors.paper] rather than
+/// [BlynkColors.ink].
+///
+/// Measured rather than guessed. The operator picks the background colour in
+/// Blynk Ops, so the app cannot know it in advance; it compares its only two
+/// text colours against that colour and takes whichever actually reads. A
+/// photographic background is covered by [_Background.scrimOpacity] ink, so it
+/// is always the light one.
+///
+/// An ARTWORK slide draws no words of its own, so this never decides anything
+/// for one.
+bool _onDark(PromotionModel promotion) {
   if (promotion.hasBackgroundImage) return true;
   final base = promotion.backgroundStart;
   if (base == null) return false;
-  return base.computeLuminance() < 0.45;
+  return contrastRatio(BlynkColors.paper, base) >
+      contrastRatio(BlynkColors.ink, base);
 }
 
-/// The admin's background: a photograph under a scrim, a two-stop gradient,
-/// or a solid wash. No decorative shapes are added on top of an image - the
-/// operator's visual is the design.
+/// The operator's background: a finished banner full-bleed, a photograph
+/// under a flat ink scrim, or their chosen colour, flat. No decorative shapes
+/// are added on top of an image - the operator's visual is the design.
+///
+/// **No gradient is rendered here** (plan §5: "no gradients as decoration").
+/// A `GRADIENT` promotion paints its `background_color`; its
+/// `background_color_end` is not drawn. That is a deliberate app-wide visual
+/// rule, not a data loss: the colour on screen is still exactly the one the
+/// operator stored, and nothing is invented to replace the second stop.
 class _Background extends StatelessWidget {
   const _Background({required this.promotion});
 
   final PromotionModel promotion;
 
+  /// The flat ink wash over an operator's photograph. Measured: `paper` on
+  /// ink at this alpha clears 5.3:1 even over a pure-white photograph, which
+  /// is the worst case, so the headline reads whatever image is uploaded.
+  ///
+  /// W8: the number now lives in the token layer as [BlynkPromo.scrimOpacity]
+  /// (W2 asked for it). `BlynkColors.scrim` still cannot serve — it measures
+  /// 3.95:1 for the same pairing.
+  static const double scrimOpacity = BlynkPromo.scrimOpacity;
+
   @override
   Widget build(BuildContext context) {
+    // ARTWORK: the operator's finished banner, exactly as uploaded. No scrim
+    // - not even a light one - because nothing is drawn over it that would
+    // need to stay legible, and a wash would dim artwork that is already
+    // composed. Identical fit and failure handling to IMAGE otherwise.
+    if (promotion.hasArtwork) {
+      return _networkFill(promotion.backgroundImageUrl!, promotion.backgroundAlignment);
+    }
+
     if (promotion.hasBackgroundImage) {
       return Stack(
         fit: StackFit.expand,
         children: [
-          Image.network(
-            promotion.backgroundImageUrl!,
-            fit: BoxFit.cover,
-            // A failed background falls back to the neutral surface rather
-            // than leaving a broken-image box behind the words.
-            errorBuilder: (_, __, ___) =>
-                const ColoredBox(color: AppSurfaces.subtle),
-            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-              if (wasSynchronouslyLoaded) return child;
-              return AnimatedOpacity(
-                opacity: frame == null ? 0 : 1,
-                duration: const Duration(milliseconds: 240),
-                child: child,
-              );
-            },
-          ),
-          // Scrim: keeps the headline legible over any photograph.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Color(0xE6101319), Color(0x66101319)],
-                stops: [0.05, 0.85],
-              ),
-            ),
-          ),
+          _networkFill(promotion.backgroundImageUrl!, promotion.backgroundAlignment),
+          // One flat scrim, never a gradient: it keeps the headline legible
+          // over any photograph an operator uploads.
+          ColoredBox(color: BlynkColors.ink.withValues(alpha: scrimOpacity)),
         ],
       );
     }
 
-    if (promotion.hasGradient) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [promotion.backgroundStart!, promotion.backgroundEnd!],
-          ),
-        ),
-      );
-    }
-
-    // SOLID, or anything unparseable: the app's neutral surface, never an
+    // SOLID, GRADIENT or anything unparseable - including a background_type
+    // this build has never heard of: the operator's own colour, flat - and
+    // the app's neutral surface when they stored nothing usable, never an
     // invented brand colour.
-    final solid = promotion.backgroundStart ?? AppSurfaces.subtle;
-    return Stack(
-      fit: StackFit.expand,
+    return ColoredBox(color: promotion.backgroundStart ?? BlynkColors.well);
+  }
+
+  /// The card-filling network image, shared by IMAGE and ARTWORK so the two
+  /// cannot drift apart in fit, fade-in or failure behaviour - including, now,
+  /// in where they crop from.
+  ///
+  /// 2026-09-24 (migration 009): `cover` fills the card and crops the rest,
+  /// and it used to crop from the centre - so a finished banner whose wording
+  /// runs along the top lost the wording. [alignment] is the operator's focal
+  /// point, chosen in Blynk Ops. Its 50/50 default IS [Alignment.center], so
+  /// every card stored before this renders exactly as it did.
+  Widget _networkFill(String url, Alignment alignment) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      alignment: alignment,
+      // A failed background falls back to the neutral surface rather than
+      // leaving a broken-image box behind the words.
+      errorBuilder: (_, __, ___) => const ColoredBox(color: BlynkColors.well),
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) return child;
+        return AnimatedOpacity(
+          opacity: frame == null ? 0 : 1,
+          duration: BlynkMotion.resolve(context, BlynkMotion.slow),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+/// What an ARTWORK slide puts over the operator's banner: nothing, or just
+/// their button.
+///
+/// No headline and no subtitle - that is the entire point of the type. The
+/// CTA keeps the same slot, the same pill and the same 48 dp target as every
+/// other slide, so an artwork banner that wants a button gets the app's real
+/// one rather than a painted-on rectangle.
+class _ArtworkContent extends StatelessWidget {
+  const _ArtworkContent({
+    required this.promotion,
+    required this.isActive,
+    required this.onCta,
+  });
+
+  final PromotionModel promotion;
+  final bool isActive;
+  final VoidCallback onCta;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!promotion.hasAction) return const SizedBox.shrink();
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        ColoredBox(color: solid),
-        // One quiet edge wash for depth, derived from the chosen colour
-        // itself rather than an arbitrary decorative gradient.
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.18),
-                Colors.white.withValues(alpha: 0),
-              ],
-            ),
+        _Entrance(
+          isActive: isActive,
+          delayMs: 130,
+          child: BlynkButton.promo(
+            label: promotion.ctaLabel!,
+            onPressed: onCta,
           ),
         ),
       ],
@@ -543,9 +747,10 @@ class _SlideContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = promotion.subtitle;
-    final titleColor = onDark ? Colors.white : AppTextColors.primary;
-    final subtitleColor =
-        onDark ? Colors.white.withValues(alpha: 0.82) : AppTextColors.secondary;
+    // One colour for both lines. Hierarchy comes from size and weight, not
+    // from a translucent second tone: the operator's background is arbitrary,
+    // and a washed-out subtitle is the first thing to fall under 4.5:1 on it.
+    final contentColor = onDark ? BlynkColors.paper : BlynkColors.ink;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -559,13 +764,10 @@ class _SlideContent extends StatelessWidget {
             promotion.title,
             maxLines: metrics.titleMaxLines,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: metrics.titleSize,
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-              letterSpacing: -0.6,
-              color: titleColor,
-            ),
+            // The size ladder is this widget's responsive concern; the
+            // family, weight, tracking and the 12 px floor come from the type
+            // layer, so no `fontSize` literal lives outside it.
+            style: BlynkText.heroTitle(metrics.titleSize).copyWith(color: contentColor),
           ),
         ),
         if (subtitle != null && metrics.showSubtitle) ...[
@@ -577,11 +779,7 @@ class _SlideContent extends StatelessWidget {
               subtitle,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: metrics.subtitleSize,
-                height: 1.35,
-                color: subtitleColor,
-              ),
+              style: BlynkText.heroSubtitle(metrics.subtitleSize).copyWith(color: contentColor),
             ),
           ),
         ],
@@ -591,9 +789,18 @@ class _SlideContent extends StatelessWidget {
             isActive: isActive,
             delayMs: 130,
             // 44 dp visual, 48 dp target, one type size at every width.
-            child: BlynkButton.primary(
+            //
+            // W9: this is `BlynkButton.promo`, the solid-ink pill that exists
+            // precisely for this slot, not `BlynkButton.primary`. The slide's
+            // background is whatever colour the operator stored in Blynk Ops,
+            // and the captured backend fixture stores `#FFE141` — the same
+            // yellow `primary` fills with, so the action was painting at
+            // 1.00:1 on its own background and vanishing. The promo surface is
+            // already Home's yellow moment; its action must not be a second
+            // one. `home_carousel_test.dart` measures the pill against every
+            // slide colour the API can return.
+            child: BlynkButton.promo(
               label: promotion.ctaLabel!,
-              compact: true,
               onPressed: onCta,
             ),
           ),
@@ -624,7 +831,7 @@ class _Foreground extends StatelessWidget {
       offsetX: 0.14,
       scaleFrom: 0.9,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, AppSpacing.sm, 0, AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(vertical: BlynkSpace.s8),
         child: Image.network(
           imageUrl,
           fit: BoxFit.contain,
@@ -634,7 +841,7 @@ class _Foreground extends StatelessWidget {
             if (wasSynchronouslyLoaded) return child;
             return AnimatedOpacity(
               opacity: frame == null ? 0 : 1,
-              duration: const Duration(milliseconds: 240),
+              duration: BlynkMotion.resolve(context, BlynkMotion.slow),
               child: child,
             );
           },
@@ -684,9 +891,9 @@ class _Entrance extends StatelessWidget {
   }
 }
 
-/// A connected track of pills; the active one is Blynk Green, which holds
-/// contrast against the white feed. It is a status readout, not a control:
-/// one labelled node, no tappable dots (swipe moves between promotions).
+/// A connected track of pills; the active one is `ink`, which holds contrast
+/// against the white feed. It is a status readout, not a control: one
+/// labelled node, no tappable dots (swipe moves between promotions).
 class _SlideIndicator extends StatelessWidget {
   const _SlideIndicator({
     super.key,
@@ -703,12 +910,12 @@ class _SlideIndicator extends StatelessWidget {
     return ExcludeSemantics(
       child: Container(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
+          horizontal: BlynkSpace.s8,
           vertical: 5,
         ),
-        decoration: BoxDecoration(
-          color: AppSurfaces.subtle,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
+        decoration: const BoxDecoration(
+          color: BlynkColors.well,
+          borderRadius: BlynkRadius.full,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -717,13 +924,13 @@ class _SlideIndicator extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: AnimatedContainer(
-                duration: BlynkMotion.resolve(context, const Duration(milliseconds: 280)),
-                curve: Curves.easeOutCubic,
+                duration: BlynkMotion.resolve(context, BlynkMotion.slow),
+                curve: BlynkMotion.easeOut,
                 width: isActive ? 22 : 7,
                 height: 7,
                 decoration: BoxDecoration(
                   color: isActive ? BlynkColors.ink : BlynkColors.lineStrong,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                  borderRadius: BlynkRadius.full,
                 ),
               ),
             );

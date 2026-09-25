@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:ecom/app_design.dart';
+import '../../../design/tokens.dart';
 
 class CancellationPolicyCard extends StatelessWidget {
   const CancellationPolicyCard({super.key});
@@ -12,21 +13,17 @@ class CancellationPolicyCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
       decoration: BoxDecoration(
           color: Colors.white, borderRadius: BorderRadius.circular(10.0)),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Cancellation Policy',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            style: BlynkText.heading,
           ),
           Text(
             // Matches the backend rule: cancellable while PLACED or PACKED.
             'You can cancel your order until it is out for delivery.',
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 12,
-              color: AppTextColors.secondary,
-            ),
+            style: BlynkText.caption.copyWith(fontWeight: FontWeight.w500, color: AppTextColors.secondary),
           ),
         ],
       ),

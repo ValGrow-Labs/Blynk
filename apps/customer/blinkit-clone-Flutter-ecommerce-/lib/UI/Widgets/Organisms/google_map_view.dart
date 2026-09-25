@@ -197,6 +197,7 @@ class GoogleTrackingMapView extends TrackingMapView {
     required this.initialCenter,
     required this.initialZoom,
     required this.markers,
+    this.semanticsLabel,
   }) : super.constructor();
 
   @override
@@ -206,16 +207,34 @@ class GoogleTrackingMapView extends TrackingMapView {
   @override
   final Set<MapMarkerSpec> markers;
 
+  /// Screen-reader label override for the map region (task-F1 review-fix
+  /// round 1). Defaults to [_trackingSemanticsLabel] - every existing
+  /// delivery-tracking call site (`OrderTrackingMap`) never passes this, so
+  /// its announced text is completely unchanged. A caller with a different
+  /// use for this widget (e.g. `ClinicLocationMap`, a static clinic-address
+  /// pin - never a rider, never a delivery) supplies its own text instead.
+  final String? semanticsLabel;
+
   @override
-  Widget build(BuildContext context) =>
-      _TrackingBody(initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
+  Widget build(BuildContext context) => _TrackingBody(
+        initialCenter: initialCenter,
+        initialZoom: initialZoom,
+        markers: markers,
+        semanticsLabel: semanticsLabel,
+      );
 }
 
 class _TrackingBody extends StatefulWidget {
-  const _TrackingBody({required this.initialCenter, required this.initialZoom, required this.markers});
+  const _TrackingBody({
+    required this.initialCenter,
+    required this.initialZoom,
+    required this.markers,
+    this.semanticsLabel,
+  });
   final GeoPoint initialCenter;
   final double initialZoom;
   final Set<MapMarkerSpec> markers;
+  final String? semanticsLabel;
 
   @override
   State<_TrackingBody> createState() => _TrackingBodyState();
@@ -378,7 +397,7 @@ class _TrackingBodyState extends State<_TrackingBody> {
     if (!_googleMapsSupportedHere) return const MapUnavailableCard();
 
     return Semantics(
-      label: _trackingSemanticsLabel,
+      label: widget.semanticsLabel ?? _trackingSemanticsLabel,
       container: true,
       child: ExcludeSemantics(
         child: IgnorePointer(

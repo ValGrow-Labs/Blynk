@@ -68,13 +68,18 @@ class AppTheme {
         surfaceTintColor: const WidgetStatePropertyAll(BlynkColors.clear),
         overlayColor: const WidgetStatePropertyAll(BlynkColors.clear),
         textStyle: const WidgetStatePropertyAll(BlynkText.label),
+        // W9: one disabled recipe app-wide. `BlynkButton` moved to
+        // `BlynkDisabled` (`line`/`ink3`, 6.21:1); the THEME still greyed out
+        // to `well`/`ink2` (4.54:1), so every button that is a plain Material
+        // button rather than a `BlynkButton` - the whole live-location picker
+        // - kept the weaker of the two. Same token, higher contrast.
         backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.disabled)) return BlynkColors.well;
+          if (states.contains(WidgetState.disabled)) return BlynkDisabled.fill;
           if (states.contains(WidgetState.pressed)) return BlynkColors.signalPressed;
           return BlynkColors.signal;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
-          return states.contains(WidgetState.disabled) ? BlynkColors.ink2 : BlynkColors.onSignal;
+          return states.contains(WidgetState.disabled) ? BlynkDisabled.label : BlynkColors.onSignal;
         }),
         side: WidgetStateProperty.resolveWith((states) {
           return states.contains(WidgetState.focused) ? _focusRing : null;
@@ -88,7 +93,7 @@ class AppTheme {
         elevation: const WidgetStatePropertyAll(0),
         textStyle: const WidgetStatePropertyAll(BlynkText.label),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
-          return states.contains(WidgetState.disabled) ? BlynkColors.ink2 : BlynkColors.ink;
+          return states.contains(WidgetState.disabled) ? BlynkDisabled.label : BlynkColors.ink;
         }),
         side: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.focused)) return _focusRing;
@@ -103,7 +108,7 @@ class AppTheme {
         minimumSize: const WidgetStatePropertyAll(_minButton),
         shape: const WidgetStatePropertyAll(_buttonShape),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
-          return states.contains(WidgetState.disabled) ? BlynkColors.ink2 : BlynkColors.ink;
+          return states.contains(WidgetState.disabled) ? BlynkDisabled.label : BlynkColors.ink;
         }),
         textStyle: WidgetStateProperty.resolveWith((states) {
           return states.contains(WidgetState.focused)
@@ -127,6 +132,9 @@ class AppTheme {
       fontFamily: BlynkText.family,
       textTheme: textTheme,
       primaryColor: BlynkColors.ink,
+      // The page is `paper` (plan §5). A previous pass introduced a cream
+      // `canvas` neutral; Blynk's palette has exactly one page surface and
+      // one tint (`well`), so that fifth neutral family is gone.
       scaffoldBackgroundColor: BlynkColors.paper,
       canvasColor: BlynkColors.paper,
       cardColor: BlynkColors.paper,

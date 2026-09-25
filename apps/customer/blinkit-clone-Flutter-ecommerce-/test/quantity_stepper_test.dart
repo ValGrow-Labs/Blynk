@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ecom/UI/Widgets/Atoms/quantity_stepper.dart';
+import 'package:ecom/design/contrast.dart';
 import 'package:ecom/design/tokens.dart';
 
 import 'fixtures/component_host.dart';
@@ -51,15 +52,34 @@ void main() {
       expect(down, 1);
     });
 
-    testWidgets('visual pill is 40 dp tall, signal fill, ink glyphs', (tester) async {
+    // 2026-09 redesign (spec §3 "Quantity stepper"): paper fill, not signal.
+    // T2: the boundary moved from `line` to BlynkStepper.borderStrong
+    // (`lineStrong`), which is what plan §8 specifies for this control —
+    // `line` on `paper` measures 1.19:1, the invisible hairline the existing
+    // control-outline guard exists to keep off real controls. Every value
+    // here now comes from BlynkStepper, so the widget cannot drift from it.
+    testWidgets('visual pill is 40 dp tall, on the stepper tokens end to end', (tester) async {
       await tester.pumpWidget(_stepper(tester, onIncrement: () {}, onDecrement: () {}));
       final pill = find.byWidgetPredicate(
-        (w) => w is DecoratedBox && w.decoration is BoxDecoration && (w.decoration as BoxDecoration).color == BlynkColors.signal,
+        (w) => w is DecoratedBox && w.decoration is BoxDecoration && (w.decoration as BoxDecoration).color == BlynkStepper.surface,
       );
       expect(pill, findsOneWidget);
-      expect(tester.getSize(pill).height, 40);
-      expect(tester.widget<Icon>(find.byIcon(Icons.add)).color, BlynkColors.ink);
-      expect(tester.widget<Text>(find.text('2')).style!.color, BlynkColors.ink);
+      expect(tester.getSize(pill).height, BlynkStepper.visualHeight);
+      expect(BlynkStepper.visualHeight, 40);
+      expect(BlynkStepper.visualHeight, lessThan(BlynkStepper.minTapSize),
+          reason: 'the extra hit area is what makes an edge tap register');
+      final decoration = (tester.widget<DecoratedBox>(pill)).decoration as BoxDecoration;
+      expect(decoration.border!.top.color, BlynkStepper.borderStrong);
+      expect(decoration.borderRadius, BlynkStepper.radius);
+      expect(BlynkStepper.borderStrong, BlynkColors.lineStrong);
+      // A control boundary is a non-text graphic: the 3:1 floor, which the
+      // 1.19:1 hairline it replaced could never meet.
+      expect(contrastRatio(BlynkStepper.borderStrong, BlynkStepper.surface), greaterThanOrEqualTo(3));
+      final add = tester.widget<Icon>(find.byIcon(Icons.add));
+      expect(add.color, BlynkStepper.icon);
+      expect(add.size, BlynkStepper.iconSize);
+      expect(tester.widget<Text>(find.text('2')).style!.color, BlynkStepper.countColor);
+      expect(tester.getSize(find.byType(QuantityStepper)).height, BlynkStepper.minTapSize);
     });
 
     testWidgets('each button has a 48 x 48 hit target', (tester) async {
@@ -129,8 +149,75 @@ void main() {
 
     testWidgets('null callbacks disable both buttons and grey the glyphs', (tester) async {
       await tester.pumpWidget(_stepper(tester));
-      expect(tester.widget<Icon>(find.byIcon(Icons.add)).color, BlynkColors.ink2);
-      expect(tester.widget<Icon>(find.byIcon(Icons.remove)).color, BlynkColors.ink2);
+      expect(tester.widget<Icon>(find.byIcon(Icons.add)).color, BlynkStepper.iconDisabled);
+      expect(tester.widget<Icon>(find.byIcon(Icons.remove)).color, BlynkStepper.iconDisabled);
+    });
+  });
+
+  // T2: the in-flight state for a cart write that has not come back yet. It
+  // is a correctness feature, not a look: a second tap while a change is in
+  // flight must not queue a duplicate change.
+  group('busy (a cart write is in flight)', () {
+    testWidgets('neither control fires while busy, however many times it is tapped', (tester) async {
+      var up = 0, down = 0;
+      await tester.pumpWidget(componentHost(
+        tester,
+        QuantityStepper(
+          quantity: 2,
+          onIncrement: () => up++,
+          onDecrement: () => down++,
+          productName: _name,
+          busy: true,
+        ),
+      ));
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.byIcon(Icons.add));
+        await tester.tap(find.byIcon(Icons.remove));
+      }
+      expect(up, 0);
+      expect(down, 0);
+    });
+
+    testWidgets('busy greys both glyphs and keeps the count visible', (tester) async {
+      await tester.pumpWidget(componentHost(
+        tester,
+        QuantityStepper(
+          quantity: 3,
+          onIncrement: () {},
+          onDecrement: () {},
+          productName: _name,
+          busy: true,
+        ),
+      ));
+      expect(tester.widget<Icon>(find.byIcon(Icons.add)).color, BlynkStepper.iconDisabled);
+      expect(tester.widget<Icon>(find.byIcon(Icons.remove)).color, BlynkStepper.iconDisabled);
+      expect(find.text('3'), findsOneWidget);
+    });
+
+    testWidgets('busy is announced, not just drawn: disabled with an "updating" label', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(componentHost(
+        tester,
+        QuantityStepper(
+          quantity: 2,
+          onIncrement: () {},
+          onDecrement: () {},
+          productName: _name,
+          busy: true,
+        ),
+      ));
+      final add = tester.getSemantics(_button('Add one more $_name, updating')).getSemanticsData();
+      expect(add.flagsCollection.isEnabled, Tristate.isFalse);
+      expect(add.hasAction(SemanticsAction.tap), isFalse);
+      expect(_button('Remove one $_name, updating'), findsOneWidget);
+      handle.dispose();
+    });
+
+    testWidgets('busy false is the default and changes nothing', (tester) async {
+      var up = 0;
+      await tester.pumpWidget(_stepper(tester, onIncrement: () => up++, onDecrement: () {}));
+      await tester.tap(find.byIcon(Icons.add));
+      expect(up, 1);
     });
   });
 

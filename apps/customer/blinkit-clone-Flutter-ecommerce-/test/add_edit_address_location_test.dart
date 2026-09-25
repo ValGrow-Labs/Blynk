@@ -7,6 +7,7 @@ import 'package:ecom/Screens/add_edit_address_screen.dart';
 import 'package:ecom/Screens/live_location_picker_screen.dart';
 import 'package:ecom/Services/Location/device_location_source.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_text_field.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_provider.dart';
 import 'package:ecom/app_theme.dart';
 
@@ -101,7 +102,10 @@ void main() {
     await tester.pump();
   }
 
-  Finder fieldWith(String label) => find.widgetWithText(TextFormField, label);
+  // The form's fields are BlynkTextFields wrapped in a FormField (the
+  // validator and the Form.validate() gate are unchanged); the shared
+  // component is what carries the label now.
+  Finder fieldWith(String label) => find.widgetWithText(BlynkTextField, label);
 
   Future<void> scrollToLocation(WidgetTester tester) async {
     await tester.scrollUntilVisible(find.text('Use my current location'), 200, scrollable: find.byType(Scrollable).first);
@@ -171,7 +175,7 @@ void main() {
     await tester.tap(find.text('Confirm location'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Save Address'));
+    await tester.tap(find.text('Save address'));
     await tester.pumpAndSettle();
 
     expect(addresses.created, isNotNull);

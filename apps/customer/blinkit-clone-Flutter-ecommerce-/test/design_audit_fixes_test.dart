@@ -10,6 +10,7 @@ import 'package:ecom/Screens/add_edit_address_screen.dart';
 import 'package:ecom/Screens/live_location_picker_screen.dart';
 import 'package:ecom/Services/Location/device_location_source.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_provider.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_provider_config.dart';
 import 'package:ecom/UI/Widgets/Organisms/map_tile_config.dart' show kMapStyleAsset;
@@ -458,18 +459,24 @@ void main() {
       await _expectReachable(tester, find.text('Use my current location'), button: OutlinedButton);
     });
 
-    testWidgets('at 1.6x Cancel and Save Address are full labels and reachable', (tester) async {
+    // W7: Save address is now BlynkButton.cta (the flat-yellow CTA), which is
+    // a token-driven surface rather than an ElevatedButton, and Cancel is
+    // BlynkButton.secondary. Only the widget the label is looked up under
+    // changed - every assertion below (>= 48 dp, the whole label plus its
+    // padding, hit-testable, one shared height >= 50) is the same, and the
+    // shared height is now 56 (BlynkCta.minHeight) rather than 50.
+    testWidgets('at 1.6x Cancel and Save address are full labels and reachable', (tester) async {
       await pumpForm(tester, scale: 1.6);
       expect(tester.takeException(), isNull);
-      await _expectReachable(tester, find.text('Save Address'), button: ElevatedButton);
-      await _expectReachable(tester, find.text('Cancel'), button: OutlinedButton);
-      expect(find.ancestor(of: find.text('Save Address'), matching: find.byType(FittedBox)), findsNothing);
+      await _expectReachable(tester, find.text('Save address'), button: BlynkButton);
+      await _expectReachable(tester, find.text('Cancel'), button: BlynkButton);
+      expect(find.ancestor(of: find.text('Save address'), matching: find.byType(FittedBox)), findsNothing);
     });
 
     testWidgets('at 1.0x the bottom bar keeps Cancel and Save side by side at one shared height (>= 50 dp)', (tester) async {
       await pumpForm(tester);
-      final cancel = tester.getRect(find.widgetWithText(OutlinedButton, 'Cancel'));
-      final save = tester.getRect(find.widgetWithText(ElevatedButton, 'Save Address'));
+      final cancel = tester.getRect(find.widgetWithText(BlynkButton, 'Cancel'));
+      final save = tester.getRect(find.widgetWithText(BlynkButton, 'Save address'));
       expect(cancel.height, greaterThanOrEqualTo(50));
       expect(cancel.height, save.height);
       expect(cancel.top, save.top);

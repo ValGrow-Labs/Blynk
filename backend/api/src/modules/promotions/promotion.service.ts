@@ -17,10 +17,30 @@ export interface CustomerPromotionDto {
   background_color: string | null;
   background_color_end: string | null;
   background_image_url: string | null;
+  /**
+   * Where the card's `cover` crop anchors on the background image
+   * (migration 009), as a percentage of that image's own width and height.
+   * Always present and always 0-100; 50/50 is the centre, i.e. the crop the
+   * app already did before the field existed.
+   */
+  background_focal_x: number;
+  background_focal_y: number;
   cta_label: string | null;
   cta_destination_type: string | null;
   cta_destination_value: string | null;
   display_order: number;
+}
+
+/**
+ * Normalises a stored focal percentage into the 0-100 the API promises. The
+ * column is `SMALLINT NOT NULL DEFAULT 50` with a `BETWEEN 0 AND 100` CHECK,
+ * so the fallback only matters for a database where migration 009 has not run
+ * yet - and 50 is exactly the centre crop that database's app already does.
+ */
+function clampFocal(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 50;
+  return Math.min(100, Math.max(0, Math.round(parsed)));
 }
 
 export class PromotionService {
@@ -35,6 +55,8 @@ export class PromotionService {
       background_color: row.background_color,
       background_color_end: row.background_color_end,
       background_image_url: row.background_image_url,
+      background_focal_x: clampFocal(row.background_focal_x),
+      background_focal_y: clampFocal(row.background_focal_y),
       cta_label: row.cta_label,
       cta_destination_type: row.cta_destination_type,
       cta_destination_value: row.cta_destination_value,
@@ -84,9 +106,13 @@ export class PromotionService {
         'VALIDATION_ERROR'
       );
     }
-    if (backgroundType === 'IMAGE' && !backgroundImage) {
+    // ARTWORK (a finished banner, drawn full-bleed) needs its file for the
+    // same reason IMAGE does - it IS the card.
+    if ((backgroundType === 'IMAGE' || backgroundType === 'ARTWORK') && !backgroundImage) {
       throw new AppError(
-        'An image background needs background_image_url',
+        backgroundType === 'ARTWORK'
+          ? 'A full-artwork background needs background_image_url'
+          : 'An image background needs background_image_url',
         400,
         'VALIDATION_ERROR'
       );
@@ -112,7 +138,10 @@ export class PromotionService {
         'VALIDATION_ERROR'
       );
     }
-    if (type && !label) {
+    // Mirrors the create schema: ARTWORK may point somewhere without a button
+    // label - the banner carries its own call to action and the whole card
+    // becomes the tap target.
+    if (type && !label && backgroundType !== 'ARTWORK') {
       throw new AppError(
         'cta_label is required when the promotion has a destination',
         400,

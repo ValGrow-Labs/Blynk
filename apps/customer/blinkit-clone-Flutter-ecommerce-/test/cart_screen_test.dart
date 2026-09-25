@@ -12,10 +12,12 @@ import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
 import 'package:ecom/Services/Providers/order.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
-import 'package:ecom/UI/Widgets/Atoms/card_product.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
 import 'package:ecom/UI/Widgets/Atoms/card_product_cart_screen.dart';
+import 'package:ecom/UI/Widgets/Atoms/image_well.dart';
 import 'package:ecom/app_colors.dart';
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/tokens.dart';
 import 'package:ecom/route_generator.dart';
 
 // Captured verbatim from the running backend
@@ -98,8 +100,12 @@ void main() {
       expect(find.text('Pelwatte Salted Butter 200g'), findsOneWidget);
       expect(find.text('Rs. 805'), findsOneWidget);
       expect(find.byType(CartProductCard), findsNWidgets(2));
-      // Images come from the shared component.
-      expect(find.byType(ProductImage), findsNWidgets(2));
+      // Images come from the shared component. W4: that component is now
+      // ProductImageWell (W1's image well) rather than the bare ProductImage,
+      // so a cart line carries the same tint, radius, inset and no-image
+      // fallback as a product card instead of drawing its own container.
+      // Same assertion, same strength, one surface fewer to drift.
+      expect(find.byType(ProductImageWell), findsNWidgets(2));
     });
 
     testWidgets('summary shows subtotal, the Rs. 70 fee and the total',
@@ -109,7 +115,7 @@ void main() {
 
       expect(find.text('Order Summary'), findsOneWidget);
       expect(find.text('Subtotal (1 item)'), findsOneWidget);
-      expect(find.text('Delivery Fee'), findsOneWidget);
+      expect(find.text('Delivery fee'), findsOneWidget);
       expect(find.text('Rs. 70'), findsOneWidget);
       // 540 + 70, in the summary and on the pinned bar.
       expect(find.text('Rs. 610'), findsNWidgets(2));
@@ -192,7 +198,14 @@ void main() {
       expect(find.text('Kotmale Fresh Milk 1L'), findsNothing);
     });
 
-    testWidgets('quantity control is yellow, not the old green',
+    // 2026-09 redesign (spec §3 "Quantity stepper"): the pill is `paper`
+    // filled with a `line` border - it no longer carries the yellow (or the
+    // old green). Was: asserted a yellow (signal) fill.
+    // T2: the stepper's boundary is BlynkStepper.borderStrong (`lineStrong`),
+    // which is what plan §8 specifies for this control; `line` on `paper` is
+    // a 1.19:1 hairline. The pill is still paper, and still neither yellow
+    // nor green — that part of the rule is unchanged.
+    testWidgets('quantity control is a paper pill with a lineStrong border, not yellow or green',
         (tester) async {
       cart.add(_product(_realMilk));
       await pumpCart(tester);
@@ -207,7 +220,23 @@ void main() {
             ),
           );
 
-      expect(filled(AppColors.primaryYellowColor), findsOneWidget);
+      // Distinguish the fully-rounded stepper pill from the card's own
+      // (16 dp radius) background, which is also a paper/line DecoratedBox.
+      final stepperPill = find.descendant(
+        of: find.byType(CartProductCard),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is DecoratedBox &&
+              w.decoration is BoxDecoration &&
+              (w.decoration as BoxDecoration).borderRadius == BlynkRadius.full,
+        ),
+      );
+      expect(stepperPill, findsOneWidget);
+      final decoration = tester.widget<DecoratedBox>(stepperPill).decoration as BoxDecoration;
+      expect(decoration.color, BlynkStepper.surface);
+      expect((decoration.border! as Border).top.color, BlynkStepper.borderStrong);
+
+      expect(filled(AppColors.primaryYellowColor), findsNothing);
       expect(filled(AppColors.primaryGreenColor), findsNothing);
     });
 
@@ -225,7 +254,7 @@ void main() {
       expect(find.text('Rs. 540'), findsWidgets);
       expect(plus('Kotmale Full Cream Fresh Pasteurised Dairy Milk Tetra Pack '
           '1 Litre Family Size Value Pack'), findsOneWidget);
-      expect(find.text('Proceed to Checkout'), findsOneWidget);
+      expect(find.text('Proceed to checkout'), findsOneWidget);
     });
   });
 
@@ -238,8 +267,8 @@ void main() {
         find.textContaining("we'll deliver them to your doorstep"),
         findsOneWidget,
       );
-      expect(find.text('Browse Groceries'), findsOneWidget);
-      expect(find.text('Proceed to Checkout'), findsNothing);
+      expect(find.text('Browse groceries'), findsOneWidget);
+      expect(find.text('Proceed to checkout'), findsNothing);
       expect(find.text('Order Summary'), findsNothing);
     });
 
@@ -252,10 +281,10 @@ void main() {
       await settle(tester);
 
       expect(find.text('Your cart is empty'), findsOneWidget);
-      expect(find.text('Proceed to Checkout'), findsNothing);
+      expect(find.text('Proceed to checkout'), findsNothing);
     });
 
-    testWidgets('Browse Groceries goes back to the shop already in the stack',
+    testWidgets('Browse groceries goes back to the shop already in the stack',
         (tester) async {
       // A stub stands in for the shell here: mounting CustomerShell pulls in
       // the Profile/Help tabs, whose remote icon images can't load in tests.
@@ -288,7 +317,7 @@ void main() {
       await settle(tester);
       expect(find.byType(CartScreen), findsOneWidget);
 
-      await tester.tap(find.text('Browse Groceries'));
+      await tester.tap(find.text('Browse groceries'));
       await tester.pump();
       await settle(tester);
 
@@ -300,14 +329,14 @@ void main() {
   });
 
   group('checkout handoff', () {
-    testWidgets('Proceed to Checkout opens the existing checkout',
+    testWidgets('Proceed to checkout opens the existing checkout',
         (tester) async {
       cart.add(_product(_realMilk));
       // Wider than a phone: the pre-existing checkout bars are laid out for
       // the real font and overflow under the test font at 400 px.
       await pumpCart(tester, size: const Size(560, 900));
 
-      await tester.tap(find.text('Proceed to Checkout'));
+      await tester.tap(find.text('Proceed to checkout'));
       await tester.pump();
       await settle(tester);
 
@@ -347,7 +376,7 @@ void main() {
       final summary = tester.getRect(find.text('Order Summary'));
       expect(summary.left, greaterThan(row.right));
       // The CTA lives in the summary column, not a pinned bar.
-      expect(find.text('Proceed to Checkout'), findsOneWidget);
+      expect(find.text('Proceed to checkout'), findsOneWidget);
       expect(find.text('TOTAL'), findsNothing);
     });
 
@@ -369,7 +398,7 @@ void main() {
         await settle(tester);
 
         expect(tester.takeException(), isNull);
-        expect(find.text('Proceed to Checkout'), findsOneWidget);
+        expect(find.text('Proceed to checkout'), findsOneWidget);
         // 540 + 1610 + 70
         expect(find.textContaining('Rs. 2,220'), findsWidgets);
 
@@ -379,5 +408,186 @@ void main() {
         expect(cart.itemCount, 4);
       });
     }
+  });
+
+  // ---- W4 (2026-09 premium redesign) -----------------------------------
+
+  group('clear cart', () {
+    testWidgets('no control while the cart is empty', (tester) async {
+      await pumpCart(tester);
+      expect(find.byKey(const Key('clear-cart')), findsNothing);
+    });
+
+    testWidgets('cancelling leaves every line in place', (tester) async {
+      cart
+        ..add(_product(_realMilk))
+        ..add(_product(_realButter));
+      await pumpCart(tester);
+
+      await tester.tap(find.byKey(const Key('clear-cart')));
+      await settle(tester);
+      expect(find.text('Clear cart?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      expect(cart.itemCount, 2);
+      expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
+    });
+
+    testWidgets('confirming empties the real cart', (tester) async {
+      cart
+        ..add(_product(_realMilk))
+        ..add(_product(_realButter));
+      await pumpCart(tester);
+
+      await tester.tap(find.byKey(const Key('clear-cart')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('clear-cart-confirm')));
+      await settle(tester);
+
+      expect(cart.isEmpty, isTrue);
+      expect(find.text('Your cart is empty'), findsOneWidget);
+      expect(find.text('Proceed to checkout'), findsNothing);
+    });
+  });
+
+  group('no fabricated commerce data', () {
+    // Plan §4.3 as T2 settled it: count yellow ACTIONS. The cart has exactly
+    // one - the checkout CTA. The mock's savings banner, discount row, promo
+    // code and struck prices have no backend field behind them and are absent.
+    testWidgets('the cart paints exactly one yellow action', (tester) async {
+      cart.add(_product(_realMilk));
+      await pumpCart(tester);
+
+      // DecoratedBox only: a Container with a decoration builds one, so this
+      // counts every painted yellow surface exactly once whichever way it was
+      // written.
+      final yellow = find.byWidgetPredicate((w) =>
+          w is DecoratedBox &&
+          w.decoration is BoxDecoration &&
+          (w.decoration as BoxDecoration).color == BlynkCta.fill);
+      expect(yellow, findsOneWidget);
+      expect(find.ancestor(of: yellow, matching: find.byType(BlynkButton)),
+          findsOneWidget);
+    });
+
+    testWidgets('checkout invents no discount, saving or promo row',
+        (tester) async {
+      cart.add(_product(_realMilk));
+      await pumpCart(
+        tester,
+        home: const CheckoutScreen(),
+        size: const Size(560, 900),
+      );
+      await settle(tester);
+
+      for (final fake in [
+        'Discount',
+        'Saving',
+        'You save',
+        'Promo',
+        'Coupon',
+        'OFF',
+        'MRP',
+      ]) {
+        expect(find.textContaining(fake), findsNothing, reason: fake);
+      }
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Text && w.style?.decoration == TextDecoration.lineThrough,
+        ),
+        findsNothing,
+      );
+    });
+  });
+
+  // A sticky bottom bar is handed the WHOLE remaining viewport as its height
+  // budget. Anything inside it that fills a bounded height - a
+  // `Container(alignment:)` (which is what BlynkButton.cta paints), a
+  // `Column(MainAxisSize.max)`, or `ContentFrame` - takes all of it and leaves
+  // the body zero-high. Nothing throws, the page still builds, and every
+  // `find.*` then quietly returns nothing: a suite can go green over a blank
+  // screen. Both of these failed before the fix and both measure the RENDERED
+  // geometry, not the presence of a widget.
+  group('sticky bars are bars, not screens', () {
+    testWidgets('cart: the checkout bar is a bar and the body keeps the rest',
+        (tester) async {
+      cart.add(_product(_realMilk));
+      await pumpCart(tester); // 400 x 860
+      await settle(tester);
+
+      const screen = 860.0;
+      final bar = tester.getSize(find.byKey(const Key('cart-checkout-bar')));
+      expect(bar.height, greaterThanOrEqualTo(BlynkCta.minHeight),
+          reason: 'the CTA still has its full 56 dp floor');
+      expect(bar.height, lessThan(screen / 3),
+          reason: 'the bar swallowed the viewport: this is the silent '
+              'bounded-height bug, not a styling nit');
+
+      // ...and the body really has the rest, with live content in it.
+      final body = tester.getSize(find.byType(CustomScrollView));
+      expect(body.height, greaterThan(screen / 2));
+      expect(tester.getSize(find.byType(CartProductCard)).height,
+          greaterThan(0));
+      expect(body.height + bar.height, lessThanOrEqualTo(screen));
+    });
+
+    testWidgets('checkout: the place-order bar is a bar and the body keeps the rest',
+        (tester) async {
+      cart.add(_product(_realMilk));
+      await pumpCart(
+        tester,
+        home: const CheckoutScreen(),
+        size: const Size(560, 900),
+      );
+      await settle(tester);
+
+      const screen = 900.0;
+      final bar = tester.getSize(find.byKey(const Key('checkout-action-bar')));
+      expect(bar.height, greaterThanOrEqualTo(70),
+          reason: 'the payment bar keeps its own 70 dp floor');
+      expect(bar.height, lessThan(screen / 3));
+
+      final body = tester.getSize(find.byType(ListView));
+      expect(body.height, greaterThan(screen / 2));
+      expect(body.height + bar.height, lessThanOrEqualTo(screen));
+    });
+  });
+
+  group('checkout composition', () {
+    testWidgets('reads address, then items, then the total', (tester) async {
+      cart.add(_product(_realMilk));
+      await pumpCart(
+        tester,
+        home: const CheckoutScreen(),
+        size: const Size(560, 900),
+      );
+      await settle(tester);
+
+      final address = tester.getRect(find.text('Delivery address'));
+      final items = tester.getRect(find.text('Items'));
+      final total = tester.getRect(find.text('Total'));
+      expect(address.top, lessThan(items.top));
+      expect(items.top, lessThan(total.top));
+      // The confirming action stays pinned below all of it.
+      expect(tester.getRect(find.text('Place order')).top,
+          greaterThan(total.top));
+    });
+
+    testWidgets('the item list is read-only on the step that submits',
+        (tester) async {
+      cart.add(_product(_realMilk));
+      await pumpCart(
+        tester,
+        home: const CheckoutScreen(),
+        size: const Size(560, 900),
+      );
+      await settle(tester);
+
+      expect(find.text('Kotmale Fresh Milk 1L'), findsOneWidget);
+      expect(plus('Kotmale Fresh Milk 1L'), findsNothing);
+      expect(minus('Kotmale Fresh Milk 1L'), findsNothing);
+      expect(find.byTooltip('Remove Kotmale Fresh Milk 1L'), findsNothing);
+    });
   });
 }

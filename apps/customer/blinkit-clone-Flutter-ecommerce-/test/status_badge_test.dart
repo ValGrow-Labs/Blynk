@@ -30,6 +30,8 @@ void main() {
         expect(text.style!.fontSize, greaterThanOrEqualTo(12));
         final icon = tester.widget<Icon>(find.descendant(of: find.byType(StatusBadge), matching: find.byType(Icon)));
         expect(icon.color, colors.foreground);
+        // T2: the inline glyph is BlynkIcons.xs, not a bare 16.
+        expect(icon.size, BlynkIcons.xs);
         expect(contrastRatio(colors.foreground, colors.background), greaterThanOrEqualTo(4.5));
       });
     });

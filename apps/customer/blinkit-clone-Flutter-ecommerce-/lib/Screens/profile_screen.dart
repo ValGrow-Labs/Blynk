@@ -15,7 +15,10 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final signedIn = context.select<AuthProvider, bool>((a) => a.isAuthenticated);
+
     return Scaffold(
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(
         automaticallyImplyLeading: true,
         title: const Text('Profile'),
@@ -23,36 +26,18 @@ class ProfileScreen extends StatelessWidget {
       body: ContentFrame(
         maxWidth: 720,
         gutter: false,
-        child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            BlynkSpace.s8,
+            BlynkSpace.s4,
+            BlynkSpace.s8,
+            BlynkSpace.s32,
+          ),
           children: [
-            Consumer<AuthProvider>(
-              builder: (context, auth, _) {
-                final user = auth.currentUser;
-                final displayName = (user?.fullName != null && user!.fullName!.isNotEmpty)
-                    ? user.fullName!
-                    : 'My Account';
-                final displayPhone = user?.phone ?? '';
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(displayName, style: BlynkText.title),
-                    if (displayPhone.isNotEmpty)
-                      Text(
-                        displayPhone,
-                        style: BlynkText.body.copyWith(color: BlynkColors.ink2),
-                      ),
-                  ],
-                );
-              },
-            ),
+            const _AccountHeader(),
             const SizedBox(height: BlynkSpace.s24),
             // A guest browses freely; logging in is one clear step, not a wall.
-            if (!context.select<AuthProvider, bool>((a) => a.isAuthenticated)) ...[
+            if (!signedIn) ...[
               BlynkButton.primary(
                 label: 'Log in',
                 expand: true,
@@ -72,6 +57,17 @@ class ProfileScreen extends StatelessWidget {
                 Navigator.of(context).pushNamed('/user/address');
               },
             ),
+            // The appointment list is the customer's own and the backend
+            // scopes it to them, so it is offered only once they are signed
+            // in rather than opening onto a 401.
+            if (signedIn)
+              customListTile(
+                icon: BlynkIcons.dental,
+                title: 'My appointments',
+                callback: () {
+                  Navigator.of(context).pushNamed('/dental/appointments');
+                },
+              ),
             customListTile(
               icon: BlynkIcons.share,
               title: 'Share the app',
@@ -89,16 +85,59 @@ class ProfileScreen extends StatelessWidget {
                 Navigator.of(context).pushNamed('/app/about');
               },
             ),
-            if (context.select<AuthProvider, bool>((a) => a.isAuthenticated))
+            if (signedIn)
               customListTile(
                 icon: BlynkIcons.logout,
                 title: 'Log out',
+                // The one logout confirmation in the app; this screen does
+                // not put up a second one.
                 callback: () => showLogoutDialog(context),
               ),
           ],
         ),
       ),
-      ),
+    );
+  }
+}
+
+/// Who is signed in. Nothing here is invented: a customer with no name on
+/// their account sees the neutral heading, and a missing phone renders
+/// nothing rather than a placeholder.
+class _AccountHeader extends StatelessWidget {
+  const _AccountHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final user = auth.currentUser;
+        final displayName = (user?.fullName != null && user!.fullName!.isNotEmpty)
+            ? user.fullName!
+            : 'My Account';
+        final displayPhone = user?.phone ?? '';
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(BlynkSpace.s16),
+          decoration: const BoxDecoration(
+            color: BlynkColors.well,
+            borderRadius: BlynkRadius.lgAll,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(displayName, style: BlynkText.title),
+              if (displayPhone.isNotEmpty) ...[
+                const SizedBox(height: BlynkSpace.s4),
+                Text(
+                  displayPhone,
+                  style: BlynkText.body.copyWith(color: BlynkColors.ink2),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

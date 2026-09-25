@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:ecom/app_design.dart';
+import '../../../design/tokens.dart';
 
 /// Shown by a map adapter when it cannot show a map: an honest label, not a
 /// fake map. Shared by every adapter so the surface looks the same whichever
@@ -20,14 +21,14 @@ class MapUnavailableCard extends StatelessWidget {
       ),
       alignment: Alignment.center,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      child: const Column(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.map_outlined, color: AppTextColors.onBackground, size: 28),
-          SizedBox(height: AppSpacing.xs),
+          const Icon(Icons.map_outlined, color: AppTextColors.onBackground, size: 28),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             'Map unavailable',
-            style: TextStyle(color: AppTextColors.onBackground, fontSize: 13, fontWeight: FontWeight.w600),
+            style: BlynkText.caption.copyWith(color: AppTextColors.onBackground),
           ),
         ],
       ),

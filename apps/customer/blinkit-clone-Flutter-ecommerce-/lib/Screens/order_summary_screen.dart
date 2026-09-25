@@ -16,8 +16,8 @@ import '../UI/Widgets/Organisms/order_status_header.dart';
 import '../UI/Widgets/Organisms/order_summary_screen_product_details_card.dart';
 import '../UI/Widgets/Organisms/order_timeline.dart';
 import '../UI/Widgets/Organisms/order_tracking_map.dart';
-import '../app_design.dart';
 import '../app_responsive.dart';
+import '../design/tokens.dart';
 
 /// The backend's `delivery.assignment_status` once the rider has collected the
 /// order and is on the way (the value the API sends: exact, upper-case).
@@ -59,6 +59,10 @@ class OrderSummaryScreen extends StatefulWidget {
 }
 
 class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBindingObserver {
+  /// Sections are separated by space, never by a rule. One step, used between
+  /// every pair, so the page keeps a single vertical rhythm.
+  static const double _sectionGap = BlynkSpace.s24;
+
   OrderModel? _order;
   CustomerError? _error;
   bool _loading = true;
@@ -234,10 +238,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.xxxl,
+            BlynkSpace.s16,
+            BlynkSpace.s24,
+            BlynkSpace.s16,
+            BlynkSpace.s48,
           ),
           children: order == null
               ? [
@@ -290,11 +294,11 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
           message: "Couldn't refresh this order. Pull down to try again.",
           offline: refreshError.isOffline,
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: _sectionGap),
       ],
       // 1. Status, directly on the page background rather than in a card.
       OrderStatusHeader(order: order),
-      const SizedBox(height: AppSpacing.lg),
+      const SizedBox(height: _sectionGap),
       // 1b. The live map - only while the rider has the order and is on the
       // way (never before pickup, never after arrival/delivery/failure).
       if (isLiveTrackable(order)) ...[
@@ -303,19 +307,19 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
           order: order,
           mapBuilder: widget.mapBuilder,
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: _sectionGap),
       ],
       // 2. What happened - only rows the backend actually recorded.
       if (order.history.isNotEmpty) ...[
         OrderTimeline(history: order.history),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: _sectionGap),
       ],
       // 3. Items.
       OrderSummaryProductsDetails(order: order),
-      const SizedBox(height: AppSpacing.md),
+      const SizedBox(height: _sectionGap),
       // 4. Bill + the one payment line.
       OrderBillCard(order: order),
-      const SizedBox(height: AppSpacing.md),
+      const SizedBox(height: _sectionGap),
       // 5. Delivery to.
       OrderDetailsCard(order: order),
       // 6. Cancel - shown only when the backend's can_cancel says so. The
@@ -323,7 +327,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> with WidgetsBin
       // children above it change, e.g. when the refresh notice appears
       // while a cancel is still running.
       if (order.canCancel) ...[
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: BlynkSpace.s32),
         OrderCancelSection(
           key: const ValueKey('order-cancel'),
           order: order,

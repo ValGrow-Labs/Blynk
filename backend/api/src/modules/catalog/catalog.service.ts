@@ -22,8 +22,30 @@ export interface CustomerProductDto {
   unit: string;
   pack_size: string | null;
   image_url: string | null;
+  /**
+   * Where the crop anchors when the app draws this photo into a fixed shape
+   * (migration 009), as a percentage of the image's own width and height.
+   * Always present and always 0-100; 50/50 is the centre, which is what the
+   * app cropped at before the field existed.
+   */
+  image_focal_x: number;
+  image_focal_y: number;
   selling_price: number;
   is_available: boolean;
+}
+
+/**
+ * Normalises a stored focal percentage into the 0-100 the API promises.
+ *
+ * The column is `SMALLINT NOT NULL DEFAULT 50` with a `BETWEEN 0 AND 100`
+ * CHECK, so this can only matter for a row written before migration 009 was
+ * applied to a given database - and the answer there is the same 50 the
+ * column defaults to, which is the centre crop the app already did.
+ */
+function clampFocal(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 50;
+  return Math.min(100, Math.max(0, Math.round(parsed)));
 }
 
 export class CatalogService {
@@ -142,6 +164,8 @@ export class CatalogService {
       unit: p.unit,
       pack_size: p.pack_size,
       image_url: p.image_url,
+      image_focal_x: clampFocal(p.image_focal_x),
+      image_focal_y: clampFocal(p.image_focal_y),
       selling_price: Number(Number(p.calculated_selling_price).toFixed(2)),
       is_available: p.is_available,
     }));
@@ -177,6 +201,8 @@ export class CatalogService {
       unit: rawProduct.unit,
       pack_size: rawProduct.pack_size,
       image_url: rawProduct.image_url,
+      image_focal_x: clampFocal(rawProduct.image_focal_x),
+      image_focal_y: clampFocal(rawProduct.image_focal_y),
       selling_price: Number(Number(rawProduct.calculated_selling_price).toFixed(2)),
       is_available: rawProduct.is_available,
     };
@@ -212,6 +238,8 @@ export class CatalogService {
     return {
       products: rows.map((product) => ({
         ...product,
+        image_focal_x: clampFocal(product.image_focal_x),
+        image_focal_y: clampFocal(product.image_focal_y),
         purchase_cost: Number(Number(product.purchase_cost).toFixed(2)),
         custom_markup_percent:
           product.custom_markup_percent !== null
@@ -236,6 +264,8 @@ export class CatalogService {
 
     return {
       ...product,
+      image_focal_x: clampFocal(product.image_focal_x),
+      image_focal_y: clampFocal(product.image_focal_y),
       purchase_cost: Number(Number(product.purchase_cost).toFixed(2)),
       custom_markup_percent:
         product.custom_markup_percent !== null ? Number(product.custom_markup_percent) : null,
@@ -283,6 +313,10 @@ export class CatalogService {
       pack_size: input.pack_size,
       description: input.description,
       image_url: input.image_url,
+      // Omitted means centre (50/50) - identical to how every image was
+      // cropped before migration 009.
+      image_focal_x: input.image_focal_x ?? 50,
+      image_focal_y: input.image_focal_y ?? 50,
       purchase_cost: input.purchase_cost,
       custom_markup_percent: input.custom_markup_percent,
       is_available: input.is_available ?? true,
@@ -344,6 +378,8 @@ export class CatalogService {
       ...(input.pack_size !== undefined ? { pack_size: input.pack_size } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.image_url !== undefined ? { image_url: input.image_url } : {}),
+      ...(input.image_focal_x !== undefined ? { image_focal_x: input.image_focal_x } : {}),
+      ...(input.image_focal_y !== undefined ? { image_focal_y: input.image_focal_y } : {}),
       ...(input.purchase_cost !== undefined ? { purchase_cost: input.purchase_cost } : {}),
       ...(input.custom_markup_percent !== undefined
         ? { custom_markup_percent: input.custom_markup_percent }

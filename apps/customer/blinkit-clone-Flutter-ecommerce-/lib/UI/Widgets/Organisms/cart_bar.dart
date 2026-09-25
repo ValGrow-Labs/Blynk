@@ -8,10 +8,14 @@ import '../../../design/tokens.dart';
 import '../Atoms/money_text.dart';
 import '../Atoms/blynk_button.dart';
 
-/// The floating cart bar: ink, 56 dp, raised. Left is "N items" and the
-/// items total only (delivery is worked out at checkout, so no fee is
-/// claimed here); right is the yellow "View cart" pill. The whole bar opens
-/// the cart. Every number comes from [CartProvider].
+/// The floating cart bar: ink, 56 dp, raised. The left is two lines — the
+/// item count above, quiet, and the items total below, loud — and the right
+/// is the yellow "View cart" pill with its forward arrow. The whole bar
+/// opens the cart. Every number comes from [CartProvider].
+///
+/// The total is the **items** total only: delivery is worked out at
+/// checkout, so no fee, saving or discount is claimed here, and the word
+/// "Total" is not used for a figure that is not the final one.
 ///
 /// It is absent from the tree while the cart is empty, and slides in and out
 /// over [BlynkMotion.base] (instantly under reduced motion). Its height is
@@ -82,20 +86,32 @@ class _BarState extends State<_Bar> {
   @override
   Widget build(BuildContext context) {
     final items = '$count ${count == 1 ? 'item' : 'items'}';
-    final onInk = BlynkText.label.copyWith(color: BlynkColors.paper);
     // A big system font would squeeze the pill and the total into one line,
     // so the pill drops below the total instead.
     final stacked = appButtonTextScale(context) > kStackButtonsAboveTextScale;
 
-    final left = Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
+    // Two lines, not one run of equal-weight text. The total is the number
+    // this bar exists to show, so it carries the price ramp in full-contrast
+    // paper; the count is the supporting line, one step down the size ramp
+    // and one step down the contrast ramp (`onInkMuted`, still 9.09:1). A
+    // single line gave "1 item" and "Rs. 624" identical weight, which is
+    // what made the bar read flat.
+    final left = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(items, style: onInk),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: BlynkSpace.s8),
-          child: Text('·', style: onInk),
+        Text(
+          items,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: BlynkText.caption.copyWith(color: BlynkColors.onInkMuted),
         ),
-        MoneyText(total, style: onInk),
+        MoneyText(
+          total,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: BlynkText.price.copyWith(color: BlynkColors.onInk),
+        ),
       ],
     );
     // The whole bar is the one keyboard stop; the pill stays a visual (and
@@ -103,6 +119,9 @@ class _BarState extends State<_Bar> {
     Widget pill(bool expand) => ExcludeFocus(
           child: BlynkButton.primary(
             label: 'View cart',
+            // The bar navigates forward; the arrow says so without a word of
+            // extra copy. `Icons.arrow_forward`, never a "→" character.
+            trailingIcon: Icons.arrow_forward,
             compact: true,
             expand: expand,
             onPressed: () => _openCart(context),
@@ -165,6 +184,7 @@ class _BarState extends State<_Bar> {
                                 children: [left, const SizedBox(height: BlynkSpace.s8), pill(true)],
                               )
                             : Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Expanded(child: left),
                                   const SizedBox(width: BlynkSpace.s8),

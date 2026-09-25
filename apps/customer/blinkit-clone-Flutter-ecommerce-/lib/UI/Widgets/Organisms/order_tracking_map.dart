@@ -4,17 +4,27 @@ import 'package:provider/provider.dart';
 import '../../../Models/order_model.dart';
 import '../../../Models/rider_location_model.dart';
 import '../../../Services/Providers/location.provider.dart';
-import '../../../app_colors.dart';
-import '../../../app_design.dart';
 import 'map_provider.dart';
+import '../../../design/tokens.dart';
 
 /// The OSM/ODbL credit a MapLibre map must show (docs/06-deployment/
 /// map-tile-hosting-setup.md section 4). Drawn by Blynk's own widget tree so it
 /// exists whatever the map style says; shown only when [mapNeedsOsmAttribution].
 const String mapAttributionText = '© OpenStreetMap contributors';
 
-const double _mapHeight = 220;
+/// W8: the one map-frame height, named in the token layer so this frame and
+/// the dental ones cannot drift apart again. Same rendered 220 as before.
+const double _mapHeight = BlynkMap.frameHeight;
 const double _initialZoom = 14;
+
+/// The section title above the map. It names what the section is — a live
+/// position — and promises nothing the backend does not send: no estimate, no
+/// route, no distance and no rider identity.
+const String mapSectionTitle = 'Live tracking';
+
+/// The freshness dot. Small enough to read as an indicator rather than a
+/// control, and always paired with words.
+const double _freshnessDot = BlynkSpace.s8;
 
 /// "Last seen 45 seconds ago" / "Last seen 2 minutes ago". Never a coordinate.
 /// A zero or negative age (clock skew) reads "just now" rather than a
@@ -44,10 +54,15 @@ class OrderTrackingMap extends StatelessWidget {
   /// behaviour is otherwise identical.
   final TrackingMapBuilder? mapBuilder;
 
+  // `semanticsLabel` is accepted (required by the `TrackingMapBuilder`
+  // typedef, task-F1 review-fix round 1) but never passed on below: the
+  // rider/delivery map keeps the Google adapter's own default label
+  // unconditionally, exactly as before this fix round.
   static TrackingMapView _defaultMapBuilder({
     required GeoPoint initialCenter,
     required double initialZoom,
     required Set<MapMarkerSpec> markers,
+    String? semanticsLabel,
   }) =>
       TrackingMapView(initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
 
@@ -84,14 +99,23 @@ class OrderTrackingMap extends StatelessWidget {
           markers: markers,
         );
 
+        // Deliberately NOT wrapped in a card: `google_logo_clearance_test`
+        // requires that nothing Blynk paints reaches the map's bottom strip,
+        // and a card surface behind the whole section would span it. The
+        // section is separated by space, like every other section here.
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Semantics(
+              header: true,
+              child: const Text(mapSectionTitle, style: BlynkText.sectionHeader),
+            ),
+            const SizedBox(height: BlynkSpace.s12),
             SizedBox(
               key: const Key('order-tracking-map-frame'),
               height: _mapHeight,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.card),
+                borderRadius: BlynkRadius.chipAll,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -99,14 +123,19 @@ class OrderTrackingMap extends StatelessWidget {
                     // Only over MapLibre's OSM tiles. Google draws its own logo
                     // and copyright in that corner: never cover it.
                     if (mapNeedsOsmAttribution)
-                      const Positioned(left: AppSpacing.sm, bottom: AppSpacing.sm, child: _AttributionOverlay()),
-                    // Hairline frame above the map; ignores touches.
-                    Positioned.fill(
+                      const Positioned(
+                        left: BlynkSpace.s8,
+                        bottom: BlynkSpace.s8,
+                        child: _AttributionOverlay(),
+                      ),
+                    // Hairline frame above the map; ignores touches. It keeps a
+                    // light map from bleeding into a light page.
+                    const Positioned.fill(
                       child: IgnorePointer(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(AppRadius.card),
-                            border: Border.all(color: AppSurfaces.border),
+                            borderRadius: BlynkRadius.chipAll,
+                            border: Border.fromBorderSide(BorderSide(color: BlynkColors.line)),
                           ),
                         ),
                       ),
@@ -115,12 +144,15 @@ class OrderTrackingMap extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            _FreshnessCaption(
-              text: riderVisible && freshness == LocationFreshness.stale
-                  ? lastSeenText(location.now.difference(point.capturedAt))
-                  : null,
-              live: riderVisible && freshness == LocationFreshness.live,
+            const SizedBox(height: BlynkSpace.s12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _FreshnessCaption(
+                text: riderVisible && freshness == LocationFreshness.stale
+                    ? lastSeenText(location.now.difference(point.capturedAt))
+                    : null,
+                live: riderVisible && freshness == LocationFreshness.live,
+              ),
             ),
           ],
         );
@@ -134,19 +166,26 @@ class OrderTrackingMap extends StatelessWidget {
 class _AttributionOverlay extends StatelessWidget {
   const _AttributionOverlay();
 
+  /// The chip is a third-party credit sitting on live tiles, so it keeps its
+  /// own tight metrics rather than a page spacing step, and stays slightly
+  /// translucent so it reads as part of the map.
+  static const double _chipPadX = 6;
+  static const double _chipPadY = 2;
+  static const double _chipOpacity = 0.85;
+
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Container(
         key: const Key('map-attribution'),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm - 2, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: _chipPadX, vertical: _chipPadY),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(4),
+          color: BlynkColors.paper.withValues(alpha: _chipOpacity),
+          borderRadius: BlynkRadius.smAll,
         ),
-        child: const Text(
+        child: Text(
           mapAttributionText,
-          style: TextStyle(color: AppTextColors.primary, fontSize: 10.5, fontWeight: FontWeight.w500),
+          style: BlynkText.caption.copyWith(color: BlynkColors.ink, fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -167,32 +206,44 @@ class _FreshnessCaption extends StatelessWidget {
     final String label;
     final TextStyle style;
     if (live) {
-      dot = AppColors.primaryGreenColor;
+      dot = BlynkColors.positive;
       label = 'Live';
-      // Darker green than the dot: the brand green is 4.36:1 on the page
-      // background, below AA for 13 px text; this is 5.29:1.
-      style = const TextStyle(color: AppTextColors.positiveOnBackground, fontSize: 13, fontWeight: FontWeight.w700);
+      // Darker green than the dot: the brand green is below AA for text this
+      // size on a light surface; `positiveInk` clears it.
+      style = BlynkText.microLabel.copyWith(color: BlynkColors.positiveInk);
     } else if (text != null) {
-      dot = AppTextColors.muted;
+      dot = BlynkColors.lineStrong;
       label = text!;
-      style = const TextStyle(color: AppTextColors.onBackground, fontSize: 13, fontWeight: FontWeight.w600);
+      style = BlynkText.caption.copyWith(color: BlynkColors.ink3);
     } else {
-      dot = AppTextColors.muted;
+      dot = BlynkColors.lineStrong;
       label = 'Live location unavailable right now.';
-      style = const TextStyle(color: AppTextColors.onBackground, fontSize: 13);
+      style = BlynkText.caption.copyWith(color: BlynkColors.ink3);
     }
 
-    return Row(
-      key: const Key('order-tracking-caption'),
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+    // A soft `well` pill, so the indicator reads as one status object rather
+    // than loose text under the map. Never colour alone: the dot always sits
+    // beside words that say the same thing.
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: BlynkColors.well, borderRadius: BlynkRadius.full),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: BlynkSpace.s12, vertical: BlynkSpace.s8),
+        child: Row(
+          key: const Key('order-tracking-caption'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: _freshnessDot,
+              height: _freshnessDot,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+              ),
+            ),
+            const SizedBox(width: BlynkSpace.s8),
+            Flexible(child: Text(label, style: style)),
+          ],
         ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(child: Text(label, style: style)),
-      ],
+      ),
     );
   }
 }

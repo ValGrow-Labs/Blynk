@@ -647,3 +647,32 @@ STATUS: CUSTOMER ORDER EXPERIENCE COMPLETE AND VERIFIED
 - Final review fixes applied: rider location no longer appears in any admin/staff/rider delivery payload (allow-listed columns, guarded by tests); the rider APK opts out of Android backup (token still in localStorage); accuracy capped; an SSE database error ends cleanly; tile requests no longer flood the access log. Open decisions in the report §16.2: retention of the last GPS point (I3), per-user SSE cap (I4), hub-default address pin (H2).
 
 STATUS: LIVE LOCATION & DELIVERY TRACKING IMPLEMENTED AND AUTOMATED-TESTED — PHYSICAL ANDROID VERIFICATION PENDING; NOT PRODUCTION-READY
+
+---
+
+## Dental Clinic Appointments — Phase 1, Booking Only (COMPLETE)
+
+> **Report:** [blynk-dental-appointments-report.md](blynk-dental-appointments-report.md) · **Decision record:** [adr-005-dental-appointments-phase-1-no-payment.md](../03-decisions/adr-005-dental-appointments-phase-1-no-payment.md) · **Plan:** `docs/superpowers/plans/2026-09-22-blynk-dental-clinic-appointments.md`
+> **Test Suite:** backend 926 passing in 41 files (147 new, from a 779 baseline) via `npm run test:hygiene`, database identical after the run · Flutter 1738 passing (173 new, from a 1565 baseline), `flutter analyze` clean · admin 79 passing (11 new, from a 68 baseline), `typecheck`/`build` clean
+> **Not verified:** any live-backend or physical-device run of the new screens/endpoints (automated-test verification only, same caveat as every prior phase)
+
+- [x] IMPLEMENTED + TESTED: a new, independent backend module (`modules/dental/`) — **seven** new tables (`dental_clinics`, `doctors`, `clinic_doctors`, `doctor_availability`, `doctor_blocked_dates`, `appointments`, `appointment_status_history`, migration `007`), not the five an earlier planning estimate assumed. Does not reuse `orders`/`OrderStatus`/any `orders/lifecycle/*` file.
+- [x] IMPLEMENTED + TESTED: double-booking prevented at the database level — partial unique index `uq_appointments_active_slot` (`(clinic_doctor_id, start_at)` scoped to `HELD`/`CONFIRMED`), the same shape already proven for rider assignment, backed by an in-transaction pre-check and a Postgres `23505` catch as the backstop. The flagship concurrency test (two customers, one slot, exactly one confirmed appointment) passed repeatedly, including a deterministic interleaving proving the `23505` backstop — not the pre-check — is what actually resolves a genuine race.
+- [x] IMPLEMENTED + TESTED: 5-minute slot hold, lazy expiry (no background sweep — an expired hold is reclaimed by the next request that touches that slot). Five-state lifecycle: `HELD → CONFIRMED`, with `CANCELLED_BY_CUSTOMER`/`CANCELLED_BY_CLINIC` as terminal cancellations and `EXPIRED` defined but never actually written (fully lazy). "Completed" is derived at read time, never stored.
+- [x] IMPLEMENTED + TESTED: public discovery API (clinics, doctors, on-read availability from a weekly template + blocked dates — no slot-generation batch job); customer booking API (hold/confirm/cancel/list/detail); admin CRUD API (clinics, doctors, clinic-doctor pairings + fee, availability, blocked dates, appointment list, admin-cancel with required reason) — all `ADMIN`-gated, no new role, no clinic login.
+- [x] IMPLEMENTED + TESTED: Customer Flutter app — 9 new screens + `DentalProvider`, reached from a new Home entry point (not a 5th bottom-nav tab), using only existing design tokens/Atoms; a `ClinicLocationMap` wrapper around the existing `MapProvider` (static pin, no routing/ETA).
+- [x] IMPLEMENTED + TESTED: Admin UI — a new "Dental" section (Clinics, Doctors, clinic-doctor roster, Availability/blocked-dates, Appointments) in `apps/admin`, following the existing Catalog admin's list+dialog pattern.
+- [x] IMPLEMENTED + TESTED: notifications — `DENTAL_APPOINTMENT_CONFIRMED`/`DENTAL_APPOINTMENT_CANCELLED`, SMS only (grepped `orders/` for the real precedent rather than assuming SMS+WhatsApp), enqueued atomically in the same transaction as the status change.
+- [x] Generic-design audit across all 9 customer + 5 admin new screens: 0 Critical, 2 Important (deferred — a slot-chip tap target and a chip-border colour, neither payment/cutoff-related), 9 Minor (9 fixed, token/copy-only).
+- [ ] **NOT BUILT (by explicit instruction, not an oversight): online payment.** No gateway, payment UI, webhook, refund, or clinic settlement anywhere. The only payment-adjacent field is `appointments.consultation_fee_snapshot`, an indicative admin-set fee shown as "payable at the clinic." See ADR-005 — payment needs its own future ADR/plan once a provider is chosen.
+- [ ] **NOT BUILT (open decision, DENTAL-07): a cancellation time-cutoff.** A customer may cancel a `CONFIRMED` appointment they own **unconditionally** today — no window is enforced. The isolated guard `canCustomerCancel()` exists so a cutoff can be added later as a one-line change; no specific value (e.g. "2 hours") was ever implemented, even though an earlier planning-stage note suggested one.
+- [ ] **NOT BUILT (open decision, DENTAL-11): appointment reminders.** Only booking-confirmation and cancellation notifications exist; no reminder lead time was invented to unblock this.
+- [ ] **NOT BUILT (deliberately out of Phase 1 scope): `NO_SHOW` tracking, a stored `COMPLETED` state, rescheduling, and a clinic self-service portal/login.**
+
+### Known limitations
+- No online payment surface exists to attack or reconcile (by design). No cancellation cutoff and no reminders — both genuinely open business decisions, not gaps.
+- Availability computation issues a handful of queries per day in a requested range rather than one batched query; acceptable at the plan's stated scale (a handful of clinics, a hard-capped 30-day range).
+- `ClinicLocationMap`'s accessibility label is announced by two Semantics nodes on the real Google adapter (both correct, verbosity only) — left open pending an adapter-aware capability check.
+- No live-backend or physical-device verification was performed for any new screen or endpoint; all verification is via the automated test suites above.
+
+STATUS: DENTAL CLINIC APPOINTMENTS (PHASE 1, BOOKING ONLY) COMPLETE AND VERIFIED

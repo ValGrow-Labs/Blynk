@@ -102,9 +102,13 @@ void main() {
       handle.dispose();
     });
 
+    // 2026-09 redesign (plan §8 "yellow add control"): the compact pill's
+    // fill is `signal`/`signalPressed` - Blynk Yellow with an `ink` label.
+    // An earlier pass had moved it to a second, decorative green chasing the
+    // reference mock; that green is gone. Size/behaviour unchanged.
     testWidgets('visual is a 40 dp signal pill; the layout and hit box is 48 dp tall', (tester) async {
       await tester.pumpWidget(_host(tester, cart, AddToCartButton(product: milk)));
-      expect(tester.getSize(_fill(BlynkColors.signal)).height, 40);
+      expect(tester.getSize(_fill(BlynkCardProduct.addFill)).height, 40);
       expect(tester.getSize(find.byType(AddToCartButton)).height, 48);
       expect(tester.getSize(find.byType(AddToCartButton)).width, greaterThanOrEqualTo(64));
     });
@@ -112,14 +116,14 @@ void main() {
     testWidgets('pressing changes the fill only, never the bounds', (tester) async {
       await tester.pumpWidget(_host(tester, cart, AddToCartButton(product: milk)));
       final before = tester.getRect(find.byType(AddToCartButton));
-      final pillBefore = tester.getRect(_fill(BlynkColors.signal));
+      final pillBefore = tester.getRect(_fill(BlynkCardProduct.addFill));
 
       final gesture = await tester.startGesture(tester.getCenter(find.text('ADD')));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(_fill(BlynkColors.signalPressed), findsOneWidget);
-      expect(_fill(BlynkColors.signal), findsNothing);
+      expect(_fill(BlynkCardProduct.addFillPressed), findsOneWidget);
+      expect(_fill(BlynkCardProduct.addFill), findsNothing);
       expect(tester.getRect(find.byType(AddToCartButton)), before);
-      expect(tester.getRect(_fill(BlynkColors.signalPressed)), pillBefore);
+      expect(tester.getRect(_fill(BlynkCardProduct.addFillPressed)), pillBefore);
 
       await gesture.up();
       await tester.pumpAndSettle();
@@ -128,7 +132,7 @@ void main() {
 
     testWidgets('the 4 dp above and below the visual pill still hit', (tester) async {
       await tester.pumpWidget(_host(tester, cart, AddToCartButton(product: milk)));
-      final pill = tester.getRect(_fill(BlynkColors.signal));
+      final pill = tester.getRect(_fill(BlynkCardProduct.addFill));
       // 2 dp above the 40 dp pill is inside the 48 dp hit box.
       await tester.tapAt(Offset(pill.center.dx, pill.top - 2));
       await tester.pumpAndSettle();
@@ -231,10 +235,10 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('expanded ADD says "Add to Cart" and adds', (tester) async {
+    testWidgets('expanded ADD says "Add to cart" and adds', (tester) async {
       await tester.pumpWidget(_host(tester, cart, AddToCartButton(product: milk, compact: false, expanded: true)));
-      expect(find.text('Add to Cart'), findsOneWidget);
-      await tester.tap(find.text('Add to Cart'));
+      expect(find.text('Add to cart'), findsOneWidget);
+      await tester.tap(find.text('Add to cart'));
       await tester.pumpAndSettle();
       expect(cart.quantityOf('p1'), 1);
     });

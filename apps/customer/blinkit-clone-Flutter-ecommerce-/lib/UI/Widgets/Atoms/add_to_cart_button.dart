@@ -12,6 +12,11 @@ import 'quantity_stepper.dart';
 /// [- n +] stepper once it is - backed by the real CartProvider, which is the
 /// app's single source of cart truth.
 ///
+/// 2026-09 redesign (spec §3 "Product card"): the compact pill's fill is
+/// `signal` (Blynk Yellow) with an `ink` label and radius 10 (was fully
+/// rounded). This is the product card's one yellow moment (plan §8); the
+/// label/tap-target/cart behaviour is unchanged.
+///
 /// Every tap target is at least 48 x 48 dp (the visual pill is 40 dp), pressing
 /// changes colour only, and the swap is a fade over [BlynkMotion.base] (none
 /// under reduced motion). The button reads ONLY this product's quantity, so a
@@ -103,14 +108,14 @@ class _AddPillState extends State<_AddPill> {
     final product = widget.product;
     final available = product.isAvailable;
     final fill = !available
-        ? BlynkColors.well
-        : (_pressed ? BlynkColors.signalPressed : BlynkColors.signal);
+        ? BlynkCardProduct.addFillUnavailable
+        : (_pressed ? BlynkCardProduct.addFillPressed : BlynkCardProduct.addFill);
     final style =
         (widget.compact ? BlynkText.caption : BlynkText.label).copyWith(
       fontWeight: FontWeight.w800,
       letterSpacing: 0.4,
       // Unavailable is ink2 on well (never the muted grey, which fails 4.5:1).
-      color: available ? BlynkColors.onSignal : BlynkColors.ink2,
+      color: available ? BlynkCardProduct.addLabel : BlynkCardProduct.addLabelUnavailable,
     );
     void add() => context.read<CartProvider>().add(product);
 
@@ -142,7 +147,7 @@ class _AddPillState extends State<_AddPill> {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: fill,
-                  borderRadius: BlynkRadius.full,
+                  borderRadius: BlynkRadius.pillAll,
                   // Focus is a 2 dp ink ring, never colour alone.
                   border: _focused
                       ? Border.all(color: BlynkColors.ink, width: 2)
@@ -184,7 +189,7 @@ class _ExpandedAdd extends StatelessWidget {
       constraints:
           const BoxConstraints(minHeight: AddToCartButton._expandedHeight),
       child: BlynkButton.primary(
-        label: available ? 'Add to Cart' : 'Currently unavailable',
+        label: available ? 'Add to cart' : 'Currently unavailable',
         expand: true,
         onPressed:
             available ? () => context.read<CartProvider>().add(product) : null,

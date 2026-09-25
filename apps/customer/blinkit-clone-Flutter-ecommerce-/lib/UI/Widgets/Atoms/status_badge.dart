@@ -20,7 +20,7 @@ class StatusBadge extends StatelessWidget {
   /// Defaults to the tone's own glyph.
   final IconData? icon;
 
-  static const double _iconSize = 16;
+  static const double _iconSize = BlynkIcons.xs;
 
   ({Color background, Color foreground, IconData icon}) get _look {
     switch (tone) {

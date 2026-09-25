@@ -5,7 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:ecom/Models/address_model.dart';
 import 'package:ecom/Screens/add_edit_address_screen.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
+import 'package:ecom/UI/Widgets/Atoms/blynk_text_field.dart';
 import 'package:ecom/app_colors.dart';
+import 'package:ecom/design/tokens.dart';
 import 'package:ecom/app_theme.dart';
 
 /// Records what the screen asks the provider to do without touching the
@@ -93,8 +96,11 @@ void main() {
     }
   }
 
+  // The form's fields are BlynkTextFields wrapped in a FormField (the
+  // validator and the Form.validate() gate are unchanged); the shared
+  // component is what carries the label now.
   Finder fieldWith(String label) =>
-      find.widgetWithText(TextFormField, label);
+      find.widgetWithText(BlynkTextField, label);
 
   Future<void> fillRequired(WidgetTester tester) async {
     await tester.enterText(fieldWith('Recipient name'), 'QA Tester');
@@ -115,7 +121,7 @@ void main() {
       await scrollToBottom(tester);
       expect(find.text('Location'), findsOneWidget);
       expect(find.text('Delivery notes'), findsOneWidget);
-      expect(find.text('Save Address'), findsOneWidget);
+      expect(find.text('Save address'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
     });
 
@@ -162,7 +168,7 @@ void main() {
       expect(fieldWith('Address name'), findsNothing);
 
       await fillRequired(tester);
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(addresses.created?.label, 'Home');
@@ -175,7 +181,7 @@ void main() {
       await tester.tap(find.text('Work'));
       await tester.pump();
       await fillRequired(tester);
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(addresses.created?.label, 'Work');
@@ -189,13 +195,13 @@ void main() {
       expect(fieldWith('Address name'), findsOneWidget);
 
       await fillRequired(tester);
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
       expect(find.text('Enter a valid address name'), findsOneWidget);
       expect(addresses.created, isNull);
 
       await tester.enterText(fieldWith('Address name'), 'Parents');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
       expect(addresses.created?.label, 'Parents');
     });
@@ -234,7 +240,7 @@ void main() {
       await pumpScreen(tester, existing: _existing);
 
       await tester.enterText(fieldWith('Address line 1'), 'No. 99, New Lane');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(addresses.updatedId, _existing.id);
@@ -250,7 +256,7 @@ void main() {
         (tester) async {
       await pumpScreen(tester);
 
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(find.text('Enter a valid recipient name'), findsOneWidget);
@@ -264,7 +270,7 @@ void main() {
       await pumpScreen(tester);
       await fillRequired(tester);
 
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(addresses.created, isNotNull);
@@ -281,7 +287,7 @@ void main() {
 
       await tester.tap(find.byType(Switch));
       await tester.pump();
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(addresses.created?.isDefault, isTrue);
@@ -292,7 +298,7 @@ void main() {
       await pumpScreen(tester);
       await fillRequired(tester);
 
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(find.byType(AddEditAddressScreen), findsOneWidget);
@@ -339,7 +345,7 @@ void main() {
       await tester.enterText(fieldWith('Recipient name'), 'bbA Tester');
       await tester.enterText(fieldWith('Recipient phone'), 'bbA Tester');
       await tester.enterText(fieldWith('Address line 1'), 'No. 12, Test Lane');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(find.text('Enter a valid Sri Lankan mobile number'), findsOneWidget);
@@ -355,7 +361,7 @@ void main() {
       await tester.enterText(fieldWith('Recipient name'), '  Mohammed   Jaasir ');
       await tester.enterText(fieldWith('Recipient phone'), '077 123 4567');
       await tester.enterText(fieldWith('Address line 1'), 'No. 12,  Test Lane');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(addresses.created, isNotNull);
@@ -386,7 +392,7 @@ void main() {
       await fillRequired(tester);
       await scrollToBottom(tester);
       await tester.enterText(fieldWith('Latitude'), '91');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
 
       expect(find.text('Enter a valid latitude'), findsOneWidget);
@@ -398,14 +404,70 @@ void main() {
       await pumpScreen(tester);
       await fillRequired(tester);
       await tester.enterText(fieldWith('Postal code'), '123');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
       expect(find.text('Enter a valid 5-digit postal code'), findsOneWidget);
 
       await tester.enterText(fieldWith('Postal code'), '12500');
-      await tester.tap(find.text('Save Address'));
+      await tester.tap(find.text('Save address'));
       await settle(tester);
       expect(addresses.created?.postalCode, '12500');
+    });
+  });
+
+  group('premium form presentation (W7)', () {
+    testWidgets('a validation message is presented by the shared field, not Material decoration',
+        (tester) async {
+      await pumpScreen(tester);
+      await tester.tap(find.text('Save address'));
+      await settle(tester);
+
+      final phone = tester.widget<BlynkTextField>(fieldWith('Recipient phone'));
+      expect(phone.errorText, 'Enter a valid Sri Lankan mobile number');
+
+      // The component's own error treatment: a 2 dp problem border and the
+      // inline glyph, one per failing field. No rule was relaxed - all three
+      // required fields still fail.
+      final field = tester.widget<TextField>(
+        find.descendant(of: fieldWith('Recipient phone'), matching: find.byType(TextField)),
+      );
+      final border = field.decoration!.enabledBorder! as OutlineInputBorder;
+      expect(border.borderSide.color, BlynkColors.problem);
+      expect(border.borderSide.width, 2);
+      expect(find.byIcon(BlynkIcons.error), findsNWidgets(3));
+    });
+
+    // The pinned bar holds a BlynkButton.cta, whose inner Container carries an
+    // alignment and therefore EXPANDS to fill any bounded height it is given.
+    // In a bottomNavigationBar slot that would eat the whole screen and leave
+    // the form at zero height - and no finder would notice, because a
+    // zero-high body still builds. Only a measurement catches it.
+    testWidgets('the pinned action bar is a bar, not the whole page', (tester) async {
+      await pumpScreen(tester, size: const Size(400, 900));
+
+      final save = tester.getSize(find.widgetWithText(BlynkButton, 'Save address'));
+      expect(save.height, lessThan(120), reason: 'the CTA has swallowed the height budget');
+      expect(tester.getSize(find.byType(ListView)).height, greaterThan(600),
+          reason: 'the form body must keep the rest of the screen');
+    });
+
+    testWidgets('exactly one yellow ACTION on the screen, and it is Save address', (tester) async {
+      await pumpScreen(tester);
+
+      // Yellow actions only: the selected label chip and the default-address
+      // switch are selection chrome and are deliberately not counted (plan
+      // section 4.3 as settled in task-T2-report.md section 8 A).
+      final yellowAction = find.descendant(
+        of: find.byType(BlynkButton),
+        matching: find.byWidgetPredicate(
+          (w) => w is Container && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).color == BlynkCta.fill,
+        ),
+      );
+      expect(yellowAction, findsOneWidget);
+      expect(
+        find.ancestor(of: yellowAction, matching: find.widgetWithText(BlynkButton, 'Save address')),
+        findsOneWidget,
+      );
     });
   });
 
@@ -424,8 +486,8 @@ void main() {
 
         expect(tester.takeException(), isNull);
         // The action bar stays pinned and visible at every size.
-        expect(find.text('Save Address'), findsOneWidget);
-        final bar = tester.getRect(find.text('Save Address'));
+        expect(find.text('Save address'), findsOneWidget);
+        final bar = tester.getRect(find.text('Save address'));
         expect(bar.bottom, lessThanOrEqualTo(size.height));
       });
     }

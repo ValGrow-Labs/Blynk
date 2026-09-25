@@ -482,4 +482,182 @@ describe('Stage 3 Catalog & Authoritative Pricing Module', () => {
       expect(res.body.data.product.calculated_selling_price).toBe(400.0);
     });
   });
+
+  // ==========================================================================
+  // 6. IMAGE FOCAL POINT (migration 009)
+  // ==========================================================================
+  // Product tiles crop the photo to fill a fixed square (`BoxFit.cover`), and
+  // that crop used to be anchored at the centre - so a photo whose subject
+  // sits off-centre lost it. These two percentages move the anchor.
+  //
+  // The whole feature is additive: 50/50 is the centre, which is exactly what
+  // the crop already did, so an untouched product must be indistinguishable
+  // from how it behaved before 009.
+  describe('Product image focal point', () => {
+    async function createProduct(body: Record<string, unknown>) {
+      return await request(app)
+        .post('/api/v1/admin/products')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          category_id: 'c0000001-0000-0000-0000-000000000001',
+          unit: '1 pc',
+          purchase_cost: 100.0,
+          ...body,
+        });
+    }
+
+    it('defaults to 50/50 - the centre - when the operator never touches it', async () => {
+      const res = await createProduct({
+        name: 'Focal Default Item',
+        sku: 'TEST-SKU-FOCAL-DEFAULT',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.product.image_focal_x).toBe(50);
+      expect(res.body.data.product.image_focal_y).toBe(50);
+    });
+
+    it('round-trips a stored focal point through create, admin read and the customer feed', async () => {
+      const created = await createProduct({
+        name: 'Focal Roundtrip Item',
+        sku: 'TEST-SKU-FOCAL-RT',
+        image_url: 'http://localhost:4000/uploads/products/tall.png',
+        // Top-of-frame subject: the case this feature exists for.
+        image_focal_x: 35,
+        image_focal_y: 12,
+      });
+
+      expect(created.status).toBe(201);
+      expect(created.body.data.product.image_focal_x).toBe(35);
+      expect(created.body.data.product.image_focal_y).toBe(12);
+
+      const id = created.body.data.product.id;
+
+      // Really in PostgreSQL, not just echoed back by the handler.
+      const admin = await request(app)
+        .get(`/api/v1/admin/products/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(admin.status).toBe(200);
+      expect(admin.body.data.product.image_focal_x).toBe(35);
+      expect(admin.body.data.product.image_focal_y).toBe(12);
+
+      // And it reaches the customer app, which is the only place the crop
+      // is actually performed.
+      const customer = await request(app).get(`/api/v1/products/${id}`);
+      expect(customer.status).toBe(200);
+      expect(customer.body.data.product.image_focal_x).toBe(35);
+      expect(customer.body.data.product.image_focal_y).toBe(12);
+      // Still customer-safe: the focal point is not a pricing field.
+      expect(customer.body.data.product).not.toHaveProperty('purchase_cost');
+    });
+
+    it('accepts the extremes and is re-adjustable at any time', async () => {
+      const created = await createProduct({
+        name: 'Focal Extremes Item',
+        sku: 'TEST-SKU-FOCAL-EDGE',
+        image_focal_x: 0,
+        image_focal_y: 0,
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.data.product.image_focal_x).toBe(0);
+      expect(created.body.data.product.image_focal_y).toBe(0);
+
+      const moved = await request(app)
+        .patch(`/api/v1/admin/products/${created.body.data.product.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ image_focal_x: 100, image_focal_y: 100 });
+      expect(moved.status).toBe(200);
+      expect(moved.body.data.product.image_focal_x).toBe(100);
+      expect(moved.body.data.product.image_focal_y).toBe(100);
+
+      // Back to centre - nothing is one-way.
+      const reset = await request(app)
+        .patch(`/api/v1/admin/products/${created.body.data.product.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ image_focal_x: 50, image_focal_y: 50 });
+      expect(reset.status).toBe(200);
+      expect(reset.body.data.product.image_focal_x).toBe(50);
+    });
+
+    it('rejects a focal point outside 0-100, or one that is not a whole percentage', async () => {
+      const tooHigh = await createProduct({
+        name: 'Focal Too High',
+        sku: 'TEST-SKU-FOCAL-HIGH',
+        image_focal_x: 101,
+      });
+      const negative = await createProduct({
+        name: 'Focal Negative',
+        sku: 'TEST-SKU-FOCAL-NEG',
+        image_focal_y: -1,
+      });
+      const fractional = await createProduct({
+        name: 'Focal Fractional',
+        sku: 'TEST-SKU-FOCAL-FRAC',
+        image_focal_x: 33.3,
+      });
+      const notANumber = await createProduct({
+        name: 'Focal Text',
+        sku: 'TEST-SKU-FOCAL-TEXT',
+        image_focal_x: 'top',
+      });
+
+      for (const res of [tooHigh, negative, fractional, notANumber]) {
+        expect(res.status).toBe(400);
+      }
+
+      // The rejection is a validation failure, not a database CHECK blowing
+      // up as a 500.
+      expect(tooHigh.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects an out-of-range focal point on update too', async () => {
+      const created = await createProduct({
+        name: 'Focal Update Guard',
+        sku: 'TEST-SKU-FOCAL-UPD',
+      });
+      const res = await request(app)
+        .patch(`/api/v1/admin/products/${created.body.data.product.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ image_focal_y: 250 });
+
+      expect(res.status).toBe(400);
+
+      // And the stored value is untouched by the rejected write.
+      const after = await request(app)
+        .get(`/api/v1/admin/products/${created.body.data.product.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(after.body.data.product.image_focal_y).toBe(50);
+    });
+
+    it('leaves every pre-existing seeded product at the centre - migration 009 changed no row', async () => {
+      // The seeded catalogue predates 009. Nothing backfilled it and nothing
+      // is allowed to have moved, so every one of those images still crops
+      // exactly as it did before the feature landed.
+      const { rows } = await pool.query<{
+        sku: string;
+        image_focal_x: number;
+        image_focal_y: number;
+      }>(`SELECT sku, image_focal_x, image_focal_y FROM products WHERE sku NOT LIKE 'TEST-SKU-%'`);
+
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(row.image_focal_x).toBe(50);
+        expect(row.image_focal_y).toBe(50);
+      }
+    });
+
+    it('an untouched product carries the centre through the customer feed', async () => {
+      const res = await request(app).get('/api/v1/products?limit=100');
+      expect(res.status).toBe(200);
+
+      const seeded = res.body.data.products.filter(
+        (p: any) => !String(p.sku).startsWith('TEST-SKU-')
+      );
+      expect(seeded.length).toBeGreaterThan(0);
+      for (const product of seeded) {
+        expect(product.image_focal_x).toBe(50);
+        expect(product.image_focal_y).toBe(50);
+      }
+    });
+  });
 });

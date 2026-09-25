@@ -5,11 +5,23 @@ import 'package:flutter/services.dart';
 import '../../../design/tokens.dart';
 
 /// "- n +" for a cart line. The pill is 40 dp tall but each button's hit area
-/// is 48 x 48, and pressing changes colour only, never layout, so it can sit
-/// where an ADD button morphs into it.
+/// is [BlynkStepper.minTapSize] (48 x 48), and pressing changes colour only,
+/// never layout, so it can sit where an ADD button morphs into it.
+///
+/// Every value comes from [BlynkStepper] (plan §8: a pill on
+/// [BlynkStepper.surface] with a [BlynkStepper.borderStrong] boundary) — the
+/// pill never carries the yellow, and nothing here can drift from the token
+/// layer.
 ///
 /// Decrement is offered while [quantity] is above [min]; increment while it is
-/// below [max] (no upper limit when [max] is null).
+/// below [max] (no upper limit when [max] is null). [busy] is the in-flight
+/// state for a cart write that has not come back yet: both controls stop
+/// responding and say so to a screen reader, while the count keeps showing
+/// the quantity the customer can see.
+///
+/// **Cart behaviour is the caller's**, unchanged: this widget only reports
+/// taps. A screen that removes a line when the count reaches zero keeps doing
+/// exactly that by passing `min: 0`.
 class QuantityStepper extends StatelessWidget {
   const QuantityStepper({
     super.key,
@@ -19,6 +31,7 @@ class QuantityStepper extends StatelessWidget {
     required this.productName,
     this.min = 0,
     this.max,
+    this.busy = false,
   });
 
   final int quantity;
@@ -28,8 +41,12 @@ class QuantityStepper extends StatelessWidget {
   final int min;
   final int? max;
 
-  static const double _hit = 48;
-  static const double _visual = 40;
+  /// A cart write is in flight: both controls are inert and announced as
+  /// disabled, so a second tap cannot queue a duplicate change.
+  final bool busy;
+
+  static const double _hit = BlynkStepper.minTapSize;
+  static const double _visual = BlynkStepper.visualHeight;
 
   void _haptic() {
     // Selection click is the Android convention; iOS/desktop stay quiet.
@@ -40,8 +57,8 @@ class QuantityStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canAdd = onIncrement != null && (max == null || quantity < max!);
-    final canRemove = onDecrement != null && quantity > min;
+    final canAdd = !busy && onIncrement != null && (max == null || quantity < max!);
+    final canRemove = !busy && onDecrement != null && quantity > min;
 
     return SizedBox(
       height: _hit,
@@ -52,7 +69,14 @@ class QuantityStepper extends StatelessWidget {
             top: (_hit - _visual) / 2,
             bottom: (_hit - _visual) / 2,
             child: DecoratedBox(
-              decoration: BoxDecoration(color: BlynkColors.signal, borderRadius: BlynkRadius.full),
+              decoration: BoxDecoration(
+                color: BlynkStepper.surface,
+                borderRadius: BlynkStepper.radius,
+                // plan §8: a `line-strong` control boundary. `line` on `paper`
+                // measures 1.19:1 — the hairline the control-outline guard
+                // exists to keep off real controls.
+                border: Border.fromBorderSide(BorderSide(color: BlynkStepper.borderStrong)),
+              ),
             ),
           ),
           Row(
@@ -60,7 +84,7 @@ class QuantityStepper extends StatelessWidget {
             children: [
               _StepButton(
                 icon: Icons.remove,
-                label: 'Remove one $productName',
+                label: busy ? 'Remove one $productName, updating' : 'Remove one $productName',
                 onTap: canRemove
                     ? () {
                         _haptic();
@@ -82,7 +106,7 @@ class QuantityStepper extends StatelessWidget {
                       child: Text(
                         '$quantity',
                         textAlign: TextAlign.center,
-                        style: BlynkText.label.copyWith(color: BlynkColors.onSignal),
+                        style: BlynkStepper.count.copyWith(color: BlynkStepper.countColor),
                       ),
                     ),
                   ),
@@ -90,7 +114,7 @@ class QuantityStepper extends StatelessWidget {
               ),
               _StepButton(
                 icon: Icons.add,
-                label: 'Add one more $productName',
+                label: busy ? 'Add one more $productName, updating' : 'Add one more $productName',
                 onTap: canAdd
                     ? () {
                         _haptic();
@@ -151,8 +175,8 @@ class _StepButtonState extends State<_StepButton> {
                 ),
                 child: Icon(
                   widget.icon,
-                  size: BlynkIcons.md,
-                  color: enabled ? BlynkColors.onSignal : BlynkColors.ink2,
+                  size: BlynkStepper.iconSize,
+                  color: enabled ? BlynkStepper.icon : BlynkStepper.iconDisabled,
                 ),
               ),
             ),

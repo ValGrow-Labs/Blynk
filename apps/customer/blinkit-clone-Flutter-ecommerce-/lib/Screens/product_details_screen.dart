@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../Models/product_model.dart';
 import '../Services/Providers/cart.provider.dart';
@@ -10,21 +11,46 @@ import '../Services/app_errors.dart';
 import '../UI/Widgets/Atoms/add_to_cart_button.dart';
 import '../UI/Widgets/Atoms/app_skeleton.dart';
 import '../UI/Widgets/Atoms/app_state_views.dart';
-import '../UI/Widgets/Atoms/card_product.dart';
+import '../UI/Widgets/Atoms/blynk_button.dart';
+import '../UI/Widgets/Atoms/circular_icon_button.dart';
 import '../UI/Widgets/Atoms/failure_states.dart';
-import '../UI/Widgets/Organisms/bottom_cart_container.dart';
-import '../app_colors.dart';
-import '../app_design.dart';
-import '../design/tokens.dart';
+import '../UI/Widgets/Atoms/image_well.dart';
 import '../UI/Widgets/Atoms/money_text.dart';
+import '../UI/Widgets/Atoms/status_badge.dart';
+import '../design/tokens.dart';
 
 /// Full product page, opened from any ProductCard (Home, Categories,
 /// Search). The tapped product renders immediately, then the page asks
 /// the backend for that product by id so price and availability are the
 /// current ones.
 ///
-/// There is no favourite action: the backend has no favourites module and
-/// this page doesn't pretend otherwise.
+/// ## 2026-09 redesign (W3) — what carries this screen, and what is missing
+///
+/// ```
+/// (o) back                              (o) share
+///         LARGE IMAGE HERO          <- ProductImageWell, the centrepiece
+/// Category                          <- real category_name
+/// Product name                      <- display, the type hierarchy's anchor
+/// Unit . Pack size
+/// Rs. 540        [ Available ]      <- real selling_price, real is_available
+/// Product details (expandable)      <- only sections with real content
+/// ------------------------------------
+/// STICKY:   [      Add to cart      ]   flat signal, ink label
+/// ```
+///
+/// **Deliberately absent, because the backend has no field for any of them:**
+/// a rating, a review count, a discount percentage, a struck original price, a
+/// per-unit ("per 100 g") price, nutrition, certification or trust badges and
+/// a favourite/wishlist control (there is no wishlist module). None of them is
+/// rendered as a placeholder, a zero or a "coming soon" — each is omitted
+/// entirely. If `description` is null the About section does not render at
+/// all. The share action carries the product's **name** only: there is no
+/// public product URL to link to, so none is invented.
+///
+/// The page therefore breathes more than a typical commerce detail page. That
+/// is the correct outcome, not an unfinished one: the weight is carried by the
+/// image, the type hierarchy and the whitespace rather than by invented
+/// commerce chrome.
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({
     super.key,
@@ -67,17 +93,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     Widget body;
     Widget? bottomBar;
+    // Nothing to share once the store says the product is gone.
+    final shareable =
+        failure == ProductDetailFailure.notFound ? null : product;
 
     if (failure == ProductDetailFailure.notFound) {
       // Removed or deactivated in the store - even if we have a listing
       // copy, it must not stay purchasable here.
       body = AppStateView(
-        icon: Icons.inventory_2_outlined,
+        icon: BlynkIcons.packed,
         title: 'Product no longer available',
         message: 'This item has been removed from the store.',
-        actionLabel: 'Go Back',
+        actionLabel: 'Go back',
         onAction: () => Navigator.of(context).maybePop(),
-        accent: AppTextColors.secondary,
       );
     } else if (product == null) {
       body = failure == ProductDetailFailure.network
@@ -94,15 +122,73 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: BlynkColors.paper,
+        surfaceTintColor: BlynkColors.clear,
         elevation: 0,
         scrolledUnderElevation: 0.5,
+        automaticallyImplyLeading: false,
+        leading: Navigator.of(context).canPop() ? const _CircularBack() : null,
+        actions: [
+          if (shareable != null) _ShareAction(product: shareable),
+          const SizedBox(width: BlynkSpace.s4),
+        ],
       ),
       body: body,
       bottomNavigationBar: bottomBar,
+    );
+  }
+}
+
+/// The mock's circular chrome control, using the shared
+/// [CircularIconButton]. It keeps the platform back tooltip so assistive
+/// technology — and `WidgetTester.pageBack()` — still find it as the back
+/// affordance rather than as an anonymous icon.
+class _CircularBack extends StatelessWidget {
+  const _CircularBack();
+
+  /// Inside the AppBar's 56 dp leading slot; the tap target stays 48 dp.
+  static const double _size = 40;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = MaterialLocalizations.of(context).backButtonTooltip;
+    return Center(
+      child: Tooltip(
+        message: label,
+        child: CircularIconButton(
+          icon: BlynkIcons.back,
+          size: _size,
+          semanticLabel: label,
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+    );
+  }
+}
+
+/// The mock's circular share control. It uses the `share_plus` capability the
+/// app already ships (Profile's "Share the app"), and it shares the product's
+/// **real name** and nothing else — there is no public product URL, no price
+/// claim and no invented deep link in the shared text.
+class _ShareAction extends StatelessWidget {
+  const _ShareAction({required this.product});
+
+  final ProductModel product;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: CircularIconButton(
+        icon: BlynkIcons.share,
+        size: _CircularBack._size,
+        semanticLabel: 'Share this product',
+        onPressed: () => Share.share(
+          '${product.name} on Blynk',
+          subject: product.name,
+        ),
+      ),
     );
   }
 }
@@ -116,75 +202,86 @@ class _DetailsBody extends StatelessWidget {
   // Leaves room for the global floating cart bar when it slides in.
   static const double _floatingCartClearance = 96;
 
+  /// The hero never takes more than this share of the viewport height, so the
+  /// name and the price are still above the fold on a short phone.
+  static const double _heroHeightShare = 0.48;
+
+  /// The image column's share of a two-column layout.
+  static const double _heroColumnShare = 0.45;
+
+  /// Floor for the two-column hero, so it stays a hero on a short laptop.
+  static const double _heroMinSide = 160;
+
+  /// The content column's cap on a very wide desktop.
+  static const double _wideContentCap = 1120;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final content =
-            wide ? _wideLayout(constraints) : _narrowLayout(constraints);
+        final content = wide
+            ? _wideLayout(context, constraints)
+            : _narrowLayout(context, constraints);
 
-        return Stack(
-          children: [
-            Positioned.fill(child: content),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: wide ? 560 : 9999),
-                child: const BottomStickyContainer(),
-              ),
-            ),
-          ],
-        );
+        // 2026-09-24: a `BottomStickyContainer` (the global floating cart
+        // bar) used to be Stack-ed over this body. It was the one screen
+        // that already owns a bottom bar, so the two stacked — and because
+        // the floating one overlays rather than occupying layout, it sat on
+        // top of the "Product details" section instead of above it. The
+        // View-cart action moved into [_BottomCtaBar], which is this
+        // screen's single bottom bar. Every other pushed route still uses
+        // BottomStickyContainer; they have no bar of their own.
+        return content;
       },
     );
   }
 
-  Widget _narrowLayout(BoxConstraints constraints) {
-    const pad = AppSpacing.lg;
-    // Square image, but never so tall that the name and price fall below
-    // the fold on a short phone.
-    final imageSize = math.min(
-      constraints.maxWidth - pad * 2,
-      constraints.maxHeight * 0.48,
+  Widget _narrowLayout(BuildContext context, BoxConstraints constraints) {
+    final gutter = BlynkSpace.gutterFor(constraints.maxWidth);
+    // Square, but never so tall that the name and price fall below the fold.
+    final heroSide = math.min(
+      constraints.maxWidth - gutter * 2,
+      constraints.maxHeight * _heroHeightShare,
     );
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        pad,
-        AppSpacing.xs,
-        pad,
+      padding: EdgeInsets.fromLTRB(
+        gutter,
+        BlynkSpace.s8,
+        gutter,
         _floatingCartClearance,
       ),
       children: [
         _Entrance(
           scaleFrom: 0.96,
-          child: _ImagePanel(product: product, height: imageSize),
+          child: Center(
+            child: SizedBox(
+              width: heroSide,
+              height: heroSide,
+              child: _Hero(product: product),
+            ),
+          ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        _Entrance(
-          delay: 60,
-          child: _ProductSummary(product: product),
-        ),
-        _Entrance(
-          delay: 100,
-          child: _ProductSections(product: product),
-        ),
+        const SizedBox(height: BlynkSpace.s24),
+        _Entrance(delay: 60, child: _ProductSummary(product: product)),
+        _Entrance(delay: 100, child: _ProductSections(product: product)),
       ],
     );
   }
 
-  Widget _wideLayout(BoxConstraints constraints) {
-    const hPad = AppSpacing.xxxl;
-    const vPad = AppSpacing.xxl;
-    const gap = 48.0;
-    final contentWidth = math.min(constraints.maxWidth, 1120.0) - hPad * 2;
+  Widget _wideLayout(BuildContext context, BoxConstraints constraints) {
+    const hPad = BlynkSpace.s32;
+    const vPad = BlynkSpace.s24;
+    const gap = BlynkSpace.s48;
+    final contentWidth =
+        math.min(constraints.maxWidth, _wideContentCap) - hPad * 2;
     // Image column takes ~45%, capped so it never outgrows the viewport
     // height on a landscape laptop (1280 x 720).
-    final imageSize = math.max(
-      160.0,
+    final heroSide = math.max(
+      _heroMinSide,
       math.min(
-        (contentWidth - gap) * 0.45,
-        constraints.maxHeight - vPad * 2 - AppSpacing.lg,
+        (contentWidth - gap) * _heroColumnShare,
+        constraints.maxHeight - vPad * 2 - BlynkSpace.s16,
       ),
     );
 
@@ -204,8 +301,9 @@ class _DetailsBody extends StatelessWidget {
               _Entrance(
                 scaleFrom: 0.96,
                 child: SizedBox(
-                  width: imageSize,
-                  child: _ImagePanel(product: product, height: imageSize),
+                  width: heroSide,
+                  height: heroSide,
+                  child: _Hero(product: product),
                 ),
               ),
               const SizedBox(width: gap),
@@ -216,7 +314,7 @@ class _DetailsBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _ProductSummary(product: product),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: BlynkSpace.s24),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 360),
                         child: AddToCartButton(
@@ -225,7 +323,7 @@ class _DetailsBody extends StatelessWidget {
                           expanded: true,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: BlynkSpace.s8),
                       _CartFeedback(product: product),
                       _ProductSections(product: product),
                     ],
@@ -240,34 +338,38 @@ class _DetailsBody extends StatelessWidget {
   }
 }
 
-class _ImagePanel extends StatelessWidget {
-  const _ImagePanel({required this.product, required this.height});
+/// The image hero: the shared [ProductImageWell], so the branded no-image
+/// fallback here is the same composition as on a 152 dp rail card and cannot
+/// drift from it. 40 of the 41 live products have no photo, so this is the
+/// screen's default appearance — it is sized generously and inset so the
+/// fallback medallion reads as deliberate rather than as a missing picture.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.product});
 
   final ProductModel product;
-  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      image: true,
-      label: product.name,
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: AppSurfaces.subtle,
-          borderRadius: BorderRadius.circular(AppRadius.sheet),
-        ),
-        clipBehavior: Clip.antiAlias,
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ProductImage(product: product, fallbackIconSize: 72),
-            if (!product.isAvailable)
-              Container(color: Colors.white.withValues(alpha: 0.55)),
-          ],
-        ),
-      ),
+    return ProductImageWell(
+      product: product,
+      radius: BlynkRadius.lgAll,
+      inset: BlynkSpace.s24,
+      overlay: product.isAvailable ? null : const _UnavailableWash(),
+    );
+  }
+}
+
+/// The unavailable wash, on the card's own tokens so the two surfaces agree.
+/// It carries no words: the availability badge below the price is what says
+/// so, and it says it in one place.
+class _UnavailableWash extends StatelessWidget {
+  const _UnavailableWash();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: BlynkCardProduct.unavailableWashColor
+          .withValues(alpha: BlynkCardProduct.unavailableWashOpacity),
     );
   }
 }
@@ -293,45 +395,28 @@ class _ProductSummary extends StatelessWidget {
             product.categoryName,
             style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
           ),
-          const SizedBox(height: AppSpacing.xs + 2),
+          const SizedBox(height: BlynkSpace.s8),
         ],
         Semantics(
           header: true,
-          child: Text(
-            product.name,
-            style: const TextStyle(
-              fontSize: 24,
-              height: 1.2,
-              fontWeight: FontWeight.w800,
-              color: AppTextColors.primary,
-            ),
-          ),
+          child: Text(product.name, style: BlynkText.display),
         ),
         if (unitLine.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.xs + 2),
+          const SizedBox(height: BlynkSpace.s4),
           Text(
             unitLine,
-            style: const TextStyle(
-              fontSize: 15,
-              color: AppTextColors.secondary,
-            ),
+            style: BlynkText.body.copyWith(color: BlynkColors.ink2),
           ),
         ],
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: BlynkSpace.s24),
+        // Wraps rather than clipping when the price grows at 2.0x text scale.
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.sm,
+          spacing: BlynkSpace.s16,
+          runSpacing: BlynkSpace.s12,
           children: [
-            MoneyText(
-              product.sellingPrice,
-              style: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: AppTextColors.primary,
-              ),
-            ),
-            if (!product.isAvailable) const _UnavailablePill(),
+            MoneyText(product.sellingPrice, style: BlynkType.priceHero),
+            _AvailabilityBadge(isAvailable: product.isAvailable),
           ],
         ),
       ],
@@ -339,34 +424,36 @@ class _ProductSummary extends StatelessWidget {
   }
 }
 
-class _UnavailablePill extends StatelessWidget {
-  const _UnavailablePill();
+/// The real `is_available` flag and nothing else. Available is a genuine
+/// positive state, so it is the one place green appears on this screen;
+/// unavailable is neutral rather than red, because an out-of-stock item is
+/// not an error.
+class _AvailabilityBadge extends StatelessWidget {
+  const _AvailabilityBadge({required this.isAvailable});
+
+  final bool isAvailable;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs + 1,
-      ),
-      decoration: BoxDecoration(
-        color: AppSurfaces.tile,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: const Text(
-        'Currently unavailable',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: AppTextColors.primary,
-        ),
-      ),
-    );
+    return isAvailable
+        ? const StatusBadge(
+            tone: BadgeTone.positive,
+            label: 'Available',
+            icon: BlynkIcons.check,
+          )
+        : const StatusBadge(
+            tone: BadgeTone.neutral,
+            label: 'Currently unavailable',
+          );
   }
 }
 
 /// Description (only when the backend has one) and the product's real
-/// catalogue attributes. Nothing here is generated copy.
+/// catalogue attributes. Nothing here is generated copy, and a section with
+/// no real content is not rendered at all — there is no empty "Nutrition" or
+/// "Certifications" block, because there is no such data.
+///
+/// Sections are separated by space, never by a rule.
 class _ProductSections extends StatelessWidget {
   const _ProductSections({required this.product});
 
@@ -387,86 +474,137 @@ class _ProductSections extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (description.isNotEmpty) ...[
-          const _SectionDivider(),
-          const _SectionTitle('About this product'),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            description,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.5,
-              color: AppTextColors.primary,
-            ),
+          const SizedBox(height: BlynkSpace.s32),
+          _DetailSection(
+            title: 'About this product',
+            child: Text(description, style: BlynkText.body),
           ),
         ],
         if (rows.isNotEmpty) ...[
-          const _SectionDivider(),
-          const _SectionTitle('Product details'),
-          const SizedBox(height: AppSpacing.xs),
-          for (final row in rows)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs + 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 96,
-                    child: Text(
-                      row.key,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppTextColors.secondary,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      row.value,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppTextColors.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(height: BlynkSpace.s24),
+          _DetailSection(
+            title: 'Product details',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final row in rows) _AttributeRow(row: row),
+              ],
             ),
+          ),
         ],
       ],
     );
   }
 }
 
-class _SectionDivider extends StatelessWidget {
-  const _SectionDivider();
+/// One catalogue attribute, label above value rather than in a fixed-width
+/// column: a 96 dp label column clipped "Category" the moment the text scale
+/// went past 1.3x.
+class _AttributeRow extends StatelessWidget {
+  const _AttributeRow({required this.row});
+
+  final MapEntry<String, String> row;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-      child: Divider(height: 1, color: AppSurfaces.border),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: BlynkSpace.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(row.key, style: BlynkType.productUnit),
+          const SizedBox(height: BlynkSpace.s4),
+          Text(row.value, style: BlynkText.label),
+        ],
+      ),
     );
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+/// An expandable section. It opens expanded: with at most three short
+/// attribute rows behind it, a collapsed-by-default section would hide real
+/// content behind a tap for no gain. The header is a header *and* a button to
+/// assistive technology, and its target is the shared 48 dp floor.
+class _DetailSection extends StatefulWidget {
+  const _DetailSection({required this.title, required this.child});
 
-  final String text;
+  final String title;
+  final Widget child;
+
+  @override
+  State<_DetailSection> createState() => _DetailSectionState();
+}
+
+class _DetailSectionState extends State<_DetailSection> {
+  bool _expanded = true;
+
+  void _toggle() => setState(() => _expanded = !_expanded);
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      header: true,
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w800,
-          color: AppTextColors.primary,
+    final duration = BlynkMotion.resolve(context, BlynkMotion.base);
+    final body = Padding(
+      padding: const EdgeInsets.only(top: BlynkSpace.s12),
+      child: widget.child,
+    );
+
+    // AnimatedSize rather than AnimatedCrossFade: the latter keeps the hidden
+    // child in the tree, so a "collapsed" section would still be there to be
+    // read. This one genuinely removes it. (AnimatedSize asserts on a zero
+    // duration, hence the reduced-motion branch.)
+    final Widget reveal;
+    if (duration == Duration.zero) {
+      reveal = _expanded ? body : const SizedBox.shrink();
+    } else {
+      reveal = AnimatedSize(
+        duration: duration,
+        curve: BlynkMotion.easeOut,
+        alignment: Alignment.topLeft,
+        child: _expanded ? body : const SizedBox(width: double.infinity),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          header: true,
+          button: true,
+          expanded: _expanded,
+          label: widget.title,
+          onTap: _toggle,
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: _toggle,
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(minHeight: BlynkControl.minHeight),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BlynkText.sectionHeader,
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: duration,
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      size: BlynkIcons.md,
+                      color: BlynkColors.ink2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
+        reveal,
+      ],
     );
   }
 }
@@ -474,10 +612,9 @@ class _SectionTitle extends StatelessWidget {
 /// "2 in cart" once the product is in the cart - the confirmation that the
 /// tap landed, driven by CartProvider rather than a one-off toast.
 class _CartFeedback extends StatelessWidget {
-  const _CartFeedback({required this.product, this.fallback});
+  const _CartFeedback({required this.product});
 
   final ProductModel product;
-  final Widget? fallback;
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +623,7 @@ class _CartFeedback extends StatelessWidget {
     );
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
+      duration: BlynkMotion.resolve(context, BlynkMotion.base),
       // The outgoing label drops out at once so the two never overlap.
       switchOutCurve: const Threshold(1),
       transitionBuilder: (child, animation) => FadeTransition(
@@ -494,38 +631,42 @@ class _CartFeedback extends StatelessWidget {
         child: SizeTransition(sizeFactor: animation, child: child),
       ),
       child: quantity > 0
-          ? Row(
+          ? Padding(
               key: const ValueKey('in-cart'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.check_circle_rounded,
-                  size: 16,
-                  color: AppColors.primaryGreenColor,
-                ),
-                const SizedBox(width: AppSpacing.xs + 2),
-                Flexible(
-                  child: Text(
-                    '$quantity in cart',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryGreenColor,
+              padding: const EdgeInsets.only(bottom: BlynkSpace.s8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    BlynkIcons.check,
+                    size: BlynkIcons.xs,
+                    color: BlynkColors.positive,
+                  ),
+                  const SizedBox(width: BlynkSpace.s4),
+                  Flexible(
+                    child: Text(
+                      '$quantity in cart',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BlynkText.microLabel
+                          .copyWith(color: BlynkColors.positiveInk),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             )
-          : (fallback ?? const SizedBox(key: ValueKey('empty'))),
+          : const SizedBox(key: ValueKey('empty')),
     );
   }
 }
 
-/// Phone CTA pinned under the content (Scaffold.bottomNavigationBar), so
-/// it sits inside the safe area and the global floating cart stacks above
-/// it rather than on top of it.
+/// The sticky phone CTA, pinned under the content
+/// (`Scaffold.bottomNavigationBar`) so it sits inside the safe area and the
+/// global floating cart stacks above it rather than on top of it.
+///
+/// It is the screen's **one** yellow action: a flat [BlynkCta.fill] surface
+/// with an ink label, full width, no gradient. The price is not repeated here
+/// — it is stated once, in the summary, at hero size.
 class _BottomCtaBar extends StatelessWidget {
   const _BottomCtaBar({required this.product});
 
@@ -537,61 +678,27 @@ class _BottomCtaBar extends StatelessWidget {
       slideFrom: 24,
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppSurfaces.border)),
+          color: BlynkColors.paper,
+          border: Border(top: BorderSide(color: BlynkColors.line)),
         ),
         child: SafeArea(
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.md,
+              BlynkSpace.s16,
+              BlynkSpace.s12,
+              BlynkSpace.s16,
+              BlynkSpace.s12,
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Flexible(
-                  flex: 2,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      MoneyText(
-                        product.sellingPrice,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppTextColors.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      _CartFeedback(
-                        product: product,
-                        fallback: Text(
-                          product.unit,
-                          key: const ValueKey('unit'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTextColors.secondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _CartFeedback(product: product),
                 ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  flex: 3,
-                  child: AddToCartButton(
-                    product: product,
-                    compact: false,
-                    expanded: true,
-                  ),
-                ),
+                _CtaRow(product: product),
               ],
             ),
           ),
@@ -601,8 +708,59 @@ class _BottomCtaBar extends StatelessWidget {
   }
 }
 
+/// The bottom bar's action row. With an empty cart it is the full-width
+/// add-to-cart control and nothing else — the screen's one job. The moment
+/// the cart holds anything it splits: the add/stepper control keeps the
+/// yellow and the left, and a **secondary** (outlined) "View cart" takes the
+/// right.
+///
+/// "View cart" is deliberately *not* a second yellow. The add control is
+/// already this screen's signal-yellow moment, and two yellow actions in one
+/// bar leave no primary. This is also why the global floating cart bar — a
+/// whole second bar, ink, with its own yellow pill — no longer overlays this
+/// screen: one bar, one primary.
+class _CtaRow extends StatelessWidget {
+  const _CtaRow({required this.product});
+
+  final ProductModel product;
+
+  /// Matches `AddToCartButton`'s expanded height so the two sit level.
+  static const double _height = 52;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCart = context.select<CartProvider, bool>((cart) => cart.itemCount > 0);
+
+    final add = AddToCartButton(
+      product: product,
+      compact: false,
+      expanded: true,
+    );
+    if (!hasCart) return add;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: add),
+        const SizedBox(width: BlynkSpace.s12),
+        Expanded(
+          child: SizedBox(
+            height: _height,
+            child: BlynkButton.secondary(
+              label: 'View cart',
+              expand: true,
+              onPressed: () => Navigator.of(context).pushNamed('/cart'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// One-shot entrance: fade plus a small slide or scale. Plays when the
-/// widget first mounts (content replacing the skeleton), never on rebuilds.
+/// widget first mounts (content replacing the skeleton), never on rebuilds,
+/// and not at all when the platform asks for reduced motion.
 class _Entrance extends StatelessWidget {
   const _Entrance({
     required this.child,
@@ -618,11 +776,14 @@ class _Entrance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (BlynkMotion.resolve(context, BlynkMotion.base) == Duration.zero) {
+      return child;
+    }
     final total = 280 + delay;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: total),
-      curve: Interval(delay / total, 1, curve: Curves.easeOutCubic),
+      curve: Interval(delay / total, 1, curve: BlynkMotion.easeOut),
       child: child,
       builder: (context, t, child) => Opacity(
         opacity: t,
@@ -638,61 +799,81 @@ class _Entrance extends StatelessWidget {
   }
 }
 
+/// The loading state, laid out like the loaded page: a square hero, then the
+/// eyebrow / name / unit / price / badge stack, then the CTA. One shared pulse
+/// drives every block.
 class _DetailsSkeleton extends StatelessWidget {
   const _DetailsSkeleton({required this.wide});
 
   final bool wide;
 
+  static const Widget _info = Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      AppSkeleton(width: 90, height: 12),
+      SizedBox(height: BlynkSpace.s8),
+      AppSkeleton(height: 28),
+      SizedBox(height: BlynkSpace.s8),
+      AppSkeleton(width: 180, height: 28),
+      SizedBox(height: BlynkSpace.s12),
+      AppSkeleton(width: 120, height: 16),
+      SizedBox(height: BlynkSpace.s24),
+      AppSkeleton(width: 140, height: 32),
+      SizedBox(height: BlynkSpace.s32),
+      AppSkeleton(height: 52, radius: BlynkRadius.lg),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
-    const info = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppSkeleton(width: 90, height: 10),
-        SizedBox(height: AppSpacing.md),
-        AppSkeleton(height: 22),
-        SizedBox(height: AppSpacing.sm),
-        AppSkeleton(width: 180, height: 22),
-        SizedBox(height: AppSpacing.md),
-        AppSkeleton(width: 80, height: 13),
-        SizedBox(height: AppSpacing.lg),
-        AppSkeleton(width: 110, height: 26),
-        SizedBox(height: AppSpacing.xl),
-        AppSkeleton(height: 52, radius: AppRadius.button),
-      ],
-    );
-
     return Semantics(
       label: 'Loading product',
-      // One shared pulse for every block below.
-      child: SkeletonScope(
+      child: SkeletonScope.ensure(
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (!wide) {
-              final size = math.min(
-                constraints.maxWidth - AppSpacing.lg * 2,
-                constraints.maxHeight * 0.48,
+              final gutter = BlynkSpace.gutterFor(constraints.maxWidth);
+              final side = math.min(
+                constraints.maxWidth - gutter * 2,
+                constraints.maxHeight * _DetailsBody._heroHeightShare,
               );
               return ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: EdgeInsets.fromLTRB(
+                  gutter,
+                  BlynkSpace.s8,
+                  gutter,
+                  BlynkSpace.s48,
+                ),
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  AppSkeleton(height: size, radius: AppRadius.sheet),
-                  const SizedBox(height: AppSpacing.xl),
-                  info,
+                  Center(
+                    child: AppSkeleton(
+                      width: side,
+                      height: side,
+                      radius: BlynkRadius.lg,
+                    ),
+                  ),
+                  const SizedBox(height: BlynkSpace.s24),
+                  _info,
                 ],
               );
             }
-            final width =
-                math.min(constraints.maxWidth, 1120.0) - AppSpacing.xxxl * 2;
-            final size = math.min(
-              (width - 48) * 0.45,
-              constraints.maxHeight - AppSpacing.xxl * 2 - AppSpacing.lg,
+            final width = math.min(
+                  constraints.maxWidth,
+                  _DetailsBody._wideContentCap,
+                ) -
+                BlynkSpace.s32 * 2;
+            final side = math.max(
+              _DetailsBody._heroMinSide,
+              math.min(
+                (width - BlynkSpace.s48) * _DetailsBody._heroColumnShare,
+                constraints.maxHeight - BlynkSpace.s24 * 2 - BlynkSpace.s16,
+              ),
             );
             return Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xxxl,
-                vertical: AppSpacing.xxl,
+                horizontal: BlynkSpace.s32,
+                vertical: BlynkSpace.s24,
               ),
               child: Align(
                 alignment: Alignment.topCenter,
@@ -702,12 +883,12 @@ class _DetailsSkeleton extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AppSkeleton(
-                        width: size,
-                        height: size,
-                        radius: AppRadius.sheet,
+                        width: side,
+                        height: side,
+                        radius: BlynkRadius.lg,
                       ),
-                      const SizedBox(width: 48),
-                      const Expanded(child: info),
+                      const SizedBox(width: BlynkSpace.s48),
+                      const Expanded(child: _info),
                     ],
                   ),
                 ),

@@ -13,6 +13,7 @@ import 'package:ecom/Services/Exceptions/api_exception.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
 import 'package:ecom/Services/Providers/product.provider.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_skeleton.dart';
+import 'package:ecom/UI/Widgets/Atoms/section_header.dart';
 import 'package:ecom/app_theme.dart';
 import 'package:ecom/design/tokens.dart';
 
@@ -168,7 +169,7 @@ void main() {
     expect(find.text('Check the spelling or browse categories.'), findsOneWidget);
     expect(find.text('Sorry!'), findsNothing);
 
-    await tester.tap(find.text('Browse Categories'));
+    await tester.tap(find.text('Browse categories'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('route:/categories'), findsOneWidget);
@@ -380,12 +381,20 @@ void main() {
     });
   });
 
-  testWidgets('section titles are sentence case at the caption size (no all-caps eyebrow)', (tester) async {
+  // 2026-09 premium redesign (W2): Search's two section titles are now the
+  // shared BlynkSectionHeader, the same one Home and every other screen use,
+  // instead of this screen's own caption-sized eyebrow. The rule the original
+  // assertion protected - sentence case, no letter-spacing, no all-caps
+  // eyebrow - is asserted unchanged; only the size and colour move, and they
+  // move onto the shared token rather than onto a new number.
+  testWidgets('section titles are the shared section header, sentence case, no all-caps eyebrow', (tester) async {
     await pumpSearch(tester);
+    expect(find.byType(BlynkSectionHeader), findsWidgets);
     final title = tester.widget<Text>(find.text('Browse categories'));
-    expect(title.style?.fontSize, BlynkText.caption.fontSize);
+    expect(title.style?.fontSize, BlynkText.sectionHeader.fontSize);
+    expect(title.style?.fontWeight, BlynkText.sectionHeader.fontWeight);
     expect(title.style?.letterSpacing, isNull);
-    expect(title.style?.color, BlynkColors.ink2);
+    expect(title.style?.color, BlynkColors.ink);
     expect(find.text('BROWSE CATEGORIES'), findsNothing);
   });
 }

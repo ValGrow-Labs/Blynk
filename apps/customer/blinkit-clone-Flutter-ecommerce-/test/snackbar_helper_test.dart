@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ecom/UI/Widgets/Atoms/app_toast.dart';
 import 'package:ecom/UI/Widgets/Atoms/snackbar_helper.dart';
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/contrast.dart';
 import 'package:ecom/design/tokens.dart';
 import 'package:ecom/main.dart' show rootScaffoldMessengerKey;
 
@@ -146,7 +147,7 @@ void main() {
     });
 
     testWidgets('an error is marked with a glyph as well as words', (tester) async {
-      await tester.pumpWidget(host(tester, (c) => showBlynkSnackBar(context: c, message: 'Could not save', isError: true)));
+      await tester.pumpWidget(host(tester, (c) => showBlynkSnackBar(context: c, message: 'Could not save', tone: SnackTone.error)));
       await tester.tap(find.text('Show'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -196,7 +197,7 @@ void main() {
             message: 'We could not place your order. Check your connection.',
             actionLabel: 'Try again',
             onAction: () {},
-            isError: true,
+            tone: SnackTone.error,
           ),
           textScale: scale,
         ));
@@ -206,6 +207,54 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    // T2 (brief item 9): one feedback system with success / error / info.
+    // The tone picks the GLYPH; the surface stays ink on every tone, so the
+    // meaning is never colour alone (Global Constraints) and no tone adds an
+    // unmeasured colour pairing.
+    group('tone', () {
+      final glyphs = <SnackTone, IconData?>{
+        SnackTone.info: null,
+        SnackTone.success: BlynkIcons.check,
+        SnackTone.error: BlynkIcons.error,
+      };
+
+      glyphs.forEach((tone, glyph) {
+        testWidgets('${tone.name}: its own glyph, always on the ink surface in paper', (tester) async {
+          await tester.pumpWidget(host(
+            tester,
+            (c) => showBlynkSnackBar(context: c, message: 'Message', tone: tone),
+          ));
+          await tester.tap(find.text('Show'));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+
+          expect(find.text('Message'), findsOneWidget);
+          final bar = tester.widget<SnackBar>(find.byType(SnackBar));
+          expect(bar.backgroundColor, BlynkColors.ink, reason: 'the tone never changes the surface');
+          final icons = find.descendant(of: find.byType(SnackBar), matching: find.byType(Icon));
+          if (glyph == null) {
+            expect(icons, findsNothing);
+          } else {
+            expect(find.descendant(of: find.byType(SnackBar), matching: find.byIcon(glyph)), findsOneWidget);
+            expect(tester.widget<Icon>(icons.first).color, BlynkColors.paper);
+            expect(contrastRatio(BlynkColors.paper, BlynkColors.ink), greaterThanOrEqualTo(4.5));
+          }
+        });
+      });
+
+      test('the three tones have three distinct treatments', () {
+        expect(glyphs.values.toSet(), hasLength(3));
+      });
+
+      testWidgets('info is the default, so no existing call site gained a glyph', (tester) async {
+        await tester.pumpWidget(host(tester, (c) => showBlynkSnackBar(context: c, message: 'Saved')));
+        await tester.tap(find.text('Show'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.descendant(of: find.byType(SnackBar), matching: find.byType(Icon)), findsNothing);
+      });
+    });
 
     testWidgets('text contrast guideline (paper on ink)', (tester) async {
       final handle = tester.ensureSemantics();

@@ -3,7 +3,19 @@ import 'package:provider/provider.dart';
 
 import '../../../design/tokens.dart';
 import '../../../Services/Providers/address.provider.dart';
+import '../Atoms/blynk_button.dart';
 
+/// The checkout screen's delivery-address row.
+///
+/// **Behaviour is frozen** (W9): it still loads the address book once after
+/// the first frame, still reads `defaultAddress`, still shows "Add" instead of
+/// "Change" when there is none, and still pushes `/user/address`. Only the
+/// skin moved onto tokens — the address-required guard itself lives in
+/// [CartScreenPaymentContainer].
+///
+/// It draws **no surface of its own**. `checkout_screen.dart` already wraps it
+/// in `appCardDecoration()` with `Clip.antiAlias`, so the top-rounded white box
+/// this used to paint was a second card inside the first one.
 class CartScreenAddressContainer extends StatefulWidget {
   const CartScreenAddressContainer({
     super.key,
@@ -30,13 +42,9 @@ class _CartScreenAddressContainerState extends State<CartScreenAddressContainer>
     final address = context.watch<AddressProvider>().defaultAddress;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: const BoxDecoration(
-        color: BlynkColors.paper,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20.0),
-          topRight: Radius.circular(20.0),
-        ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: BlynkSpace.s12,
+        vertical: BlynkSpace.s8,
       ),
       width: double.infinity,
       // A floor, not a fixed height: two lines of text at a large text size
@@ -53,28 +61,30 @@ class _CartScreenAddressContainerState extends State<CartScreenAddressContainer>
                   const Icon(
                     BlynkIcons.addressHome,
                     color: BlynkColors.ink2,
+                    size: BlynkIcons.md,
                   ),
-                  const SizedBox(
-                    width: 15,
-                  ),
+                  const SizedBox(width: BlynkSpace.s12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        // The answer, then the supporting detail — the same
+                        // two type roles the payment row beside it uses.
                         Text(
                           address != null
                               ? 'Delivering to ${address.label}'
                               : 'No delivery address yet',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: BlynkText.rowLabel,
                         ),
                         Text(
                           address?.displaySummary ?? 'Add an address to check out',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          style: BlynkText.bodyMuted,
                         ),
                       ],
                     ),
@@ -82,26 +92,17 @@ class _CartScreenAddressContainerState extends State<CartScreenAddressContainer>
                 ],
               ),
             ),
-            // A real 48 dp button (it was bare tappable text with no semantics).
-            TextButton(
+            const SizedBox(width: BlynkSpace.s8),
+            // The app's one plain-ink text button, the same one the address
+            // book's own cards use. It is deliberately not a second yellow:
+            // "Place order" below is this screen's single yellow action.
+            BlynkButton.tertiary(
+              label: address != null ? 'Change' : 'Add',
+              semanticLabel:
+                  address != null ? 'Change delivery address' : 'Add delivery address',
               onPressed: () {
                 Navigator.of(context).pushNamed('/user/address');
               },
-              style: TextButton.styleFrom(
-                minimumSize: const Size(48, 48),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                tapTargetSize: MaterialTapTargetSize.padded,
-              ),
-              child: Semantics(
-                label: address != null ? 'Change delivery address' : 'Add delivery address',
-                excludeSemantics: true,
-                child: Text(
-                  address != null ? "Change" : "Add",
-                  style: const TextStyle(
-                    color: BlynkColors.ink,
-                  ),
-                ),
-              ),
             ),
           ],
         ),

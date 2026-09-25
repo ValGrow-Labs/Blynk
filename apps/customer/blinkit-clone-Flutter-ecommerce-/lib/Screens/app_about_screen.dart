@@ -17,40 +17,54 @@ class _AppAboutScreenState extends State<AppAboutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(
         title: const Text('About us'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: BlynkSpace.s16,
-          vertical: BlynkSpace.s16,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          // A short page of prose: a full-width desktop line is unreadable.
+          // W8: the 640 is now [BlynkForm.proseMaxWidth].
+          constraints: const BoxConstraints(maxWidth: BlynkForm.proseMaxWidth),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              BlynkSpace.s16,
+              BlynkSpace.s24,
+              BlynkSpace.s16,
+              BlynkSpace.s32,
+            ),
+            children: [
+              const Text('Blynk', style: BlynkText.display),
+              FutureBuilder<PackageInfo>(
+                future: _packageInfo,
+                builder: (context, snapshot) {
+                  final info = snapshot.data;
+                  // Nothing while loading, and nothing (rather than a made-up
+                  // number) if the platform cannot report a version.
+                  if (info == null) return const SizedBox.shrink();
+                  final build =
+                      info.buildNumber.isEmpty ? '' : ' (${info.buildNumber})';
+                  return Padding(
+                    padding: const EdgeInsets.only(top: BlynkSpace.s4),
+                    child: Text(
+                      'Version ${info.version}$build',
+                      style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: BlynkSpace.s24),
+              const Text(
+                'Blynk delivers groceries from a local store in '
+                '${StoreInfo.hubName}. You place the order in the app and pay '
+                'in cash when it arrives. Deliveries go out '
+                '${StoreInfo.deliveryHoursLabel}.',
+                style: BlynkText.body,
+              ),
+            ],
+          ),
         ),
-        children: [
-          const Text('Blynk', style: BlynkText.title),
-          FutureBuilder<PackageInfo>(
-            future: _packageInfo,
-            builder: (context, snapshot) {
-              final info = snapshot.data;
-              // Nothing while loading, and nothing (rather than a made-up
-              // number) if the platform cannot report a version.
-              if (info == null) return const SizedBox.shrink();
-              final build =
-                  info.buildNumber.isEmpty ? '' : ' (${info.buildNumber})';
-              return Text(
-                'Version ${info.version}$build',
-                style: BlynkText.body.copyWith(color: BlynkColors.ink2),
-              );
-            },
-          ),
-          const SizedBox(height: BlynkSpace.s16),
-          const Text(
-            'Blynk delivers groceries from a local store in '
-            '${StoreInfo.hubName}. You place the order in the app and pay '
-            'in cash when it arrives. Deliveries go out '
-            '${StoreInfo.deliveryHoursLabel}.',
-            style: BlynkText.body,
-          ),
-        ],
       ),
     );
   }

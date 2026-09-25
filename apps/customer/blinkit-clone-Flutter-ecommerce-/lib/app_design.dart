@@ -38,8 +38,14 @@ class AppRadius {
 class AppTextColors {
   static const Color primary = BlynkColors.ink;
   static const Color secondary = BlynkColors.ink2;
-  // 2.54:1 on white: fails the text floor. Non-text glyphs and disabled only;
-  // no token equivalent. Call sites that use it for text migrate in T3/T2.
+  // 2.54:1 on white: fails the text floor, which is why it has no token
+  // equivalent and never gained one.
+  //
+  // W8: it now has **zero call sites in lib/**. The last one was
+  // `dental_home_entry.dart`'s trailing chevron, which moved to
+  // `BlynkColors.ink2`. It is kept declared only so `audit_fixes_test.dart`
+  // can keep measuring that it fails the floor - the evidence for not using
+  // it. Do not reintroduce it; use `ink2` or `ink3`.
   static const Color muted = Color(0xff9CA3AF);
   static const Color onYellow = BlynkColors.onSignal;
 
@@ -71,15 +77,18 @@ class AppSurfaces {
 }
 
 /// Shared decoration for the app's card surfaces so a product tile, an
-/// order row and an address card don't each invent their own radius. Flat: a
-/// hairline edge, no shadow (only the cart bar and sheets are raised).
+/// order row and an address card don't each invent their own radius.
+///
+/// 2026-09 redesign (spec §2 "Soft shadow is back"): cards float on the
+/// [BlynkElevation.soft] token instead of being flat; the hairline outside
+/// edge stays alongside it.
 BoxDecoration appCardDecoration({Color? color}) {
   return BoxDecoration(
     color: color ?? BlynkColors.paper,
     borderRadius: AppRadius.cardBorder,
     // Outside stroke: the edge is drawn beyond the box, so adding it moved no layout.
     border: Border.all(color: BlynkColors.line, strokeAlign: BorderSide.strokeAlignOutside),
-    boxShadow: BlynkElevation.none,
+    boxShadow: BlynkElevation.soft,
   );
 }
 
@@ -96,11 +105,8 @@ ButtonStyle appPrimaryButtonStyle({EdgeInsetsGeometry? padding}) {
           horizontal: AppSpacing.xxl,
           vertical: AppSpacing.md + 2,
         ),
-    textStyle: const TextStyle(
-      fontFamily: 'Catamaran',
-      fontWeight: FontWeight.w800,
-      fontSize: 15,
-    ),
+    // 15 px w800 — the size [appButtonTextScale] measures against.
+    textStyle: BlynkText.rowLabel.copyWith(fontWeight: FontWeight.w800),
     shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonBorder),
   );
 }

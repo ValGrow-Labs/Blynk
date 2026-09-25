@@ -11,14 +11,48 @@ export const promotionDestinationTypes = ['CATEGORY', 'PRODUCT', 'CATALOG'] as c
 /**
  * How the carousel card is filled behind the content. The customer app
  * renders exactly what is stored here - it no longer picks its own tint.
+ *
+ * IMAGE and ARTWORK both carry `background_image_url`; what differs is what
+ * the app draws on top of it:
+ *
+ *   IMAGE   - the operator's photograph under a flat ink scrim, with the
+ *             app's own headline and subtitle over it.
+ *   ARTWORK - a finished banner, full-bleed: no scrim, no headline, no
+ *             subtitle. The uploaded file already carries its own wording.
+ *
+ * NOTE: `title` is REQUIRED for ARTWORK too, exactly as for every other
+ * type. It is never painted on an ARTWORK card, so it looks redundant - it
+ * is not. It is the slide's accessibility label in the customer app (with
+ * the words baked into a picture, a screen-reader user would otherwise get
+ * nothing at all) and it is the row label in the Blynk Ops promotion list.
+ * Do not make it optional for ARTWORK.
  */
-export const promotionBackgroundTypes = ['SOLID', 'GRADIENT', 'IMAGE'] as const;
+export const promotionBackgroundTypes = ['SOLID', 'GRADIENT', 'IMAGE', 'ARTWORK'] as const;
 
 /** #RGB, #RRGGBB or #RRGGBBAA. */
 const hexColor = z
   .string()
   .trim()
   .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, 'Must be a hex colour, e.g. #FFE141');
+
+/**
+ * A crop anchor for the card's background image, as a percentage of that
+ * image's own width or height (migration 009).
+ *
+ * The carousel card is a fixed shape and the background fills it with
+ * `cover`, so whatever does not fit is cropped away - from the centre, until
+ * now. A banner whose headline runs along the top lost exactly that headline.
+ * This says which point must survive the crop, and it applies to IMAGE and
+ * ARTWORK alike because both draw `background_image_url`.
+ *
+ * 50 is the centre, which is where `cover` anchored before this existed - so
+ * omitting it leaves every stored banner rendering exactly as it does today.
+ */
+const focalPercent = z
+  .number()
+  .int('Focal point must be a whole percentage')
+  .min(0, 'Focal point must be between 0 and 100')
+  .max(100, 'Focal point must be between 0 and 100');
 
 export const createPromotionSchema = z
   .object({
@@ -29,6 +63,8 @@ export const createPromotionSchema = z
     background_color: hexColor.nullable().optional(),
     background_color_end: hexColor.nullable().optional(),
     background_image_url: z.string().trim().url('Must be a valid URL').nullable().optional(),
+    background_focal_x: focalPercent.default(50).optional(),
+    background_focal_y: focalPercent.default(50).optional(),
     cta_label: z.string().trim().max(40).nullable().optional(),
     cta_destination_type: z.enum(promotionDestinationTypes).nullable().optional(),
     // A category slug or a product id; ignored for CATALOG.
@@ -46,10 +82,18 @@ export const createPromotionSchema = z
         path: ['background_color_end'],
       });
     }
-    if (data.background_type === 'IMAGE' && !data.background_image_url) {
+    // ARTWORK is validated exactly as IMAGE: both are nothing without the
+    // file they are meant to render.
+    if (
+      (data.background_type === 'IMAGE' || data.background_type === 'ARTWORK') &&
+      !data.background_image_url
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'An image background needs background_image_url',
+        message:
+          data.background_type === 'ARTWORK'
+            ? 'A full-artwork background needs background_image_url'
+            : 'An image background needs background_image_url',
         path: ['background_image_url'],
       });
     }
@@ -63,7 +107,12 @@ export const createPromotionSchema = z
         path: ['cta_destination_value'],
       });
     }
-    if (type && !data.cta_label) {
+    // ARTWORK is the one type that may carry a destination with no button
+    // label: the uploaded banner already draws its own call to action, so the
+    // customer app makes the whole card tappable instead of stamping a pill
+    // over the artwork. Every other type still needs the label - without one
+    // there would be nothing on the card to press.
+    if (type && !data.cta_label && data.background_type !== 'ARTWORK') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'cta_label is required when the promotion has a destination',
@@ -85,6 +134,8 @@ export const updatePromotionSchema = z.object({
   background_color: hexColor.nullable().optional(),
   background_color_end: hexColor.nullable().optional(),
   background_image_url: z.string().trim().url('Must be a valid URL').nullable().optional(),
+  background_focal_x: focalPercent.optional(),
+  background_focal_y: focalPercent.optional(),
   cta_label: z.string().trim().max(40).nullable().optional(),
   cta_destination_type: z.enum(promotionDestinationTypes).nullable().optional(),
   cta_destination_value: z.string().trim().max(255).nullable().optional(),

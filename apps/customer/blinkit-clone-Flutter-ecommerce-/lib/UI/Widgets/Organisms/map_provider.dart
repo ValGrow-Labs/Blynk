@@ -60,10 +60,22 @@ class MapMarkerSpec {
 /// Builds a [TrackingMapView]. The default is the real map; OrderTrackingMap
 /// accepts an override so widget tests can supply a fake without a native
 /// platform view.
+///
+/// [semanticsLabel] is an optional screen-reader label override for the map
+/// region (task F1 fix round 1). It is honoured by the Google adapter today
+/// (falling back to its own generic delivery/rider phrase when omitted -
+/// `google_map_view.dart`'s `GoogleTrackingMapView.semanticsLabel`); the
+/// MapLibre adapter has no built-in semantics node of its own and silently
+/// ignores it. Every implementation of this typedef must still declare the
+/// parameter (Dart function-type subtyping requires it, even when unused),
+/// which is why the grocery-order call sites (`OrderTrackingMap`'s own
+/// `_defaultMapBuilder`, and every test fake) now accept-and-forward/ignore
+/// it without changing their own behaviour.
 typedef TrackingMapBuilder = TrackingMapView Function({
   required GeoPoint initialCenter,
   required double initialZoom,
   required Set<MapMarkerSpec> markers,
+  String? semanticsLabel,
 });
 
 /// A read-only map showing a fixed set of markers - the live delivery-tracking
@@ -79,11 +91,22 @@ abstract class TrackingMapView extends StatelessWidget {
     required GeoPoint initialCenter,
     required double initialZoom,
     required Set<MapMarkerSpec> markers,
+    String? semanticsLabel,
   }) {
     switch (MapProviderConfig.kind) {
       case MapProviderKind.google:
-        return GoogleTrackingMapView(key: key, initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
+        return GoogleTrackingMapView(
+          key: key,
+          initialCenter: initialCenter,
+          initialZoom: initialZoom,
+          markers: markers,
+          semanticsLabel: semanticsLabel,
+        );
       case MapProviderKind.maplibre:
+        // MapLibre draws no Semantics node of its own (task-F1 review-fix
+        // round 1): nothing to override yet, so semanticsLabel is not
+        // threaded to it. A caller relying on a label with this adapter
+        // must supply its own Semantics wrapper (ClinicLocationMap does).
         return MapLibreTrackingMapView(
             key: key, initialCenter: initialCenter, initialZoom: initialZoom, markers: markers);
     }

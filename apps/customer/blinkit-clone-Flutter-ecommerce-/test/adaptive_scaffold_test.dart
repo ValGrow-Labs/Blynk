@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ecom/UI/Widgets/Organisms/adaptive_scaffold.dart';
+import 'package:ecom/design/contrast.dart';
 import 'package:ecom/design/tokens.dart';
 
 import 'fixtures/component_host.dart';
@@ -141,7 +142,10 @@ void main() {
       expect(selections, [1, 3, 0]);
     });
 
-    testWidgets('selected: filled ink icon and a 3 dp signal bar; others outlined ink2', (tester) async {
+    // 2026-09 redesign (spec §3 "Bottom nav"): the selected item now sits on
+    // a `signal` rounded-square tile (chip radius) behind the icon. Was: a
+    // 3 dp signal bar beneath it — that rule is deliberately reversed.
+    testWidgets('selected: filled ink icon on a signal rounded-square tile; others outlined ink2', (tester) async {
       await pump(tester, selected: 1);
 
       Icon iconOf(String label) => tester.widget<Icon>(
@@ -162,9 +166,17 @@ void main() {
 
       expect(indicator('Orders').color, BlynkColors.signal);
       expect(indicator('Shop').color, BlynkColors.clear);
-      final bar3 = tester.widget<Container>(find.byKey(const ValueKey('nav-indicator-Orders')));
-      expect(bar3.constraints!.maxHeight, 3);
-      // No yellow pill behind the icon: signal is the 3 dp bar only.
+      // The selected item's tile is a rounded square (chip radius), not a bar.
+      expect(indicator('Orders').borderRadius, BlynkRadius.chipAll);
+      expect(indicator('Shop').borderRadius, BlynkRadius.chipAll);
+      // review R1 M-2: the indicator's only size assertion (the old 3 dp
+      // bar height) was dropped along with the bar itself and never
+      // replaced, so a regression shrinking/growing the tile would have
+      // passed silently. The tile is the icon (BlynkIcons.md) plus its own
+      // padding on every side, square, regardless of selection state.
+      const tileSize = BlynkIcons.md + 2 * (BlynkSpace.s4 + 2);
+      expect(tester.getSize(find.byKey(const ValueKey('nav-indicator-Orders'))), const Size(tileSize, tileSize));
+      expect(tester.getSize(find.byKey(const ValueKey('nav-indicator-Shop'))), const Size(tileSize, tileSize));
       expect(find.byType(AnimatedContainer), findsNothing);
     });
 
@@ -218,6 +230,18 @@ void main() {
       );
       expect(find.byKey(const ValueKey('nav-badge-dot')), findsOneWidget);
       expect(find.bySemanticsLabel('Orders, order in progress'), findsOneWidget);
+      // T2 ruling: the dot is BlynkNav.badgeDot, which is neutral `ink` and
+      // NOT `problem`. An order on its way is in progress, not a failure, and
+      // plan §5 reserves red for errors and cancellation.
+      final dot = tester.widget<DecoratedBox>(
+        find.descendant(
+          of: find.byKey(const ValueKey('nav-badge-dot')),
+          matching: find.byType(DecoratedBox),
+        ),
+      ).decoration as BoxDecoration;
+      expect(dot.color, BlynkNav.badgeDot);
+      expect(dot.color, isNot(BlynkColors.problem));
+      expect((dot.border! as Border).top.color, BlynkNav.badgeDotBorder);
       handle.dispose();
     });
 
@@ -269,14 +293,42 @@ void main() {
       expect(selections, [2, 0]);
     });
 
-    testWidgets('the rail marks the selection and uses the filled icon', (tester) async {
+    // T2: the rail carries the SAME selected treatment as the compact bar —
+    // a filled glyph on a `signal` rounded-square tile (plan §9,
+    // BlynkNav.selectedTile). Previously the rail used a quiet `well` pill,
+    // so one component showed two different selected states depending only on
+    // the width it was given. The assertion is reversed deliberately; the
+    // rule it encoded ("no yellow pill on the rail") is the one that changed.
+    testWidgets('the rail marks the selection with the same signal tile and the filled icon', (tester) async {
       await pump(tester, width: 800, selected: 3);
       final r = tester.widget<NavigationRail>(rail);
       expect(r.selectedIndex, 3);
       expect(find.byIcon(BlynkIcons.profileSelected), findsOneWidget);
       expect(find.byIcon(BlynkIcons.profile), findsNothing);
-      // No yellow pill on the rail either.
-      expect(r.indicatorColor, isNot(BlynkColors.signal));
+      expect(r.indicatorColor, BlynkNav.selectedTile);
+      expect(BlynkNav.selectedTile, BlynkColors.signal);
+      expect(
+        (r.indicatorShape! as RoundedRectangleBorder).borderRadius,
+        BlynkNav.tileRadius,
+        reason: 'a rounded square, not a stadium pill',
+      );
+      expect(r.selectedIconTheme!.color, BlynkNav.selectedIcon);
+      expect(r.unselectedIconTheme!.color, BlynkNav.unselectedIcon);
+      expect(r.selectedLabelTextStyle!.fontSize, greaterThanOrEqualTo(12));
+      expect(r.unselectedLabelTextStyle!.fontSize, greaterThanOrEqualTo(12));
+      // The tile's glyph stays legible on Blynk Yellow.
+      expect(contrastRatio(BlynkNav.selectedIcon, BlynkNav.selectedTile), greaterThanOrEqualTo(4.5));
+    });
+
+    testWidgets('compact and rail agree: one selected treatment, not two', (tester) async {
+      await pump(tester, width: 400, selected: 1);
+      final compactTile =
+          tester.widget<Container>(find.byKey(const ValueKey('nav-indicator-Orders'))).decoration!
+              as BoxDecoration;
+      await pump(tester, width: 800, selected: 1);
+      final r = tester.widget<NavigationRail>(rail);
+      expect(compactTile.color, r.indicatorColor);
+      expect(compactTile.borderRadius, (r.indicatorShape! as RoundedRectangleBorder).borderRadius);
     });
 
     testWidgets('semantics: a selected, labelled button', (tester) async {

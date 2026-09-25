@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ecom/UI/Widgets/Atoms/app_state_views.dart';
 import 'package:ecom/UI/Widgets/Atoms/blynk_button.dart';
+import 'package:ecom/UI/Widgets/Atoms/failure_states.dart';
+import 'package:ecom/Services/app_errors.dart';
 import 'package:ecom/design/tokens.dart';
 
 import 'fixtures/component_host.dart';
@@ -21,7 +23,7 @@ void main() {
       await tester.pumpWidget(_view(
         tester,
         AppStateView(
-          icon: Icons.wifi_off_rounded,
+          icon: Icons.wifi_off,
           title: "We couldn't load categories",
           message: 'Check your connection and try again - your cart is safe.',
           actionLabel: 'Try Again',
@@ -271,10 +273,10 @@ void main() {
             SliverFillRemaining(
               hasScrollBody: false,
               child: AppStateView(
-                icon: Icons.search_off_rounded,
+                icon: Icons.search_off,
                 title: 'Sorry!',
                 message: 'We could not find anything.',
-                actionLabel: 'Browse Categories',
+                actionLabel: 'Browse categories',
                 onAction: () {},
               ),
             ),
@@ -283,7 +285,126 @@ void main() {
         center: false,
       ));
       expect(tester.takeException(), isNull);
-      expect(find.text('Browse Categories'), findsOneWidget);
+      expect(find.text('Browse categories'), findsOneWidget);
+    });
+  });
+
+  // T2 (brief item 11): loading, offline and server-error are three
+  // different things and must never read as one another. Telling a customer
+  // "check your connection" for a 500 sends them to reboot a router that is
+  // working; a spinner where an error belongs reads as a hang.
+  group('loading vs offline vs server error are three distinguishable states', () {
+    testWidgets('each has its own glyph, its own words and its own action', (tester) async {
+      await tester.pumpWidget(_view(tester, const AppStateView.loading('Loading your orders')));
+      expect(find.text('Loading your orders'), findsOneWidget);
+      expect(find.byType(BlynkButton), findsNothing, reason: 'nothing to retry yet');
+      expect(find.byIcon(BlynkIcons.offline), findsNothing);
+      expect(find.byIcon(BlynkIcons.error), findsNothing);
+
+      await tester.pumpWidget(_view(tester, AppStateView.offline(() {})));
+      expect(find.byIcon(BlynkIcons.offline), findsOneWidget);
+      expect(find.text("You're offline"), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+
+      await tester.pumpWidget(_view(
+        tester,
+        AppStateView.error(
+          title: "We couldn't load your orders",
+          message: AppErrors.server.message,
+          onRetry: () {},
+        ),
+      ));
+      expect(find.byIcon(BlynkIcons.error), findsOneWidget);
+      expect(find.byIcon(BlynkIcons.offline), findsNothing);
+      expect(find.textContaining('offline'), findsNothing,
+          reason: 'a server failure must not blame the connection');
+      expect(find.text(AppErrors.server.message), findsOneWidget);
+    });
+  });
+
+  // T2, correctness: "retry" must actually re-issue the request, every time.
+  // A retry that only rebuilds the view, or that fires once and then goes
+  // inert, is a defect that reads as "the app is stuck". These count real
+  // invocations of the callback the state view was handed.
+  group('retry really re-issues', () {
+    testWidgets('AppStateView.error: each press calls the retry again', (tester) async {
+      var attempts = 0;
+      await tester.pumpWidget(_view(
+        tester,
+        AppStateView.error(
+          title: "We couldn't load your orders",
+          message: 'Something went wrong on our side. Try again in a moment.',
+          onRetry: () => attempts++,
+        ),
+      ));
+      for (var i = 1; i <= 3; i++) {
+        await tester.tap(find.text('Try again'));
+        await tester.pump();
+        expect(attempts, i, reason: 'press $i must re-issue, not just rebuild');
+      }
+    });
+
+    testWidgets('AppStateView.offline: each press calls the retry again', (tester) async {
+      var attempts = 0;
+      await tester.pumpWidget(_view(tester, AppStateView.offline(() => attempts++)));
+      await tester.tap(find.text('Try again'));
+      await tester.tap(find.text('Try again'));
+      expect(attempts, 2);
+    });
+
+    testWidgets('FailureState: a retryable failure gets a working retry, a final one gets none', (tester) async {
+      var attempts = 0;
+      await tester.pumpWidget(_view(
+        tester,
+        FailureState(
+          failure: AppErrors.server,
+          title: "We couldn't load your orders",
+          onRetry: () => attempts++,
+          scrollable: false,
+        ),
+      ));
+      await tester.tap(find.text('Try again'));
+      await tester.tap(find.text('Try again'));
+      expect(attempts, 2);
+
+      await tester.pumpWidget(_view(
+        tester,
+        FailureState(
+          failure: AppErrors.notFound,
+          title: "We couldn't load that order",
+          onRetry: () => attempts++,
+          scrollable: false,
+        ),
+      ));
+      expect(find.text('Try again'), findsNothing,
+          reason: 'asking again cannot help, so no retry is offered');
+      expect(attempts, 2);
+    });
+
+    testWidgets('FailureState never hides the real failure behind the offline state', (tester) async {
+      await tester.pumpWidget(_view(
+        tester,
+        FailureState(
+          failure: AppErrors.server,
+          title: "We couldn't load your orders",
+          onRetry: () {},
+          scrollable: false,
+        ),
+      ));
+      expect(find.text(AppErrors.server.message), findsOneWidget);
+      expect(find.text("You're offline"), findsNothing);
+
+      await tester.pumpWidget(_view(
+        tester,
+        FailureState(
+          failure: AppErrors.offline,
+          title: "We couldn't load your orders",
+          onRetry: () {},
+          scrollable: false,
+        ),
+      ));
+      expect(find.text("You're offline"), findsOneWidget);
+      expect(find.byIcon(BlynkIcons.offline), findsOneWidget);
     });
   });
 }

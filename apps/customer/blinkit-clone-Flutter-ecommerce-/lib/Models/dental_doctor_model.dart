@@ -1,0 +1,199 @@
+// Mirrors the backend's DentalSpecialty enum exactly
+// (backend/api/src/database/types.ts lines 44-50) and the two doctor DTOs
+// B2 actually returns (task-B2-report.md; backend/api/src/modules/dental/
+// doctor.service.ts / clinic.service.ts).
+
+/// Matches `DentalSpecialty` in `backend/api/src/database/types.ts`
+/// (lines 44-50) exactly. `unknown` is the fallback for any value this app
+/// doesn't recognise yet, so a new specialty added on the backend can never
+/// crash the client - see `dentalSpecialtyFromString`.
+enum DentalSpecialty {
+  generalDentist,
+  orthodontist,
+  periodontist,
+  endodontist,
+  oralSurgeon,
+  pediatricDentist,
+  unknown,
+}
+
+DentalSpecialty dentalSpecialtyFromString(String? raw) {
+  switch (raw) {
+    case 'GENERAL_DENTIST':
+      return DentalSpecialty.generalDentist;
+    case 'ORTHODONTIST':
+      return DentalSpecialty.orthodontist;
+    case 'PERIODONTIST':
+      return DentalSpecialty.periodontist;
+    case 'ENDODONTIST':
+      return DentalSpecialty.endodontist;
+    case 'ORAL_SURGEON':
+      return DentalSpecialty.oralSurgeon;
+    case 'PEDIATRIC_DENTIST':
+      return DentalSpecialty.pediatricDentist;
+    default:
+      return DentalSpecialty.unknown;
+  }
+}
+
+/// Human-readable specialty name for display (task F2 - clinic/doctor
+/// screens). `unknown` (any backend value this app doesn't recognise yet)
+/// reads as the generic "Dentist" rather than an empty string or the raw
+/// backend enum token.
+String dentalSpecialtyLabel(DentalSpecialty specialty) {
+  switch (specialty) {
+    case DentalSpecialty.generalDentist:
+      return 'General dentist';
+    case DentalSpecialty.orthodontist:
+      return 'Orthodontist';
+    case DentalSpecialty.periodontist:
+      return 'Periodontist';
+    case DentalSpecialty.endodontist:
+      return 'Endodontist';
+    case DentalSpecialty.oralSurgeon:
+      return 'Oral surgeon';
+    case DentalSpecialty.pediatricDentist:
+      return 'Pediatric dentist';
+    case DentalSpecialty.unknown:
+      return 'Dentist';
+  }
+}
+
+/// One clinic a doctor practices at, as embedded in `GET /dental/doctors/:id`
+/// (`doctor.service.ts getDoctorById` -> `DoctorClinicDto`). This is the
+/// doctor -> clinics direction; `ClinicDoctorModel` below is the clinic ->
+/// doctors direction returned by a different endpoint - the two DTOs are not
+/// the same shape on the backend, so they are not force-fit into one model
+/// here either.
+class DoctorClinicModel {
+  final String clinicDoctorId;
+  final String clinicId;
+  final String name;
+  final String city;
+  final String addressLine;
+  final double latitude;
+  final double longitude;
+  final double? consultationFee;
+
+  const DoctorClinicModel({
+    required this.clinicDoctorId,
+    required this.clinicId,
+    required this.name,
+    required this.city,
+    required this.addressLine,
+    required this.latitude,
+    required this.longitude,
+    this.consultationFee,
+  });
+
+  factory DoctorClinicModel.fromJson(Map<String, dynamic> json) {
+    return DoctorClinicModel(
+      clinicDoctorId: (json['clinic_doctor_id'] ?? '').toString(),
+      clinicId: (json['clinic_id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      city: (json['city'] ?? '').toString(),
+      addressLine: (json['address_line'] ?? '').toString(),
+      latitude: double.tryParse((json['latitude'] ?? 0).toString()) ?? 0.0,
+      longitude: double.tryParse((json['longitude'] ?? 0).toString()) ?? 0.0,
+      consultationFee:
+          json['consultation_fee'] == null ? null : double.tryParse(json['consultation_fee'].toString()),
+    );
+  }
+}
+
+/// `GET /dental/doctors/:id` (`doctor.service.ts getDoctorById` ->
+/// `DoctorDto`).
+class DoctorModel {
+  final String id;
+  final String fullName;
+  final DentalSpecialty specialty;
+  final String rawSpecialty;
+  final String? photoUrl;
+  final String? bio;
+  final List<DoctorClinicModel> clinics;
+
+  const DoctorModel({
+    required this.id,
+    required this.fullName,
+    required this.specialty,
+    required this.rawSpecialty,
+    this.photoUrl,
+    this.bio,
+    this.clinics = const [],
+  });
+
+  factory DoctorModel.fromJson(Map<String, dynamic> json) {
+    final rawClinics = (json['clinics'] as List?) ?? const [];
+    return DoctorModel(
+      id: (json['id'] ?? '').toString(),
+      fullName: (json['full_name'] ?? '').toString(),
+      specialty: dentalSpecialtyFromString(json['specialty']?.toString()),
+      rawSpecialty: (json['specialty'] ?? '').toString(),
+      photoUrl: json['photo_url']?.toString(),
+      bio: json['bio']?.toString(),
+      clinics: rawClinics
+          .whereType<Map>()
+          .map((c) => DoctorClinicModel.fromJson(c.cast<String, dynamic>()))
+          .toList(),
+    );
+  }
+
+  static DoctorModel? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final map = json.cast<String, dynamic>();
+    if ((map['id'] ?? '').toString().isEmpty) return null;
+    return DoctorModel.fromJson(map);
+  }
+}
+
+/// One row of `GET /dental/clinics/:id/doctors` (`clinic.service.ts
+/// listClinicDoctors` -> `ClinicDoctorDto`): a doctor practicing at ONE
+/// clinic (the clinic named by the path), with the fee for that specific
+/// pairing. `clinicDoctorId` IS `clinic_doctors.id` - the exact id to send as
+/// `clinic_doctor_id` when holding a slot (task-B3-report.md
+/// `createHoldSchema`). There is no separate `clinicId` field in this
+/// response (the backend does not return one here - it's implied by the
+/// path parameter used to fetch this list), so this model does not invent
+/// one either.
+class ClinicDoctorModel {
+  final String clinicDoctorId;
+  final String doctorId;
+  final String fullName;
+  final DentalSpecialty specialty;
+  final String rawSpecialty;
+  final String? photoUrl;
+  final String? bio;
+  final double? consultationFee;
+
+  const ClinicDoctorModel({
+    required this.clinicDoctorId,
+    required this.doctorId,
+    required this.fullName,
+    required this.specialty,
+    required this.rawSpecialty,
+    this.photoUrl,
+    this.bio,
+    this.consultationFee,
+  });
+
+  factory ClinicDoctorModel.fromJson(Map<String, dynamic> json) {
+    return ClinicDoctorModel(
+      clinicDoctorId: (json['clinic_doctor_id'] ?? '').toString(),
+      doctorId: (json['doctor_id'] ?? '').toString(),
+      fullName: (json['full_name'] ?? '').toString(),
+      specialty: dentalSpecialtyFromString(json['specialty']?.toString()),
+      rawSpecialty: (json['specialty'] ?? '').toString(),
+      photoUrl: json['photo_url']?.toString(),
+      bio: json['bio']?.toString(),
+      consultationFee:
+          json['consultation_fee'] == null ? null : double.tryParse(json['consultation_fee'].toString()),
+    );
+  }
+
+  static ClinicDoctorModel? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final map = json.cast<String, dynamic>();
+    if ((map['clinic_doctor_id'] ?? '').toString().isEmpty) return null;
+    return ClinicDoctorModel.fromJson(map);
+  }
+}

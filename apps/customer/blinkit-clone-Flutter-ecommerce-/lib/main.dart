@@ -8,6 +8,7 @@ import 'package:ecom/Services/Providers/auth.provider.dart';
 import 'package:ecom/Services/Providers/address.provider.dart';
 import 'package:ecom/Services/Providers/cart.provider.dart';
 import 'package:ecom/Services/Providers/connectivity_hint.dart';
+import 'package:ecom/Services/Providers/dental.provider.dart';
 import 'package:ecom/Services/app_config.dart';
 import 'package:ecom/Services/global_error_handling.dart';
 import 'package:ecom/Screens/config_problem_screen.dart';
@@ -89,6 +90,11 @@ List<SingleChildWidget> buildAppProviders() => [
       ),
       ChangeNotifierProvider<OrderProvider>(
         create: (_) => OrderProvider(),
+      ),
+      // Dental clinic appointments (task F1-F5). No caching of its own by
+      // design (task-F1-report.md) - screens re-fetch on demand.
+      ChangeNotifierProvider<DentalProvider>(
+        create: (_) => DentalProvider(),
       ),
       // The customer's live rider location (SSE), watched by the order detail
       // screen while an order is out for delivery. Default real opener; the

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app_design.dart';
 import '../design/tokens.dart';
 import '../app_responsive.dart';
 import '../Models/order_format.dart';
@@ -59,43 +58,44 @@ class HelpScreen extends StatelessWidget {
     final responsive = Responsive.of(context);
 
     return Scaffold(
+      backgroundColor: BlynkColors.paper,
       appBar: AppBar(title: const Text('Help')),
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: responsive.contentMaxWidth),
           child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              BlynkSpace.s16,
+              BlynkSpace.s8,
+              BlynkSpace.s16,
+              BlynkSpace.s32,
+            ),
             children: [
+              // The page's own heading: a soft well, no border, no rule
+              // under it - the space below is the separation.
               Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
+                padding: const EdgeInsets.all(BlynkSpace.s16),
+                decoration: const BoxDecoration(
                   color: BlynkColors.well,
-                  borderRadius: AppRadius.cardBorder,
+                  borderRadius: BlynkRadius.lgAll,
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.support_agent_rounded, size: 30),
-                    SizedBox(width: AppSpacing.md),
+                    const Icon(
+                      Icons.support_agent,
+                      size: BlynkIcons.lg,
+                      color: BlynkColors.ink,
+                    ),
+                    const SizedBox(width: BlynkSpace.s12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Need a hand?',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                              color: AppTextColors.primary,
-                            ),
-                          ),
-                          SizedBox(height: 2),
+                          const Text('Need a hand?', style: BlynkText.title),
+                          const SizedBox(height: BlynkSpace.s4),
                           Text(
                             'Answers to the questions we get most.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppTextColors.secondary,
-                            ),
+                            style: BlynkText.body.copyWith(color: BlynkColors.ink2),
                           ),
                         ],
                       ),
@@ -103,52 +103,38 @@ class HelpScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: BlynkSpace.s24),
               ..._faqs.map((faq) => _FaqTile(faq: faq)),
-              const SizedBox(height: AppSpacing.xl),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: appCardDecoration(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Our store',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: AppTextColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    const Text(
-                      'Deliveries go out ${StoreInfo.deliveryHoursLabel}.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.4,
-                        color: AppTextColors.secondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.place_outlined,
-                          size: 18,
-                          color: BlynkColors.ink2,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          '${StoreInfo.hubName}, ${StoreInfo.country}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(height: BlynkSpace.s24),
+              Semantics(
+                header: true,
+                child: Text(
+                  'Our store',
+                  style: BlynkText.caption.copyWith(color: BlynkColors.ink2),
                 ),
+              ),
+              const SizedBox(height: BlynkSpace.s8),
+              Text(
+                'Deliveries go out ${StoreInfo.deliveryHoursLabel}.',
+                style: BlynkText.body.copyWith(color: BlynkColors.ink2),
+              ),
+              const SizedBox(height: BlynkSpace.s8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.place_outlined,
+                    size: BlynkIcons.sm,
+                    color: BlynkColors.ink2,
+                  ),
+                  const SizedBox(width: BlynkSpace.s8),
+                  Expanded(
+                    child: Text(
+                      '${StoreInfo.hubName}, ${StoreInfo.country}',
+                      style: BlynkText.body.copyWith(color: BlynkColors.ink2),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -174,45 +160,31 @@ class _FaqTile extends StatelessWidget {
     // Material (not a decorated Container) so the ExpansionTile's ListTile
     // can paint its own background and ink splash - a DecoratedBox in
     // between silently swallows them.
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.cardBorder,
-        border: Border.all(color: BlynkColors.line),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: BlynkSpace.s8),
       child: Material(
-        color: Colors.white,
-        borderRadius: AppRadius.cardBorder,
+        color: BlynkColors.well,
+        borderRadius: BlynkRadius.lgAll,
         clipBehavior: Clip.antiAlias,
         child: Theme(
           // The default divider lines read as clutter against the card edge.
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          data: Theme.of(context).copyWith(dividerColor: BlynkColors.clear),
           child: ExpansionTile(
-            title: Text(
-              faq.question,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: AppTextColors.primary,
-              ),
-            ),
-            iconColor: BlynkColors.ink2,
+            title: Text(faq.question, style: BlynkText.rowLabel),
+            iconColor: BlynkColors.ink,
+            collapsedIconColor: BlynkColors.ink2,
             childrenPadding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
+              BlynkSpace.s16,
               0,
-              AppSpacing.lg,
-              AppSpacing.lg,
+              BlynkSpace.s16,
+              BlynkSpace.s16,
             ),
             children: [
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   faq.answer,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                    color: AppTextColors.secondary,
-                  ),
+                  style: BlynkText.body.copyWith(color: BlynkColors.ink2),
                 ),
               ),
             ],

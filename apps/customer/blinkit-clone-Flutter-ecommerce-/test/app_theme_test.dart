@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ecom/app_theme.dart';
+import 'package:ecom/design/contrast.dart';
 import 'package:ecom/design/tokens.dart';
 
 Widget _host(Widget child, {double textScale = 1}) => MaterialApp(
@@ -114,7 +115,10 @@ void main() {
         t.labelSmall,
       ]) {
         expect(s!.fontSize, greaterThanOrEqualTo(12));
-        expect(s.fontFamily, 'Catamaran');
+        // 2026-09-24: the type family moved Catamaran -> Poppins to match the
+        // reference design. Expectation updated; the assertion is unchanged in
+        // strength (still pins every theme style to exactly one family).
+        expect(s.fontFamily, BlynkText.family);
       }
     });
   });
@@ -195,16 +199,21 @@ void main() {
       expect(material.color, BlynkColors.signal);
     });
 
-    testWidgets('disabled primary button is well fill with ink2 label', (tester) async {
+    // W9: the expected VALUES moved because the design did - the theme now
+    // shares `BlynkButton`'s single disabled recipe instead of keeping a
+    // second, lower-contrast one. The assertion is the same shape and the
+    // pairing it pins is 6.21:1 rather than 4.54:1.
+    testWidgets('disabled primary button is the one BlynkDisabled recipe', (tester) async {
       await tester.pumpWidget(_host(const ElevatedButton(onPressed: null, child: Text('Add'))));
       final material = tester.widget<Material>(
         find.descendant(of: find.byType(ElevatedButton), matching: find.byType(Material)).first,
       );
-      expect(material.color, BlynkColors.well);
+      expect(material.color, BlynkDisabled.fill);
       final text = tester.widget<DefaultTextStyle>(
         find.descendant(of: find.byType(ElevatedButton), matching: find.byType(DefaultTextStyle)).first,
       );
-      expect(text.style.color, BlynkColors.ink2);
+      expect(text.style.color, BlynkDisabled.label);
+      expect(contrastRatio(BlynkDisabled.label, BlynkDisabled.fill), greaterThanOrEqualTo(4.5));
     });
 
     testWidgets('pressed primary button uses signalPressed', (tester) async {

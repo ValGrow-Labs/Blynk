@@ -10,7 +10,6 @@ import 'package:provider/provider.dart';
 import 'package:ecom/Models/address_model.dart';
 import 'package:ecom/Models/category_model.dart';
 import 'package:ecom/Models/order_model.dart';
-import 'package:ecom/Models/order_status_labels.dart';
 import 'package:ecom/Models/product_model.dart';
 import 'package:ecom/Screens/Auth/login_screen.dart';
 import 'package:ecom/Screens/Auth/otp_verification_screen.dart';
@@ -24,14 +23,13 @@ import 'package:ecom/UI/Widgets/Atoms/blynk_spinner.dart';
 import 'package:ecom/UI/Widgets/Atoms/blynk_text_field.dart';
 import 'package:ecom/UI/Widgets/Atoms/card_product.dart';
 import 'package:ecom/UI/Widgets/Atoms/category_widget.dart';
-import 'package:ecom/UI/Widgets/Atoms/order_status_chip.dart';
 import 'package:ecom/UI/Widgets/Organisms/cart_screen_address_container.dart';
 import 'package:ecom/UI/Widgets/Organisms/cart_screen_payment_container.dart';
 import 'package:ecom/UI/Widgets/Organisms/empty_cart_view.dart';
 import 'package:ecom/UI/Widgets/Organisms/home_screen_app_bar.dart';
-import 'package:ecom/UI/Widgets/Organisms/home_screen_search_bar.dart';
 import 'package:ecom/UI/Widgets/Organisms/login_screen_otp_sheet.dart';
 import 'package:ecom/UI/Widgets/Organisms/products_screen_sub_category_list.dart';
+import 'package:ecom/Services/store_info.dart';
 import 'package:ecom/app_design.dart';
 import 'package:ecom/app_theme.dart';
 import 'package:ecom/design/contrast.dart';
@@ -184,7 +182,18 @@ void main() {
     testWidgets('"Change" is ink, not a green link, and keeps its own name', (tester) async {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(bars(tester));
-      expect(tester.widget<Text>(find.text('Change')).style?.color, BlynkColors.ink);
+      // W9: "Change" is now the shared BlynkButton.tertiary rather than a
+      // hand-styled TextButton, so the ink comes from the button's resolved
+      // foreground instead of an inline TextStyle. Same colour, and this now
+      // also pins the DISABLED branch, which the inline style never covered.
+      final change = tester.widget<TextButton>(find.widgetWithText(TextButton, 'Change'));
+      expect(change.style?.foregroundColor?.resolve(<WidgetState>{}), BlynkColors.ink);
+      expect(
+        change.style?.foregroundColor?.resolve(<WidgetState>{WidgetState.disabled}),
+        isNot(BlynkColors.positive),
+        reason: 'never a green link',
+      );
+      expect(find.byType(BlynkButton), findsWidgets);
       expect(find.bySemanticsLabel('Change delivery address'), findsOneWidget);
       handle.dispose();
     });
@@ -219,10 +228,10 @@ void main() {
         await tester.pumpWidget(componentHost(tester, const EmptyCartView(), textScale: scale, width: 320, center: false));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        final button = find.widgetWithText(ElevatedButton, 'Browse Groceries');
+        final button = find.widgetWithText(ElevatedButton, 'Browse groceries');
         await tester.ensureVisible(button);
         expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
-        final label = tester.getRect(find.descendant(of: button, matching: find.text('Browse Groceries')));
+        final label = tester.getRect(find.descendant(of: button, matching: find.text('Browse groceries')));
         expect(tester.getRect(button).height, greaterThanOrEqualTo(label.height));
       });
     }
@@ -244,42 +253,27 @@ void main() {
     });
   });
 
-  group('Home search field', () {
-    testWidgets('placeholder is ink2 and the boundary is lineStrong (both readable)', (tester) async {
-      await tester.pumpWidget(componentHost(
-        tester,
-        const CustomScrollView(slivers: [HomeScreenSearchBar()]),
-        center: false,
-      ));
-      final material = tester.widget<Material>(
-        find.descendant(of: find.byType(HomeScreenSearchBar), matching: find.byType(Material)).first,
-      );
-      final side = (material.shape! as RoundedRectangleBorder).side;
-      expect(side.color, BlynkColors.lineStrong);
-      expect(side.width, 1);
-      final placeholder = tester.widget<Text>(find.text('Search groceries & essentials'));
-      expect(placeholder.style?.color, BlynkColors.ink2);
-      expect(placeholder.style?.fontSize, BlynkText.body.fontSize);
-      // The field is the well; the text sits on it.
-      expect(material.color, BlynkColors.well);
+  // 2026-09-24: Home's full-width search FIELD was replaced by a circular
+  // search button in the brand header, to match the reference composition, so
+  // `HomeScreenSearchBar` renders nowhere in lib/ and has been deleted. The two
+  // widget tests that pumped it went with it — a guard over a widget nothing
+  // renders proves nothing.
+  //
+  // The contrast facts they asserted are NOT about that widget, though: they
+  // pin the field recipe still used by the Search screen, and they pin the two
+  // values it replaced as genuine failures. Those are kept here, widget-free,
+  // rather than deleted along with the host. The 48 dp assertion is not kept:
+  // it belonged to that widget, and the header button's own tap target is
+  // covered by Home's tests.
+  group('search field recipe (token-level; the Search screen renders it)', () {
+    test('ink2 on well reads, lineStrong bounds it, and what they replaced still fails', () {
       expect(contrastRatio(BlynkColors.ink2, BlynkColors.well), greaterThanOrEqualTo(4.5));
       expect(contrastRatio(BlynkColors.lineStrong, BlynkColors.paper), greaterThanOrEqualTo(3));
       expect(contrastRatio(BlynkColors.lineStrong, BlynkColors.well), greaterThanOrEqualTo(3));
-      // What it replaced fails both bars.
+      // Non-vacuity: the pair this recipe replaced must still measure as a
+      // failure, or the assertions above are not actually holding a line.
       expect(contrastRatio(AppTextColors.muted, BlynkColors.well), lessThan(4.5));
       expect(contrastRatio(BlynkColors.line, BlynkColors.paper), lessThan(3));
-    });
-
-    testWidgets('the search row is a 48 dp button', (tester) async {
-      final handle = tester.ensureSemantics();
-      await tester.pumpWidget(componentHost(
-        tester,
-        const CustomScrollView(slivers: [HomeScreenSearchBar()]),
-        center: false,
-      ));
-      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
-      handle.dispose();
     });
   });
 
@@ -297,7 +291,10 @@ void main() {
         ),
       ));
       expect(_anyGreen(tester), isFalse);
-      final line = tester.widget<Text>(find.textContaining('Delivering'));
+      // 2026-09-24: the line is the destination alone. It used to read
+      // 'Delivering to <hub> · <hours>' and truncated on a normal phone.
+      final line = tester.widget<Text>(find.text(
+          '${StoreInfo.hubName} · ${StoreInfo.deliveryHoursLabel}'));
       expect(line.style?.color, BlynkColors.ink2);
       expect(line.style?.letterSpacing, isNull);
       expect(tester.widget<Icon>(find.byIcon(BlynkIcons.shop)).color, BlynkColors.ink2);
@@ -339,9 +336,9 @@ void main() {
       await dispose(tester);
     });
 
-    testWidgets('Skip, Skip & Explore Store and Resend are ink tertiary buttons', (tester) async {
+    testWidgets('Skip, Skip & explore store and Resend are ink tertiary buttons', (tester) async {
       await pumpOtp(tester);
-      for (final label in ['Skip', 'Skip & Explore Store']) {
+      for (final label in ['Skip', 'Skip & explore store']) {
         final button = find.widgetWithText(TextButton, label);
         expect(button, findsOneWidget, reason: label);
         expect(_ink(tester, button), BlynkColors.ink, reason: label);
@@ -540,9 +537,12 @@ void main() {
   });
 
   group('flat cards', () {
-    test('appCardDecoration has no shadow and a hairline outside edge (layout unchanged)', () {
+    // 2026-09 redesign (spec §2 "Soft shadow is back"): cards float on the
+    // BlynkElevation.soft token again; the hairline outside edge is
+    // unchanged. Was: appCardDecoration had no shadow at all.
+    test('appCardDecoration carries the soft shadow token and a hairline outside edge (layout unchanged)', () {
       final d = appCardDecoration();
-      expect(d.boxShadow, isEmpty);
+      expect(d.boxShadow, BlynkElevation.soft);
       final border = d.border! as Border;
       expect(border.top.color, BlynkColors.line);
       expect(border.top.strokeAlign, BorderSide.strokeAlignOutside);
@@ -550,7 +550,9 @@ void main() {
       expect(d.color, BlynkColors.paper);
     });
 
-    testWidgets('a product card casts no shadow', (tester) async {
+    // Was: no shadow at all. Now the card's own Container casts exactly the
+    // BlynkElevation.soft shadow (spec §3 "Product card").
+    testWidgets('a product card casts the soft shadow, and only the soft token', (tester) async {
       await tester.pumpWidget(ChangeNotifierProvider<CartProvider>.value(
         value: CartProvider(),
         child: componentHost(
@@ -558,15 +560,26 @@ void main() {
           const SizedBox(width: 160, height: 260, child: ProductCard(product: _milk)),
         ),
       ));
-      for (final w in tester.widgetList<Container>(find.descendant(of: find.byType(ProductCard), matching: find.byType(Container)))) {
-        final d = w.decoration;
-        if (d is BoxDecoration) expect(d.boxShadow, anyOf(isNull, isEmpty));
+      final shadowed = tester
+          .widgetList<Container>(find.descendant(of: find.byType(ProductCard), matching: find.byType(Container)))
+          .map((w) => w.decoration)
+          .whereType<BoxDecoration>()
+          .where((d) => d.boxShadow != null && d.boxShadow!.isNotEmpty);
+      expect(shadowed, isNotEmpty, reason: 'the card casts the soft elevation shadow');
+      for (final d in shadowed) {
+        expect(d.boxShadow, BlynkElevation.soft);
       }
     });
   });
 
   group('category tile and rail', () {
-    testWidgets('the selected tile is a 2 dp ink border on the well, never a yellow wash', (tester) async {
+    // 2026-09-24 redesign: the tile is a circle on one neutral surface, and
+    // the selected one is a thin signal RING over a faint wash — not the
+    // solid yellow block, and not one of four rotating pastels, that these
+    // two tests used to assert. Both of those spent colour on decoration;
+    // the tile now spends it only on state.
+    testWidgets('selected: a signal ring over the faint wash, never a solid yellow tile',
+        (tester) async {
       await tester.pumpWidget(componentHost(
         tester,
         const SizedBox(
@@ -575,21 +588,27 @@ void main() {
           child: CategoryWidget(category: CategoryModel(id: '1', name: 'Dairy', slug: 'dairy'), isActive: true),
         ),
       ));
-      final tile = tester.widget<AnimatedContainer>(find.byType(AnimatedContainer));
-      final d = tile.decoration! as BoxDecoration;
-      expect(d.color, BlynkColors.well);
-      expect((d.border! as Border).top.color, BlynkColors.ink);
-      expect((d.border! as Border).top.width, 2);
+      final d = tester.widget<AnimatedContainer>(find.byType(AnimatedContainer)).decoration!
+          as BoxDecoration;
+      expect(d.shape, BoxShape.circle);
+      expect(d.color, BlynkCategory.selectedSurface);
+      expect(d.color, isNot(BlynkColors.signal));
+      expect((d.border! as Border).top.color, BlynkCategory.selectedRing);
+      expect((d.border! as Border).top.width, BlynkCategory.ringWidth);
     });
 
-    testWidgets('the unselected tile is the well with no border', (tester) async {
+    testWidgets('unselected: the one neutral surface, no ring, no decorative colour',
+        (tester) async {
       await tester.pumpWidget(componentHost(
         tester,
         const SizedBox(width: 90, height: 130, child: CategoryWidget(category: CategoryModel(id: '1', name: 'Dairy', slug: 'dairy'))),
       ));
-      final d = tester.widget<AnimatedContainer>(find.byType(AnimatedContainer)).decoration! as BoxDecoration;
-      expect(d.color, BlynkColors.well);
+      final d = tester.widget<AnimatedContainer>(find.byType(AnimatedContainer)).decoration!
+          as BoxDecoration;
+      expect(d.shape, BoxShape.circle);
+      expect(d.color, BlynkCategory.surface);
       expect(d.border, isNull);
+      expect(d.gradient, isNull);
     });
 
     for (final width in [320.0, 400.0]) {
@@ -608,6 +627,7 @@ void main() {
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 8,
                       labelHeight: CategoryTileGridDelegate.labelHeightFor(context),
+                      diameter: CategoryTileGridDelegate.diameterIn(width, (width - 32 - 8 * 3) / 4),
                     ),
                     delegate: SliverChildBuilderDelegate(
                       (_, i) => CategoryWidget(category: CategoryModel(id: '$i', name: names[i], slug: 's$i')),
@@ -634,8 +654,8 @@ void main() {
     }
 
     test('the grid tile height follows the text scale (no fixed aspect ratio)', () {
-      const small = CategoryTileGridDelegate(crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8, labelHeight: 32);
-      const large = CategoryTileGridDelegate(crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8, labelHeight: 64);
+      const small = CategoryTileGridDelegate(crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8, labelHeight: 32, diameter: 64);
+      const large = CategoryTileGridDelegate(crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8, labelHeight: 64, diameter: 64);
       expect(large.shouldRelayout(small), isTrue);
       final source = File('lib/UI/Widgets/Organisms/home_screen_category_builder.dart').readAsStringSync();
       expect(source, isNot(contains('childAspectRatio')));
@@ -718,16 +738,4 @@ void main() {
     });
   });
 
-  group('order status chip', () {
-    test('success and neutral use the tokens, and stay 4.5:1 on white, the well and the retired page tint', () {
-      expect(orderChipColors(OrderTone.success).foreground, BlynkColors.positiveInk);
-      expect(orderChipColors(OrderTone.neutral).foreground, BlynkColors.ink3);
-      for (final tone in OrderTone.values) {
-        final fg = orderChipColors(tone).foreground;
-        for (final background in [BlynkColors.paper, BlynkColors.well, const Color(0xffEDF2F8)]) {
-          expect(contrastRatio(fg, background), greaterThanOrEqualTo(4.5), reason: '$tone on $background');
-        }
-      }
-    });
-  });
 }
