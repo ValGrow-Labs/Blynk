@@ -59,6 +59,8 @@ import type {
   DeliveryFeeInput,
   DeliveryFeeSetting,
   DeliveryRadiusSetting,
+  DeliveryZone,
+  DeliveryZonesSetting,
   CartRulesSetting,
   SmallOrderFeeSetting,
   CheckoutSettings,
@@ -480,6 +482,12 @@ export const settings = {
 
   setDeliveryRadius: (radiusKm: number) =>
     apiRequest<DeliveryRadiusSetting>('/admin/settings/delivery-radius', { method: 'PATCH', body: { radius_km: radiusKm } }),
+
+  /** Extra delivery areas (2026-11-01): circles beside the store radius (Beruwala first); PUT replaces the list. */
+  getDeliveryZones: () => apiRequest<DeliveryZonesSetting>('/admin/settings/delivery-zones'),
+
+  setDeliveryZones: (zones: DeliveryZone[]) =>
+    apiRequest<DeliveryZonesSetting>('/admin/settings/delivery-zones', { method: 'PUT', body: { zones } }),
 
   /** Cart rules (owner, 2026-10-27): one seller per order (ON by default). */
   getCartRules: () => apiRequest<CartRulesSetting>('/admin/settings/cart-rules'),

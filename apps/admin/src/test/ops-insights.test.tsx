@@ -159,6 +159,37 @@ describe('Delivery map', () => {
     await waitFor(() => expect(api.find('GET', '/admin/reports/order-map').at(-1)!.query.get('status')).toBe('all'));
   });
 
+  it('draws each enabled extra delivery area as its own dashed circle with its name, and none when the server sends none', async () => {
+    const BERUWALA_ZONE = { name: 'Beruwala', lat: 6.4759, lng: 79.9842, radius_km: 3 };
+    renderApp('/order-map', (c) =>
+      c.path === '/admin/reports/order-map' ? ok({ ...MAP, store: { ...MAP.store, zones: [BERUWALA_ZONE] } }) : undefined
+    );
+    const zone = await screen.findByTestId('map-zone');
+    expect(zone).toHaveAttribute('data-zone', 'Beruwala');
+    const ring = zone.querySelector('circle.grid-map__zone');
+    expect(ring).not.toBeNull();
+    expect(ring!.getAttribute('r')).toBe('3');
+    // Placed around its own centre, in km east/north of the store (north is up, so y is negated).
+    const at = toKm(MAP.store, BERUWALA_ZONE);
+    expect(Number(ring!.getAttribute('cx'))).toBeCloseTo(at.x, 6);
+    expect(Number(ring!.getAttribute('cy'))).toBeCloseTo(-at.y, 6);
+    expect(zone).toHaveTextContent('Beruwala 3 km');
+    expect(screen.getByText(/extra delivery areas \(Beruwala\)/)).toBeInTheDocument();
+    // The main ring is still there and the outside wording is the API's count.
+    expect(document.querySelector('circle.grid-map__radius')).not.toBeNull();
+    expect(screen.getByText('1 order was outside the 4 km radius. Farthest: 4.6 km.')).toBeInTheDocument();
+  });
+
+  it('draws no extra circle when the order map has no zones (an older server or none switched on)', async () => {
+    renderApp('/order-map', (c) =>
+      c.path === '/admin/reports/order-map' ? ok({ ...MAP, store: { ...MAP.store, zones: [] } }) : undefined
+    );
+    await screen.findByRole('img', { name: /20 orders in 2 areas/ });
+    expect(screen.queryByTestId('map-zone')).not.toBeInTheDocument();
+    expect(document.querySelector('circle.grid-map__zone')).toBeNull();
+    expect(screen.queryByText(/extra delivery areas/)).not.toBeInTheDocument();
+  });
+
   const CELL: MapCellDetail = {
     range: 'last_30_days',
     status: 'delivered',

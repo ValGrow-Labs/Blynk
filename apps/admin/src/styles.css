@@ -3040,6 +3040,14 @@ td .mrp-capped {
   vector-effect: non-scaling-stroke;
 }
 
+.grid-map__zone {
+  fill: rgba(12, 131, 31, 0.05);
+  stroke: var(--green);
+  stroke-width: 2px;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+}
+
 .grid-map__cell {
   fill-opacity: 0.78;
   stroke: #fff;

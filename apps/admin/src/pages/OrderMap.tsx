@@ -302,7 +302,13 @@ const heat = (w: number) => (w > 0.66 ? '#d9480f' : w > 0.33 ? '#f59f00' : '#fcc
 function GridMap({ data, selected, onSelect }: { data: OrderMapData; selected: string | null; onSelect(c: OrderMapCell): void }) {
   const r = data.store.radius_km;
   const points = data.cells.map((c) => ({ c, ...toKm(data.store, c) }));
-  const reach = Math.max(r * 1.15, ...points.map((p) => Math.max(Math.abs(p.x), Math.abs(p.y)) + 0.4));
+  // Extra delivery areas (2026-11-01): each enabled zone is drawn like the main circle, around its own centre.
+  const zones = (data.store.zones ?? []).map((z) => ({ ...z, ...toKm(data.store, z) }));
+  const reach = Math.max(
+    r * 1.15,
+    ...points.map((p) => Math.max(Math.abs(p.x), Math.abs(p.y)) + 0.4),
+    ...zones.map((z) => Math.max(Math.abs(z.x), Math.abs(z.y)) + z.radius_km * 1.15)
+  );
   const max = Math.max(1, ...data.cells.map((c) => c.orders));
   const ticks = Array.from({ length: Math.floor(reach) * 2 + 1 }, (_, i) => i - Math.floor(reach));
   const label = `Map of ${data.totals.orders} orders in ${data.totals.cells} areas around the store; ${data.totals.outside} outside the ${r} km radius.`;
@@ -320,6 +326,14 @@ function GridMap({ data, selected, onSelect }: { data: OrderMapData; selected: s
         ))}
         <circle cx={0} cy={0} r={r} className="grid-map__radius" />
         <circle cx={0} cy={0} r={Math.max(0, r - data.edge_km)} className="grid-map__edge" />
+        {zones.map((z, i) => (
+          <g key={`${z.name}-${i}`} data-testid="map-zone" data-zone={z.name}>
+            <circle cx={z.x} cy={-z.y} r={z.radius_km} className="grid-map__zone" />
+            <text x={z.x} y={-z.y - z.radius_km - 0.12} className="grid-map__label" textAnchor="middle">
+              {z.name} {z.radius_km} km
+            </text>
+          </g>
+        ))}
         {points.map(({ c, x, y }) => (
           <circle
             key={c.cell}
@@ -345,6 +359,7 @@ function GridMap({ data, selected, onSelect }: { data: OrderMapData; selected: s
       </svg>
       <figcaption className="cell__secondary">
         Each square of the grid is 1 km; north is up. Solid ring: the {r} km service radius. Dashed ring: the last {data.edge_km} km.
+        {zones.length > 0 ? ` Dashed circles: extra delivery areas (${zones.map((z) => z.name).join(', ')}).` : ''}
       </figcaption>
     </figure>
   );

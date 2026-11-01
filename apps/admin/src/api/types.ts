@@ -366,6 +366,22 @@ export interface DeliveryRadiusSetting {
   store_name: string;
 }
 
+/** One extra delivery area: a circle around its own centre, switched on or off. */
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radius_km: number;
+  enabled: boolean;
+}
+
+/** GET/PUT /admin/settings/delivery-zones (2026-11-01): the extra delivery areas next to the store radius. */
+export interface DeliveryZonesSetting {
+  zones: DeliveryZone[];
+  updated_at: string | null;
+}
+
 /** GET/PATCH /admin/settings/cart-rules (owner, 2026-10-27): rules about what a cart may hold. `one_seller_per_order`
  * is ON until switched off; the shape has room for more rules (mixed carts for nearby sellers come later). */
 export interface CartRulesSetting {

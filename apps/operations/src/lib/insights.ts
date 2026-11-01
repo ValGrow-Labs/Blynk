@@ -149,6 +149,41 @@ export function circlePolygon(lat: number, lng: number, radiusKm: number, steps 
   return pts;
 }
 
+/** The enabled extra areas as GeoJSON polygons (the same ring as the service circle), each named; empty when none. */
+export function zonesGeoJson(zones: ReadonlyArray<{ name: string; lat: number; lng: number; radius_km: number }> | null | undefined) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: (zones ?? []).map((z) => ({
+      type: 'Feature' as const,
+      properties: { name: z.name },
+      geometry: { type: 'Polygon' as const, coordinates: [circlePolygon(z.lat, z.lng, z.radius_km)] },
+    })),
+  };
+}
+
+/** [west, south, east, north] that holds the store circle and every extra area circle. */
+export function coverageBounds(
+  store: { lat: number; lng: number; radius_km: number },
+  zones: ReadonlyArray<{ lat: number; lng: number; radius_km: number }> | null | undefined
+): [[number, number], [number, number]] {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (const c of [store, ...(zones ?? [])]) {
+    const dLat = c.radius_km / 111.32;
+    const dLng = c.radius_km / (111.32 * Math.cos((c.lat * Math.PI) / 180));
+    west = Math.min(west, c.lng - dLng);
+    east = Math.max(east, c.lng + dLng);
+    south = Math.min(south, c.lat - dLat);
+    north = Math.max(north, c.lat + dLat);
+  }
+  return [
+    [west, south],
+    [east, north],
+  ];
+}
+
 export const ZONE_LABEL = { inside: 'Inside', near_edge: 'Near the edge', outside: 'Outside' } as const;
 
 /** One line for the owner on whether the radius looks right. */

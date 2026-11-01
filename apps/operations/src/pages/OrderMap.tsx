@@ -8,7 +8,7 @@ import { PageHeader } from '../components/Layout';
 import { Spinner } from '../components/ui';
 import { formatColomboDate } from '../lib/catalog';
 import { errorMessage } from '../lib/errors';
-import { ORDER_MAP_RANGE_LABEL, ZONE_LABEL, cellDetail, cellName, circlePolygon, radiusAdvice } from '../lib/insights';
+import { ORDER_MAP_RANGE_LABEL, ZONE_LABEL, cellDetail, cellName, circlePolygon, coverageBounds, radiusAdvice, zonesGeoJson } from '../lib/insights';
 import { STATUS_LABEL, formatClock, formatMoney, shortNumber } from '../lib/orders';
 import { MAP_STYLE_URL } from '../lib/route';
 
@@ -278,6 +278,8 @@ function HeatMap({ data, onSelect }: { data: OrderMapData; onSelect(c: OrderMapC
   pick.current = onSelect;
   const [failed, setFailed] = useState(false);
   const { lat, lng, radius_km } = data.store;
+  // The enabled extra areas (2026-11-01); a key so the map is built again only when they change.
+  const zonesKey = JSON.stringify(data.store.zones ?? []);
 
   // The map, the hub and the radius: once per store.
   useEffect(() => {
@@ -303,6 +305,19 @@ function HeatMap({ data, onSelect }: { data: OrderMapData; onSelect(c: OrderMapC
       m.addSource('radius', { type: 'geojson', data: radiusGeoJson(d) });
       m.addLayer({ id: 'radius-fill', type: 'fill', source: 'radius', paint: { 'fill-color': '#0c831f', 'fill-opacity': 0.05 } });
       m.addLayer({ id: 'radius-line', type: 'line', source: 'radius', paint: { 'line-color': '#0c831f', 'line-width': 2, 'line-dasharray': [2, 2] } });
+      // Each enabled extra delivery area: the same dashed ring as the service radius, with its name.
+      if ((d.store.zones ?? []).length > 0) {
+        m.addSource('zones', { type: 'geojson', data: zonesGeoJson(d.store.zones) });
+        m.addLayer({ id: 'zones-fill', type: 'fill', source: 'zones', paint: { 'fill-color': '#0c831f', 'fill-opacity': 0.05 } });
+        m.addLayer({ id: 'zones-line', type: 'line', source: 'zones', paint: { 'line-color': '#0c831f', 'line-width': 2, 'line-dasharray': [2, 2] } });
+        m.addLayer({
+          id: 'zones-label',
+          type: 'symbol',
+          source: 'zones',
+          layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-font': ['Noto Sans Bold'], 'text-anchor': 'center' },
+          paint: { 'text-color': '#0c831f', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+        });
+      }
       m.addSource('cells', { type: 'geojson', data: cellsGeoJson(d) });
       m.addLayer({
         id: 'cells',
@@ -330,21 +345,13 @@ function HeatMap({ data, onSelect }: { data: OrderMapData; onSelect(c: OrderMapC
         if (c) pick.current(c);
       });
     });
-    const dLat = radius_km / 111.32;
-    const dLng = radius_km / (111.32 * Math.cos((lat * Math.PI) / 180));
-    m.fitBounds(
-      [
-        [lng - dLng, lat - dLat],
-        [lng + dLng, lat + dLat],
-      ],
-      { padding: 24, duration: 0 }
-    );
+    m.fitBounds(coverageBounds({ lat, lng, radius_km }, latest.current.store.zones), { padding: 24, duration: 0 });
     return () => {
       m.remove();
       map.current = null;
       loaded.current = false;
     };
-  }, [lat, lng, radius_km]);
+  }, [lat, lng, radius_km, zonesKey]);
 
   // New figures (another range or status): just the bubbles change.
   useEffect(() => {
@@ -362,6 +369,12 @@ function HeatMap({ data, onSelect }: { data: OrderMapData; onSelect(c: OrderMapC
       <p className="order-map__legend">
         <span className="order-map__dot" aria-hidden="true" /> more orders = bigger, warmer bubble ·{' '}
         <span className="order-map__ring" aria-hidden="true" /> {radius_km} km service radius
+        {(data.store.zones ?? []).map((z) => (
+          <span key={z.name} data-testid="order-map-zone-legend">
+            {' · '}
+            <span className="order-map__ring" aria-hidden="true" /> {z.name} ({z.radius_km} km)
+          </span>
+        ))}
       </p>
     </section>
   );

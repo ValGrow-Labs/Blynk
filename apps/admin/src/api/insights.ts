@@ -66,6 +66,13 @@ export interface OrderMapCell {
   zone: MapZone;
 }
 
+export interface OrderMapZone {
+  name: string;
+  lat: number;
+  lng: number;
+  radius_km: number;
+}
+
 export interface OrderMap {
   range: OrderMapRange;
   status: 'delivered' | 'all';
@@ -74,7 +81,8 @@ export interface OrderMap {
   cell_meters: number;
   cell_degrees: number;
   edge_km: number;
-  store: { name: string; lat: number; lng: number; radius_km: number };
+  /** `zones`: the enabled extra delivery areas (2026-11-01); absent on an older server = none. */
+  store: { name: string; lat: number; lng: number; radius_km: number; zones?: OrderMapZone[] };
   totals: {
     orders: number;
     revenue: number;

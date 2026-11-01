@@ -18,6 +18,7 @@ import type {
 } from '../api/types';
 import { BasePerKmEditor, type BasePerKmDrafts, type BasePerKmErrors } from '../components/BasePerKmEditor';
 import { DeliveryRadiusCard } from '../components/DeliveryRadiusCard';
+import { DeliveryZonesCard } from '../components/DeliveryZonesCard';
 import { SmallOrderFeeCard } from '../components/SmallOrderFeeCard';
 import { CartRulesCard } from '../components/CartRulesCard';
 import { KmTierEditor, ModeChoice } from '../components/KmTierEditor';
@@ -93,6 +94,8 @@ export function Settings() {
       <DeliveryFeeSettingPanel />
       {/* Delivery radius (owner, 2026-10-25). */}
       <DeliveryRadiusCard />
+      {/* Extra delivery areas (2026-11-01): Beruwala etc. as separate circles. */}
+      <DeliveryZonesCard />
       {/* Global default markup (migration 044; owner, 2026-10-13). */}
       <DefaultMarkupPanel />
       <CheckoutSettingsPanel />

@@ -5,6 +5,7 @@ import type { AvailabilityWindow, AvailabilitySetting } from '../lib/availabilit
 import type { HomeSection, HomeSectionsSetting } from '../lib/homeSections';
 import type { BundleOffer, BundleOffersSetting } from '../lib/bundleOffers';
 import type { QrLink, QrLinksSetting } from '../lib/qrLinks';
+import type { DeliveryZone, DeliveryZonesSetting } from '../lib/deliveryZones';
 import type { DailyReportDraft, DailyReportPreview, DailyReportSendResult, DailyReportSetting } from '../lib/dailyReport';
 import type {
   AppShareLinks,
@@ -1184,6 +1185,12 @@ export const settings = {
     get: () => apiRequest<DeliveryRadiusSetting>('/admin/settings/delivery-radius'),
     update: (radius_km: number) =>
       apiRequest<DeliveryRadiusSetting>('/admin/settings/delivery-radius', { method: 'PATCH', body: { radius_km } }),
+  },
+  /** Extra delivery areas (2026-11-01): separate circles (Beruwala) added to the main radius; PUT replaces the whole list. */
+  deliveryZones: {
+    get: () => apiRequest<DeliveryZonesSetting>('/admin/settings/delivery-zones'),
+    update: (zones: DeliveryZone[]) =>
+      apiRequest<DeliveryZonesSetting>('/admin/settings/delivery-zones', { method: 'PUT', body: { zones } }),
   },
   /** Cart rules (owner, 2026-10-27): one seller per order (ON by default). */
   cartRules: {

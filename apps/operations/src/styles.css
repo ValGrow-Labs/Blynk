@@ -4320,3 +4320,40 @@ a.button {
 .extra-categories__item .button {
   min-height: 44px;
 }
+
+/* Extra delivery areas card (2026-11-01): one bordered row per area. */
+.zone-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.zone-row__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.zone-row__name {
+  flex: 1 1 auto;
+}
+
+.zone-row__foot,
+.zone-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

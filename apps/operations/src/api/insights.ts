@@ -66,6 +66,14 @@ export interface OrderMapCell {
   zone: MapZone;
 }
 
+/** An enabled extra delivery area (a circle) on the order map. */
+export interface OrderMapZone {
+  name: string;
+  lat: number;
+  lng: number;
+  radius_km: number;
+}
+
 export interface OrderMap {
   range: OrderMapRange;
   status: 'delivered' | 'all';
@@ -74,7 +82,8 @@ export interface OrderMap {
   cell_meters: number;
   cell_degrees: number;
   edge_km: number;
-  store: { name: string; lat: number; lng: number; radius_km: number };
+  /** `zones` (2026-11-01): the enabled extra delivery areas; absent on an older API = none. */
+  store: { name: string; lat: number; lng: number; radius_km: number; zones?: OrderMapZone[] };
   totals: {
     orders: number;
     revenue: number;
