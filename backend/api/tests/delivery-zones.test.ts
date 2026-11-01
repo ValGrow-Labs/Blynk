@@ -122,7 +122,7 @@ describe('Extra delivery areas setting', () => {
     const res = await getZones(opsToken);
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({
-      zones: [{ id: 'beruwala', name: 'Beruwala', lat: 6.4759, lng: 79.9842, radius_km: 3, enabled: false }],
+      zones: [{ id: 'beruwala', name: 'Beruwala', lat: 6.465, lng: 79.9857, radius_km: 2.4, enabled: false }],
       updated_at: null,
     });
     expect((await request(app).get('/api/v1/store')).body.data.delivery_zones).toEqual([]);

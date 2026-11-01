@@ -44,9 +44,13 @@ export interface PublicDeliveryZone {
   radius_km: number;
 }
 
-/** Beruwala town centre (the customer app's own place list); 3 km keeps it clear of Bentota (~7 km south). */
+/**
+ * The Beruwala area the owner's brother drew on the map (2026-11-02): the coast and town from just north
+ * of Beruwala down to Moragalla, a circle of about 2.4 km around 6.465, 79.9857 (it overlaps the store circle and
+ * stays far from Bentota). Switched off until the owner turns it on; adjustable in Admin.
+ */
 export const DEFAULT_DELIVERY_ZONES: DeliveryZone[] = [
-  { id: 'beruwala', name: 'Beruwala', lat: 6.4759, lng: 79.9842, radius_km: 3, enabled: false },
+  { id: 'beruwala', name: 'Beruwala', lat: 6.465, lng: 79.9857, radius_km: 2.4, enabled: false },
 ];
 
 const finiteNumber = (label: string) =>
