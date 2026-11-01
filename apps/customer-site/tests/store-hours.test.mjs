@@ -41,7 +41,7 @@ test('the Dockerfile ships store-hours.js and fills in the API address', () => {
 });
 
 // ---------------------------------------------------------------- the delivery radius (owner, 2026-11-01)
-// The radius is an Admin setting, never typed text: pages mark it <span data-radius>6</span> and store-hours.js fills it
+// The radius is an Admin setting, never typed text: pages mark it <span data-radius>4</span> and store-hours.js fills it
 // from GET /store radius_km, the same call that carries the hours.
 /** Runs store-hours.js against a fake page and a fake /store answer; returns the fake elements afterwards. */
 async function runStoreHours(data, { lang = 'en', ok = true, fail = false } = {}) {
@@ -49,8 +49,8 @@ async function runStoreHours(data, { lang = 'en', ok = true, fail = false } = {}
     textContent: attrs.text ?? '', attrs: { ...attrs.attrs },
     hasAttribute(n) { return n in this.attrs; }, setAttribute(n, v) { this.attrs[n] = v; },
   });
-  const plain = el({ text: '6' });
-  const counted = el({ text: '6', attrs: { 'data-count': '6' } });
+  const plain = el({ text: '4' });
+  const counted = el({ text: '4', attrs: { 'data-count': '4' } });
   const hours = el({ text: '8 AM to 9 PM' });
   const document = {
     documentElement: { lang },
@@ -73,8 +73,8 @@ async function runStoreHours(data, { lang = 'en', ok = true, fail = false } = {}
 }
 const HOURS = { days: Object.fromEntries(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => [d, { open: '08:00', close: '21:00' }])) };
 
-test('store-hours.js fills data-radius from /store radius_km: 6 -> "6", 6.5 -> "6.5", no trailing zeros', async () => {
-  for (const [given, shown] of [[6, '6'], ['6.00', '6'], [6.5, '6.5'], ['6.50', '6.5'], [7.25, '7.25'], [4, '4'], [6.001, '6']]) {
+test('store-hours.js fills data-radius from /store radius_km: 4 -> "4", 4.5 -> "4.5", no trailing zeros', async () => {
+  for (const [given, shown] of [[4, '4'], ['4.00', '4'], [4.5, '4.5'], ['4.50', '4.5'], [7.25, '7.25'], [6, '6'], [4.001, '4']]) {
     const { plain, counted, calls } = await runStoreHours({ radius_km: given, hours: HOURS });
     assert.deepEqual(calls, ['https://api.test/v1/store']);
     assert.equal(plain.textContent, shown, `radius_km ${given}`);
@@ -86,26 +86,26 @@ test('store-hours.js fills data-radius from /store radius_km: 6 -> "6", 6.5 -> "
 });
 
 test('the radius fills even when the store has no opening hours, and in Sinhala and Tamil pages', async () => {
-  const noHours = await runStoreHours({ radius_km: 6.5 });
-  assert.equal(noHours.plain.textContent, '6.5');
+  const noHours = await runStoreHours({ radius_km: 4.5 });
+  assert.equal(noHours.plain.textContent, '4.5');
   assert.equal(noHours.hours.textContent, '8 AM to 9 PM', 'hours are left as written when the store sends none');
-  for (const lang of ['si', 'ta']) assert.equal((await runStoreHours({ radius_km: 6.5, hours: HOURS }, { lang })).plain.textContent, '6.5');
+  for (const lang of ['si', 'ta']) assert.equal((await runStoreHours({ radius_km: 4.5, hours: HOURS }, { lang })).plain.textContent, '4.5');
 });
 
-test('a missing, zero or odd radius_km, an error or no answer leaves the written 6 alone', async () => {
+test('a missing, zero or odd radius_km, an error or no answer leaves the written 4 alone', async () => {
   for (const data of [{ hours: HOURS }, { radius_km: null }, { radius_km: 0 }, { radius_km: -2 }, { radius_km: 'far' }, { radius_km: '' }, { radius_km: NaN }]) {
     const { plain, counted } = await runStoreHours(data);
-    assert.equal(plain.textContent, '6', JSON.stringify(data));
-    assert.equal(counted.attrs['data-count'], '6');
+    assert.equal(plain.textContent, '4', JSON.stringify(data));
+    assert.equal(counted.attrs['data-count'], '4');
   }
   for (const opts of [{ ok: false }, { fail: true }]) {
     const { plain } = await runStoreHours({ radius_km: 9 }, opts);
-    assert.equal(plain.textContent, '6');
+    assert.equal(plain.textContent, '4');
   }
 });
 
 test('the hours still fill when the radius does (one /store call for both)', async () => {
-  const { hours, calls } = await runStoreHours({ radius_km: 6, hours: { days: Object.fromEntries(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => [d, { open: '07:00', close: '22:00' }])) } });
+  const { hours, calls } = await runStoreHours({ radius_km: 4, hours: { days: Object.fromEntries(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => [d, { open: '07:00', close: '22:00' }])) } });
   assert.equal(hours.textContent, '7 AM to 10 PM');
   assert.equal(calls.length, 1);
 });
@@ -119,5 +119,5 @@ test('no page types the radius: every "N km" the pages show is a data-radius spa
     if (/data-radius/.test(html)) assert.match(html, /<script src="\/store-hours\.js\?v=\w+" defer><\/script>/, `${file}: store-hours.js not loaded`);
   }
   const terms = readFileSync(join(site, 'terms.html'), 'utf8');
-  assert.match(terms, /about <span data-radius>6<\/span> km of the Dharga Town Clock Tower/);
+  assert.match(terms, /deliver within about <span data-radius>4<\/span> km of the Dharga Town Clock Tower \(Dharga Town, Aluthgama, Kande Vihara, Kaluwamodara, Bentota and Moragalla\) and in Beruwala town\./);
 });

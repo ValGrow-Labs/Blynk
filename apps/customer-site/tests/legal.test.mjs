@@ -124,7 +124,7 @@ test('the owner\'s choices are filled in', () => {
     'Wallet balance does not expire .',
     'courts of Kalutara , Sri Lanka',
     'through the Platform. We may refuse',
-    'We currently deliver to Aluthgama, Dharga Town, Beruwala and areas within about 6 km of the Dharga Town Clock Tower.',
+    'We currently deliver within about 4 km of the Dharga Town Clock Tower (Dharga Town, Aluthgama, Kande Vihara, Kaluwamodara, Bentota and Moragalla) and in Beruwala town.',
   ]) assert.ok(t.includes(s), `terms: "${s}"`);
   const p = visible(pages.privacy);
   for (const s of ['up to 12 months after you close it', 'up to 6 years for tax', 'up to 6 months', 'respond within 21 working days',

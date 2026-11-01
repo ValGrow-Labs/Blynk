@@ -111,7 +111,7 @@ function tokens(c) {
     // 2026-10-20: no typed-in opening hours). The words written here only show if that script cannot run.
     hours: '<span data-hours="dash">8 AM – 9 PM</span>, <span data-hours="days-lower">every day</span>',
     // The delivery radius is an Admin setting (owner, 2026-11-01); store-hours.js fills the span from GET /store radius_km.
-    radius: '<span data-radius>6</span>',
+    radius: '<span data-radius>4</span>',
     supportEmail: mail(c.supportEmail),
     privacyEmail: mail(privacyEmail),
     registeredAddress: esc(c.registeredAddress || ''),

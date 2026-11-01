@@ -11,8 +11,8 @@
 //   data-hours="days-lower"  every day / Mon–Sat / today
 //   data-store-status        Open now · until 9 PM / Closed now · opens tomorrow at 8 AM
 // and the opening hours in the page's structured data. si and ta pages get their own words.
-// The delivery radius works the same way: <span data-radius>6</span> becomes the radius_km that Admin set
-// (6 or 6.5, no trailing zeros). Meta tags and JSON-LD cannot be updated by a script, so they carry the default.
+// The delivery radius works the same way: <span data-radius>4</span> becomes the radius_km that Admin set
+// (4 or 4.5, no trailing zeros). Meta tags and JSON-LD cannot be updated by a script, so they carry the default.
 //
 // The API address below is filled in by the Dockerfile from the API_BASE_URL build argument.
 (function () {
@@ -69,9 +69,9 @@
     return run && order.length > 2 ? `${W.days[order[0]]}–${W.days[order[order.length - 1]]}` : order.map((d) => W.days[d]).join(', ');
   }
 
-  // The delivery radius, from the same /store call (Admin sets it; owner, 2026-11-01: "6 km, with Beruwala").
+  // The delivery radius, from the same /store call (Admin sets it; it stays 4 km, Beruwala is an extra delivery area, not part of the radius).
   // A data-count copy of it is kept in step so the count-up in app.js lands on the live figure.
-  // 6 -> "6", 6.5 -> "6.5", "6.50" -> "6.5". An absent or odd value leaves the written default alone.
+  // 4 -> "4", 4.5 -> "4.5", "4.50" -> "4.5". An absent or odd value leaves the written default alone.
   function radiusText(km) {
     const n = Number(km);
     if (km === null || km === undefined || km === '' || !Number.isFinite(n) || n <= 0) return null;

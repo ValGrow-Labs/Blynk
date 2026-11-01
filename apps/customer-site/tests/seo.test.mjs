@@ -373,6 +373,22 @@ test('/beruwala exists in English, Sinhala and Tamil, built like the other area 
   }
 });
 
+test('Beruwala is an extra area, not part of the radius: its pages state no distance and no radius marker', () => {
+  for (const prefix of ['', '/si', '/ta']) {
+    const html = byPath.get(`${prefix}/beruwala`).html;
+    assert.doesNotMatch(html, /data-radius/, `${prefix}/beruwala has a radius marker`);
+    const body = (html.match(/<body[\s\S]*<\/body>/) || [''])[0].replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.doesNotMatch(body, /\d\s*(km\b|<small>KM)|\d\s*කි\.මී|කි\.මී\.\s*\d|\d\s*கி\.மீ/i, `${prefix}/beruwala states a distance`);
+    assert.doesNotMatch(html.replace(/<!--[\s\S]*?-->/g, ''), /within\s+(about\s+)?\d|inside the/i, `${prefix}/beruwala implies a distance`);
+  }
+  const en = byPath.get('/beruwala').html;
+  assert.match(en, /Beruwala town is a delivery area/);
+  assert.match(en, /the app checks your pin on the map/);
+  // Elsewhere Beruwala town is named beside the radius, never inside it.
+  const terms = readFileSync(join(site, 'terms.html'), 'utf8');
+  assert.doesNotMatch(terms, /Beruwala[^<]*km/);
+});
+
 test('every area page, category page and the home pages list Beruwala', () => {
   for (const { path, html } of PAGES) {
     if (LEGAL.includes(path)) continue;
@@ -404,34 +420,34 @@ test('every area page, category page and the home pages list Beruwala', () => {
   for (const p of ['/beruwala', '/si/beruwala', '/ta/beruwala']) assert.ok(sitemap.includes(`<loc>${SITE}${p}</loc>`), `sitemap lacks ${p}`);
 });
 
-test('the delivery radius is never typed: every page marks it with data-radius (default 6), none says 4 km', () => {
-  const typed = /(^|[^\d.])4(\.0+)?\s*(km|KM|කි\.මී\.|கி\.மீ)|කි\.මී\.\s*4|4ක|data-count="4"/;
+test('the delivery radius is never typed: every page marks it with data-radius (default 4), none says 6 km (the radius stays 4, Beruwala is an extra area)', () => {
+  const typed = /(^|[^\d.])6(\.0+)?\s*(km|KM|කි\.මී\.|கி\.மீ)|කි\.මී\.\s*6|6ක|data-count="6"/;
   for (const { path, html } of PAGES) {
     const noScripts = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<script(?! type="application\/ld\+json")[\s\S]*?<\/script>/g, '');
-    assert.doesNotMatch(noScripts, typed, `${path} still types 4 km`);
+    assert.doesNotMatch(noScripts, typed, `${path} types 6 km`);
     assert.ok(!html.includes('{km}'), `${path}: unfilled {km}`);
     // Whatever the visible text shows next to km is a data-radius span, never a bare number (the head and JSON-LD
     // cannot be updated by a script and carry the plain default).
     const body = (html.match(/<body[\s\S]*<\/body>/) || [''])[0].replace(/<script[\s\S]*?<\/script>/g, '');
     assert.doesNotMatch(body.replace(/<span data-radius[^>]*>[^<]*<\/span>/g, ''), /\d\s*(km\b|<small>KM)|\d+(\.\d+)?ක්?\s|කි\.මී\.\s*\d|\d\s*කි\.මී|\d\s*கி\.மீ/, `${path}: a radius is typed in the page text`);
     for (const m of html.matchAll(/<span data-radius(?: data-count="([^"]*)")?>([^<]*)<\/span>/g)) {
-      assert.equal(m[2], '6', `${path}: default radius text`);
-      if (m[1] !== undefined) assert.equal(m[1], '6', `${path}: default data-count`);
+      assert.equal(m[2], '4', `${path}: default radius text`);
+      if (m[1] !== undefined) assert.equal(m[1], '4', `${path}: default data-count`);
     }
   }
-  // The markers are on the pages that talk about the radius, and they load store-hours.js to be filled.
-  for (const path of ['/', '/terms', '/beruwala', '/aluthgama', '/si/', '/ta/', '/si/beruwala', '/ta/beruwala', '/sanitary-pads-home-delivery']) {
+  // The markers are on the pages that talk about the radius (not the Beruwala pages: Beruwala is an extra area), and they load store-hours.js to be filled.
+  for (const path of ['/', '/terms', '/aluthgama', '/bentota', '/si/', '/ta/', '/si/bentota', '/ta/bentota', '/sanitary-pads-home-delivery']) {
     const html = byPath.get(path).html;
     assert.match(html, /<span data-radius[ >]/, `${path} has no data-radius marker`);
     assert.match(html, /<script src="\/store-hours\.js\?v=\w+" defer><\/script>/, `${path}: store-hours.js`);
   }
-  // Meta tags and JSON-LD cannot be updated by a script: they carry the default, written as 6.
+  // Meta tags and JSON-LD cannot be updated by a script: they carry the default, written as 4.
   const home = byPath.get('/').html;
-  assert.match(metaContent(home, 'name', 'description'), /its 6 km surroundings, including Aluthgama and Beruwala/);
-  assert.match(ldNodes(home).find((n) => n['@type'] === 'GroceryStore').description, /within 6 km of the Clock Tower, including Aluthgama and Beruwala/);
-  assert.doesNotMatch(readFileSync(join(site, 'manifest.webmanifest'), 'utf8'), /\b4 km/);
+  assert.match(metaContent(home, 'name', 'description'), /its 4 km surroundings, including Aluthgama, and in Beruwala town/);
+  assert.match(ldNodes(home).find((n) => n['@type'] === 'GroceryStore').description, /within 4 km of the Clock Tower, including Aluthgama, and in Beruwala town/);
+  assert.doesNotMatch(readFileSync(join(site, 'manifest.webmanifest'), 'utf8'), /\b6 km/);
   // The home page's big figure is both a marker and a count-up target.
-  assert.match(home, /<span data-radius data-count="6">6<\/span> km<\/h2>/);
+  assert.match(home, /<span data-radius data-count="4">4<\/span> km<\/h2>/);
 });
 
 test('the seller page tagline stays Dharga Town only', () => {
