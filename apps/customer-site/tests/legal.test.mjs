@@ -124,7 +124,7 @@ test('the owner\'s choices are filled in', () => {
     'Wallet balance does not expire .',
     'courts of Kalutara , Sri Lanka',
     'through the Platform. We may refuse',
-    'We currently deliver to Aluthgama, Dharga Town and areas within about 4 km of them.',
+    'We currently deliver to Aluthgama, Dharga Town, Beruwala and areas within about 6 km of the Dharga Town Clock Tower.',
   ]) assert.ok(t.includes(s), `terms: "${s}"`);
   const p = visible(pages.privacy);
   for (const s of ['up to 12 months after you close it', 'up to 6 years for tax', 'up to 6 months', 'respond within 21 working days',
@@ -174,12 +174,12 @@ test('once the owner fills in the details they appear on the pages', () => {
 
 test('each page: owner title, Last updated date, a contents list that matches its sections, no tracking', () => {
   const c = readConfig();
-  assert.equal(c.lastUpdated, '2026-10-27');
+  assert.equal(c.lastUpdated, '2026-11-01');
   const titles = { terms: 'Terms and Conditions', privacy: 'Privacy Policy', refunds: 'Return, Refund and Cancellation Policy' };
   for (const n of NAMES) {
     const html = pages[n];
     assert.match(html, new RegExp(`<h1>${titles[n].replace(/[,]/g, '\\$&')}</h1>`), n);
-    assert.match(html, /<p class="legal-meta">Last updated: <time datetime="2026-10-27">27 October 2026<\/time><\/p>/, n);
+    assert.match(html, /<p class="legal-meta">Last updated: <time datetime="2026-11-01">1 November 2026<\/time><\/p>/, n);
     const toc = [...html.match(/<nav class="legal-toc"[\s\S]*?<\/nav>/)[0].matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
     const sections = [...html.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1]);
     assert.ok(toc.length >= 7, `${n}: ${toc.length} contents entries`);

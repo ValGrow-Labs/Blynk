@@ -48,8 +48,8 @@ const ldBlocks = (html) => [...html.matchAll(/<script type="application\/ld\+jso
 const ldNodes = (html) => ldBlocks(html).flatMap((b) => b['@graph'] || [b]);
 const urlToPath = (u) => u.replace(SITE, '');
 
-test('the expected pages exist: home, legal, 5 areas, 4 categories, Sinhala and Tamil', () => {
-  const areas = ['dharga-town', 'aluthgama', 'bentota', 'kaluwamodara', 'moragalla'];
+test('the expected pages exist: home, legal, 6 areas, 4 categories, Sinhala and Tamil', () => {
+  const areas = ['dharga-town', 'aluthgama', 'bentota', 'kaluwamodara', 'moragalla', 'beruwala'];
   const want = ['/', '/si/', '/ta/', ...LEGAL, ...areas.flatMap((a) => [`/${a}`, `/si/${a}`, `/ta/${a}`]),
     '/baby-diapers-delivery-aluthgama', '/sanitary-pads-home-delivery', '/rice-and-dhal-delivery-dharga-town', '/milk-powder-delivery-aluthgama'];
   for (const p of want) assert.ok(byPath.has(p), `missing page ${p}`);
@@ -129,7 +129,7 @@ test('GTM markers and analytics.js (page_view) on every page except the tracking
 
 test('hreflang: en, si, ta and x-default on every language version, all pointing at each other', () => {
   const withAlt = PAGES.filter((p) => Object.keys(alternates(p.html)).length);
-  assert.equal(withAlt.length, 18, 'home + 5 areas, in 3 languages');
+  assert.equal(withAlt.length, 21, 'home + 6 areas, in 3 languages');
   for (const { path, html } of withAlt) {
     const alt = alternates(html);
     assert.deepEqual(Object.keys(alt).sort(), ['en', 'si', 'ta', 'x-default'], path);
@@ -213,7 +213,7 @@ test('JSON-LD parses everywhere; the home page is a GroceryStore with the brief\
   assert.equal(hours.dayOfWeek.length, 7);
   assert.deepEqual([hours.opens, hours.closes], ['08:00', '21:00']);
   assert.equal(store.openingHours, 'Mo-Su 08:00-21:00');
-  assert.deepEqual(store.areaServed.map((a) => a.name), ['Dharga Town', 'Aluthgama', 'Bentota', 'Kaluwamodara', 'Moragalla']);
+  assert.deepEqual(store.areaServed.map((a) => a.name), ['Dharga Town', 'Aluthgama', 'Bentota', 'Kaluwamodara', 'Moragalla', 'Beruwala']);
   assert.ok(store.priceRange);
   assert.match(store.paymentAccepted, /Cash/);
   // The hours on the page say the same.
@@ -342,4 +342,100 @@ test('nginx serves the SEO pages at clean URLs and leaves /app to the shop', () 
   assert.match(conf, /location = \/robots\.txt/);
   assert.match(conf, /location = \/sitemap\.xml/);
   assert.match(conf, /^\s*charset utf-8;$/m);
+});
+
+// ---------------------------------------------------------------- Beruwala and the delivery radius (owner, 2026-11-01)
+const AREA_NAMES = {
+  en: ['Dharga Town', 'Aluthgama', 'Bentota', 'Kaluwamodara', 'Moragalla', 'Beruwala'],
+  si: ['දර්ගා නගරය', 'අළුත්ගම', 'බෙන්තොට', 'කළුවාමෝදර', 'මොරගල්ල', 'බේරුවල'],
+  ta: ['தர்கா நகர்', 'அளுத்கம', 'பெந்தோட்டை', 'களுவாமோதரை', 'மொரகல்ல', 'பேருவளை'],
+};
+const linkHrefs = (html) => [...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1]);
+
+test('/beruwala exists in English, Sinhala and Tamil, built like the other area pages', () => {
+  for (const [lang, prefix, name, h1] of [['en', '', 'Beruwala', /Grocery delivery in Beruwala/], ['si', '/si', 'බේරුවල', /බේරුවලට සිල්ලර බඩු බෙදාහැරීම/],
+    ['ta', '/ta', 'பேருவளை', /பேருவளை பகுதியில் மளிகைப் பொருள் டெலிவரி/]]) {
+    const page = byPath.get(`${prefix}/beruwala`);
+    assert.ok(page, `missing ${prefix}/beruwala`);
+    assert.equal(page.html.match(/<html lang="([a-z]+)">/)[1], lang);
+    assert.match(page.html, /<h1 id="page-title">([^<]+)<\/h1>/);
+    assert.match(page.html.match(/<h1 id="page-title">([^<]+)<\/h1>/)[1], h1);
+    assert.ok(page.html.includes(name), `${prefix}/beruwala does not name Beruwala`);
+    assert.deepEqual(alternates(page.html), { en: `${SITE}/beruwala`, si: `${SITE}/si/beruwala`, ta: `${SITE}/ta/beruwala`, 'x-default': `${SITE}/beruwala` });
+    // Same sections as /bentota and /moragalla: hero with order button, local copy, categories, how, delivery, areas, band.
+    const sibling = byPath.get(`${prefix}/moragalla`).html;
+    const sections = (h) => [...h.matchAll(/<section class="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(sections(page.html), sections(sibling), `${prefix}/beruwala has different sections from moragalla`);
+    // Order button campaign is the page's own.
+    assert.match(page.html, /utm_campaign=beruwala/);
+    // No religious imagery, no phone number as text, no typed-in hours (those are data-hours spans).
+    assert.doesNotMatch(page.html, /mosque|masjid|temple|church|kovil|palli|පන්සල|දේවස්ථාන|ஆலயம்|பள்ளிவாசல்|கோவில்/i);
+  }
+});
+
+test('every area page, category page and the home pages list Beruwala', () => {
+  for (const { path, html } of PAGES) {
+    if (LEGAL.includes(path)) continue;
+    const lang = path.startsWith('/si/') ? 'si' : path.startsWith('/ta/') ? 'ta' : 'en';
+    const own = path.replace(/^\/(si|ta)\//, '/').replace(/\/$/, '');
+    // Every page's footer area nav and the area/link lists point at the Beruwala page of its own language
+    // (category pages are English only).
+    const want = lang === 'en' ? '/beruwala' : `/${lang}/beruwala`;
+    const hrefs = linkHrefs(html);
+    if (own !== '/beruwala') assert.ok(hrefs.includes(want), `${path} has no link to ${want}`);
+    // The footer says all three areas.
+    const footer = html.match(/<small>© [\s\S]*?<\/small>/)[0];
+    assert.match(footer, lang === 'en' ? /Dharga Town, Aluthgama &amp; Beruwala, Sri Lanka/ : lang === 'si' ? /බේරුවල/ : /பேருவளை/, `${path} footer: ${footer}`);
+  }
+  const home = byPath.get('/').html;
+  assert.match(home, /<small>© <span data-year><\/span> Blynk · Dharga Town, Aluthgama &amp; Beruwala, Sri Lanka<\/small>/);
+  assert.match(home, /<li><a href="\/beruwala">Beruwala<\/a><\/li>/);
+  assert.match(home, /<title>Blynk — Groceries delivered in Dharga Town, Aluthgama &amp; Beruwala<\/title>/);
+  for (const path of ['/', '/si/', '/ta/']) assert.ok(byPath.get(path).html.includes(AREA_NAMES[path === '/' ? 'en' : path.slice(1, 3)][5]), `${path} does not name Beruwala`);
+  // Every language lists all six areas in its footer.
+  for (const lang of ['en', 'si', 'ta']) {
+    const page = byPath.get(lang === 'en' ? '/aluthgama' : `/${lang}/aluthgama`).html;
+    for (const name of AREA_NAMES[lang]) assert.ok(page.includes(`>${name}</a>`), `${lang}: footer lacks ${name}`);
+  }
+  // The place Play and search engines read.
+  const manifest = JSON.parse(readFileSync(join(site, 'manifest.webmanifest'), 'utf8'));
+  assert.match(manifest.description, /Beruwala/);
+  const sitemap = readFileSync(join(pagesDir, 'sitemap.xml'), 'utf8');
+  for (const p of ['/beruwala', '/si/beruwala', '/ta/beruwala']) assert.ok(sitemap.includes(`<loc>${SITE}${p}</loc>`), `sitemap lacks ${p}`);
+});
+
+test('the delivery radius is never typed: every page marks it with data-radius (default 6), none says 4 km', () => {
+  const typed = /(^|[^\d.])4(\.0+)?\s*(km|KM|කි\.මී\.|கி\.மீ)|කි\.මී\.\s*4|4ක|data-count="4"/;
+  for (const { path, html } of PAGES) {
+    const noScripts = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<script(?! type="application\/ld\+json")[\s\S]*?<\/script>/g, '');
+    assert.doesNotMatch(noScripts, typed, `${path} still types 4 km`);
+    assert.ok(!html.includes('{km}'), `${path}: unfilled {km}`);
+    // Whatever the visible text shows next to km is a data-radius span, never a bare number (the head and JSON-LD
+    // cannot be updated by a script and carry the plain default).
+    const body = (html.match(/<body[\s\S]*<\/body>/) || [''])[0].replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.doesNotMatch(body.replace(/<span data-radius[^>]*>[^<]*<\/span>/g, ''), /\d\s*(km\b|<small>KM)|\d+(\.\d+)?ක්?\s|කි\.මී\.\s*\d|\d\s*කි\.මී|\d\s*கி\.மீ/, `${path}: a radius is typed in the page text`);
+    for (const m of html.matchAll(/<span data-radius(?: data-count="([^"]*)")?>([^<]*)<\/span>/g)) {
+      assert.equal(m[2], '6', `${path}: default radius text`);
+      if (m[1] !== undefined) assert.equal(m[1], '6', `${path}: default data-count`);
+    }
+  }
+  // The markers are on the pages that talk about the radius, and they load store-hours.js to be filled.
+  for (const path of ['/', '/terms', '/beruwala', '/aluthgama', '/si/', '/ta/', '/si/beruwala', '/ta/beruwala', '/sanitary-pads-home-delivery']) {
+    const html = byPath.get(path).html;
+    assert.match(html, /<span data-radius[ >]/, `${path} has no data-radius marker`);
+    assert.match(html, /<script src="\/store-hours\.js\?v=\w+" defer><\/script>/, `${path}: store-hours.js`);
+  }
+  // Meta tags and JSON-LD cannot be updated by a script: they carry the default, written as 6.
+  const home = byPath.get('/').html;
+  assert.match(metaContent(home, 'name', 'description'), /its 6 km surroundings, including Aluthgama and Beruwala/);
+  assert.match(ldNodes(home).find((n) => n['@type'] === 'GroceryStore').description, /within 6 km of the Clock Tower, including Aluthgama and Beruwala/);
+  assert.doesNotMatch(readFileSync(join(site, 'manifest.webmanifest'), 'utf8'), /\b4 km/);
+  // The home page's big figure is both a marker and a count-up target.
+  assert.match(home, /<span data-radius data-count="6">6<\/span> km<\/h2>/);
+});
+
+test('the seller page tagline stays Dharga Town only', () => {
+  const seller = byPath.get('/seller').html;
+  assert.match(seller, /<p class="seller-tagline">Open to sellers in Dharga Town only, for now\.<\/p>/);
+  assert.doesNotMatch(seller, /Beruwala[^<]*only/i);
 });

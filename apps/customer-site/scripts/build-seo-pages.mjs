@@ -3,7 +3,7 @@
 //
 // Writes apps/customer-site/pages/, which the Dockerfile copies to the site
 // root as it is (COPY apps/customer-site/pages/ /usr/share/nginx/html/):
-//   /dharga-town /aluthgama /bentota /kaluwamodara /moragalla   area pages
+//   /dharga-town /aluthgama /bentota /kaluwamodara /moragalla /beruwala   area pages
 //   /baby-diapers-delivery-aluthgama ...                          category pages
 //   /si/ /ta/ and /si/<area> /ta/<area>                           Sinhala and Tamil
 //   /sitemap.xml /robots.txt /pages.css (pages.css is hand-written, not generated)
@@ -31,7 +31,7 @@ const siteDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(siteDir, 'pages');
 
 export const SITE = 'https://blynk.lk';
-export const LASTMOD = '2026-10-15';
+export const LASTMOD = '2026-11-01';
 const YEAR = '2026';
 const PHONE = '+94717107374';
 const WHATSAPP = 'https://wa.me/94717107374';
@@ -39,7 +39,7 @@ const OG_IMAGE = `${SITE}/assets/og-image.jpg`;
 const CSS = '/styles.css?v=20261014b';
 const PAGES_CSS = '/pages.css?v=20261015c';
 const ANALYTICS = '/analytics.js?v=20261015a';
-const STORE_HOURS = '/store-hours.js?v=20261020a';
+const STORE_HOURS = '/store-hours.js?v=20261101a';
 const LANGS = ['en', 'si', 'ta'];
 
 // ---------------------------------------------------------------- helpers
@@ -113,7 +113,7 @@ const T = {
     areaTitle: 'Grocery delivery in {area} | Blynk',
     areaDesc: 'Order groceries and daily essentials from Blynk in {area}. Delivered from near the Dharga Town Clock Tower. Pay cash on delivery.',
     areaH1: 'Grocery delivery in {area}',
-    factHours: 'Every day 8 AM – 9 PM', factCash: 'Cash on delivery', factRange: 'Within 4 km of the Dharga Town Clock Tower',
+    factHours: 'Every day 8 AM – 9 PM', factCash: 'Cash on delivery', factRange: 'Within {km} km of the Dharga Town Clock Tower',
     catsKicker: 'What you can order', catsH2: 'Everything for the home, in one order.',
     catsNote: 'Shop by the same categories you see in the app. What is in stock and today’s prices are shown in the app.',
     howKicker: 'How it works', howH2: 'Three steps to your door.',
@@ -130,7 +130,7 @@ const T = {
     help: 'Need help?', call: 'Call us', wa: 'WhatsApp us',
     areasNav: 'Areas we deliver to', langNav: 'Language', legalNav: 'Legal',
     privacy: 'Privacy Policy', terms: 'Terms and Conditions', refunds: 'Return, Refund and Cancellation Policy',
-    footerPlace: 'Dharga Town & Aluthgama, Sri Lanka',
+    footerPlace: 'Dharga Town, Aluthgama & Beruwala, Sri Lanka',
   },
   si: {
     locale: 'si_LK', langName: 'සිංහල',
@@ -139,7 +139,7 @@ const T = {
     areaTitle: '{areaTo} සිල්ලර බඩු බෙදාහැරීම | Blynk',
     areaDesc: 'Blynk වෙතින් {areaTo} සිල්ලර බඩු සහ දෛනික අත්‍යවශ්‍ය දෑ ඇණවුම් කරන්න. භාණ්ඩ ලැබුණු විට මුදලින් ගෙවන්න.',
     areaH1: '{areaTo} සිල්ලර බඩු බෙදාහැරීම',
-    factHours: 'සෑම දිනකම පෙ.ව. 8 – ප.ව. 9', factCash: 'භාණ්ඩ ලැබුණු විට මුදලින් ගෙවන්න', factRange: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. 4ක් ඇතුළත',
+    factHours: 'සෑම දිනකම පෙ.ව. 8 – ප.ව. 9', factCash: 'භාණ්ඩ ලැබුණු විට මුදලින් ගෙවන්න', factRange: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. {km}ක් ඇතුළත',
     catsKicker: 'ඔබට ඇණවුම් කළ හැකි දේ', catsH2: 'නිවසට අවශ්‍ය සියල්ල, එකම ඇණවුමකින්.',
     catsNote: 'ඇප් එකේ ඇති කාණ්ඩ අනුවම මිලදී ගන්න. තොගයේ ඇති දේ සහ අද මිල ගණන් ඇප් එකේ පෙන්වයි.',
     howKicker: 'එය ක්‍රියා කරන ආකාරය', howH2: 'ඔබේ දොරකඩට පියවර තුනයි.',
@@ -156,7 +156,7 @@ const T = {
     help: 'උදව් අවශ්‍යද?', call: 'අපට අමතන්න', wa: 'WhatsApp කරන්න',
     areasNav: 'බෙදාහැරීමේ ප්‍රදේශ', langNav: 'භාෂාව', legalNav: 'නීතිමය',
     privacy: 'රහස්‍යතා ප්‍රතිපත්තිය (English)', terms: 'නියම සහ කොන්දේසි (English)', refunds: 'ආපසු භාරදීම්, මුදල් ආපසු ගෙවීම් සහ අවලංගු කිරීමේ ප්‍රතිපත්තිය (English)',
-    footerPlace: 'දර්ගා නගරය සහ අළුත්ගම, ශ්‍රී ලංකාව',
+    footerPlace: 'දර්ගා නගරය, අළුත්ගම සහ බේරුවල, ශ්‍රී ලංකාව',
   },
   ta: {
     locale: 'ta_LK', langName: 'தமிழ்',
@@ -165,7 +165,7 @@ const T = {
     areaTitle: '{area} பகுதியில் மளிகைப் பொருள் டெலிவரி | Blynk',
     areaDesc: 'Blynk மூலம் {area} பகுதிக்கு மளிகைப் பொருட்களையும் அன்றாடத் தேவைகளையும் ஆர்டர் செய்யுங்கள். பொருள் கிடைத்ததும் பணமாகச் செலுத்துங்கள்.',
     areaH1: '{area} பகுதியில் மளிகைப் பொருள் டெலிவரி',
-    factHours: 'தினமும் காலை 8 – இரவு 9', factCash: 'பொருள் கிடைத்ததும் பணம் செலுத்தலாம்', factRange: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து 4 கி.மீ.க்குள்',
+    factHours: 'தினமும் காலை 8 – இரவு 9', factCash: 'பொருள் கிடைத்ததும் பணம் செலுத்தலாம்', factRange: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து {km} கி.மீ.க்குள்',
     catsKicker: 'நீங்கள் ஆர்டர் செய்யக்கூடியவை', catsH2: 'வீட்டுக்குத் தேவையான அனைத்தும், ஒரே ஆர்டரில்.',
     catsNote: 'ஆப்பில் உள்ள அதே வகைகளின்படி வாங்குங்கள். கையிருப்பில் உள்ளவையும் இன்றைய விலைகளும் ஆப்பில் காட்டப்படும்.',
     howKicker: 'எப்படி வேலை செய்கிறது', howH2: 'உங்கள் வாசலுக்கு மூன்று படிகள்.',
@@ -182,13 +182,14 @@ const T = {
     help: 'உதவி தேவையா?', call: 'எங்களை அழையுங்கள்', wa: 'WhatsApp செய்யுங்கள்',
     areasNav: 'டெலிவரி பகுதிகள்', langNav: 'மொழி', legalNav: 'சட்டம்',
     privacy: 'தனியுரிமைக் கொள்கை (English)', terms: 'விதிமுறைகள் மற்றும் நிபந்தனைகள் (English)', refunds: 'திருப்பி அனுப்புதல், பணத்திருப்பம் மற்றும் ரத்துக் கொள்கை (English)',
-    footerPlace: 'தர்கா நகர் மற்றும் அளுத்கம, இலங்கை',
+    footerPlace: 'தர்கா நகர், அளுத்கம மற்றும் பேருவளை, இலங்கை',
   },
 };
 
 // ---------------------------------------------------------------- areas
-// Every area is within about 4 km of the Clock Tower (6.441268, 80.011437);
-// the app checks each address, so the copy never promises a whole town.
+// Every area is within about 6 km of the Clock Tower (6.441268, 80.011437); the radius is an Admin setting, so the
+// copy writes it as {km} (see radius() below) and store-hours.js shows the live figure. The app checks each address,
+// so the copy never promises a whole town.
 export const AREAS = [
   {
     slug: 'dharga-town',
@@ -218,9 +219,9 @@ export const AREAS = [
     },
     localH2: { en: 'Aluthgama, close to home', si: 'අළුත්ගම, ඔබේ නිවසට ළඟින්', ta: 'அளுத்கம, உங்கள் வீட்டுக்கு அருகில்' },
     local: {
-      en: 'Aluthgama is next door to Dharga Town and well inside our 4 km delivery area. Whether you live near the town, the railway station or the river, pin your home in the app and it shows that we deliver there before you order.',
-      si: 'අළුත්ගම දර්ගා නගරයට යාබදව පිහිටා ඇති අතර අපේ කි.මී. 4ක බෙදාහැරීමේ ප්‍රදේශය තුළ හොඳින්ම පිහිටයි. ඔබ නගරය, දුම්රිය ස්ථානය හෝ ගඟ අසල ජීවත් වුවද, ඇප් එකේ ඔබේ නිවස සලකුණු කරන්න; ඇණවුම් කිරීමට පෙර අප එහි බෙදාහරින බව එය පෙන්වයි.',
-      ta: 'அளுத்கம தர்கா நகருக்கு அடுத்ததாக உள்ளது; எங்கள் 4 கி.மீ. டெலிவரி பகுதிக்குள் நன்றாகவே அடங்குகிறது. நீங்கள் நகருக்கு அருகிலோ, ரயில் நிலையத்துக்கு அருகிலோ, ஆற்றங்கரையிலோ வசித்தாலும், ஆப்பில் உங்கள் வீட்டைக் குறியுங்கள்; ஆர்டர் செய்வதற்கு முன்பே நாங்கள் அங்கு டெலிவரி செய்கிறோமா என்பதை அது காட்டும்.',
+      en: 'Aluthgama is next door to Dharga Town and well inside our {km} km delivery area. Whether you live near the town, the railway station or the river, pin your home in the app and it shows that we deliver there before you order.',
+      si: 'අළුත්ගම දර්ගා නගරයට යාබදව පිහිටා ඇති අතර අපේ කි.මී. {km}ක බෙදාහැරීමේ ප්‍රදේශය තුළ හොඳින්ම පිහිටයි. ඔබ නගරය, දුම්රිය ස්ථානය හෝ ගඟ අසල ජීවත් වුවද, ඇප් එකේ ඔබේ නිවස සලකුණු කරන්න; ඇණවුම් කිරීමට පෙර අප එහි බෙදාහරින බව එය පෙන්වයි.',
+      ta: 'அளுத்கம தர்கா நகருக்கு அடுத்ததாக உள்ளது; எங்கள் {km} கி.மீ. டெலிவரி பகுதிக்குள் நன்றாகவே அடங்குகிறது. நீங்கள் நகருக்கு அருகிலோ, ரயில் நிலையத்துக்கு அருகிலோ, ஆற்றங்கரையிலோ வசித்தாலும், ஆப்பில் உங்கள் வீட்டைக் குறியுங்கள்; ஆர்டர் செய்வதற்கு முன்பே நாங்கள் அங்கு டெலிவரி செய்கிறோமா என்பதை அது காட்டும்.',
     },
     popular: ['baby-diapers-delivery-aluthgama', 'milk-powder-delivery-aluthgama', 'sanitary-pads-home-delivery'],
   },
@@ -229,15 +230,15 @@ export const AREAS = [
     name: { en: 'Bentota', si: 'බෙන්තොට', ta: 'பெந்தோட்டை' },
     to: { si: 'බෙන්තොටට' }, in: { si: 'බෙන්තොට' },
     lead: {
-      en: 'Blynk delivers groceries and daily essentials to homes, guest houses and villas in Bentota that are within 4 km of the Dharga Town Clock Tower.',
-      si: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. 4ක් ඇතුළත පිහිටි බෙන්තොට නිවාස, ආගන්තුක නිවාස සහ විලා වෙත Blynk සිල්ලර බඩු සහ දෛනික අත්‍යවශ්‍ය දෑ බෙදාහරියි.',
-      ta: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து 4 கி.மீ.க்குள் உள்ள பெந்தோட்டை வீடுகள், விருந்தினர் இல்லங்கள், வில்லாக்களுக்கு Blynk மளிகைப் பொருட்களையும் அன்றாடத் தேவைகளையும் டெலிவரி செய்கிறது.',
+      en: 'Blynk delivers groceries and daily essentials to homes, guest houses and villas in Bentota that are within {km} km of the Dharga Town Clock Tower.',
+      si: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. {km}ක් ඇතුළත පිහිටි බෙන්තොට නිවාස, ආගන්තුක නිවාස සහ විලා වෙත Blynk සිල්ලර බඩු සහ දෛනික අත්‍යවශ්‍ය දෑ බෙදාහරියි.',
+      ta: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து {km} கி.மீ.க்குள் உள்ள பெந்தோட்டை வீடுகள், விருந்தினர் இல்லங்கள், வில்லாக்களுக்கு Blynk மளிகைப் பொருட்களையும் அன்றாடத் தேவைகளையும் டெலிவரி செய்கிறது.',
     },
     localH2: { en: 'Which parts of Bentota we reach', si: 'අප ළඟා වන බෙන්තොට ප්‍රදේශ', ta: 'பெந்தோட்டையின் எந்தப் பகுதிகளுக்கு வருகிறோம்' },
     local: {
-      en: 'Bentota is just across the river from Aluthgama. We deliver to the parts of Bentota within 4 km of the Clock Tower. The app checks your pin as soon as you set it, so if your address is further out you will know before you order anything.',
-      si: 'බෙන්තොට පිහිටා ඇත්තේ අළුත්ගමට ගඟෙන් එගොඩය. ඔරලෝසු කණුවේ සිට කි.මී. 4ක් ඇතුළත බෙන්තොට ප්‍රදේශවලට අපි බෙදාහරිමු. ඔබ ස්ථානය සලකුණු කළ වහාම ඇප් එක එය පරීක්ෂා කරයි, එබැවින් ඔබේ ලිපිනය ඊට වඩා දුර නම් කිසිවක් ඇණවුම් කිරීමට පෙර ඔබට දැනගත හැකිය.',
-      ta: 'பெந்தோட்டை அளுத்கமவுக்கு ஆற்றின் மறுகரையில் உள்ளது. மணிக்கூட்டுக் கோபுரத்திலிருந்து 4 கி.மீ.க்குள் உள்ள பெந்தோட்டைப் பகுதிகளுக்கு நாங்கள் டெலிவரி செய்கிறோம். நீங்கள் இருப்பிடத்தைக் குறித்தவுடன் ஆப் அதைச் சரிபார்க்கும்; உங்கள் முகவரி அதைவிடத் தொலைவில் இருந்தால், எதையும் ஆர்டர் செய்வதற்கு முன்பே உங்களுக்குத் தெரிந்துவிடும்.',
+      en: 'Bentota is just across the river from Aluthgama. We deliver to the parts of Bentota within {km} km of the Clock Tower. The app checks your pin as soon as you set it, so if your address is further out you will know before you order anything.',
+      si: 'බෙන්තොට පිහිටා ඇත්තේ අළුත්ගමට ගඟෙන් එගොඩය. ඔරලෝසු කණුවේ සිට කි.මී. {km}ක් ඇතුළත බෙන්තොට ප්‍රදේශවලට අපි බෙදාහරිමු. ඔබ ස්ථානය සලකුණු කළ වහාම ඇප් එක එය පරීක්ෂා කරයි, එබැවින් ඔබේ ලිපිනය ඊට වඩා දුර නම් කිසිවක් ඇණවුම් කිරීමට පෙර ඔබට දැනගත හැකිය.',
+      ta: 'பெந்தோட்டை அளுத்கமவுக்கு ஆற்றின் மறுகரையில் உள்ளது. மணிக்கூட்டுக் கோபுரத்திலிருந்து {km} கி.மீ.க்குள் உள்ள பெந்தோட்டைப் பகுதிகளுக்கு நாங்கள் டெலிவரி செய்கிறோம். நீங்கள் இருப்பிடத்தைக் குறித்தவுடன் ஆப் அதைச் சரிபார்க்கும்; உங்கள் முகவரி அதைவிடத் தொலைவில் இருந்தால், எதையும் ஆர்டர் செய்வதற்கு முன்பே உங்களுக்குத் தெரிந்துவிடும்.',
     },
     popular: ['milk-powder-delivery-aluthgama', 'baby-diapers-delivery-aluthgama', 'rice-and-dhal-delivery-dharga-town'],
   },
@@ -252,9 +253,9 @@ export const AREAS = [
     },
     localH2: { en: 'Kaluwamodara is in range', si: 'කළුවාමෝදර අපේ ප්‍රදේශය තුළයි', ta: 'களுவாமோதரை எங்கள் பகுதிக்குள்' },
     local: {
-      en: 'Kaluwamodara is close to Dharga Town and well within our 4 km delivery area. Drop your pin exactly on your house and add directions if the road is hard to find; the rider uses both to reach you.',
-      si: 'කළුවාමෝදර දර්ගා නගරයට ආසන්නව, අපේ කි.මී. 4ක බෙදාහැරීමේ ප්‍රදේශය තුළ හොඳින්ම පිහිටයි. ඔබේ නිවස මතම ස්ථානය සලකුණු කරන්න, මාර්ගය සොයාගැනීමට අපහසු නම් මඟ පෙන්වීම්ද එක් කරන්න; රයිඩර් ඔබ වෙත ළඟා වීමට ඒ දෙකම භාවිත කරයි.',
-      ta: 'களுவாமோதரை தர்கா நகருக்கு அருகில், எங்கள் 4 கி.மீ. டெலிவரி பகுதிக்குள் நன்றாகவே உள்ளது. உங்கள் வீட்டின் மீதே இருப்பிடத்தைக் குறியுங்கள்; வழி கண்டுபிடிக்கச் சிரமமாக இருந்தால் வழிகாட்டுதல்களையும் சேருங்கள். ரைடர் உங்களை அடைய இரண்டையும் பயன்படுத்துவார்.',
+      en: 'Kaluwamodara is close to Dharga Town and well within our {km} km delivery area. Drop your pin exactly on your house and add directions if the road is hard to find; the rider uses both to reach you.',
+      si: 'කළුවාමෝදර දර්ගා නගරයට ආසන්නව, අපේ කි.මී. {km}ක බෙදාහැරීමේ ප්‍රදේශය තුළ හොඳින්ම පිහිටයි. ඔබේ නිවස මතම ස්ථානය සලකුණු කරන්න, මාර්ගය සොයාගැනීමට අපහසු නම් මඟ පෙන්වීම්ද එක් කරන්න; රයිඩර් ඔබ වෙත ළඟා වීමට ඒ දෙකම භාවිත කරයි.',
+      ta: 'களுவாமோதரை தர்கா நகருக்கு அருகில், எங்கள் {km} கி.மீ. டெலிவரி பகுதிக்குள் நன்றாகவே உள்ளது. உங்கள் வீட்டின் மீதே இருப்பிடத்தைக் குறியுங்கள்; வழி கண்டுபிடிக்கச் சிரமமாக இருந்தால் வழிகாட்டுதல்களையும் சேருங்கள். ரைடர் உங்களை அடைய இரண்டையும் பயன்படுத்துவார்.',
     },
     popular: ['rice-and-dhal-delivery-dharga-town', 'baby-diapers-delivery-aluthgama', 'milk-powder-delivery-aluthgama'],
   },
@@ -263,17 +264,36 @@ export const AREAS = [
     name: { en: 'Moragalla', si: 'මොරගල්ල', ta: 'மொரகல்ல' },
     to: { si: 'මොරගල්ලට' }, in: { si: 'මොරගල්ලේ' },
     lead: {
-      en: 'Blynk delivers groceries and daily essentials to Moragalla homes within 4 km of the Dharga Town Clock Tower. Order from 8 AM to 9 PM and pay at your door.',
-      si: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. 4ක් ඇතුළත මොරගල්ල නිවාසවලට Blynk සිල්ලර බඩු සහ දෛනික අත්‍යවශ්‍ය දෑ බෙදාහරියි. පෙ.ව. 8 සිට ප.ව. 9 දක්වා ඇණවුම් කර, දොරකඩදී ගෙවන්න.',
-      ta: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து 4 கி.மீ.க்குள் உள்ள மொரகல்ல வீடுகளுக்கு Blynk மளிகைப் பொருட்களையும் அன்றாடத் தேவைகளையும் டெலிவரி செய்கிறது. காலை 8 முதல் இரவு 9 வரை ஆர்டர் செய்து, வாசலில் பணம் செலுத்துங்கள்.',
+      en: 'Blynk delivers groceries and daily essentials to Moragalla homes within {km} km of the Dharga Town Clock Tower. Order from 8 AM to 9 PM and pay at your door.',
+      si: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. {km}ක් ඇතුළත මොරගල්ල නිවාසවලට Blynk සිල්ලර බඩු සහ දෛනික අත්‍යවශ්‍ය දෑ බෙදාහරියි. පෙ.ව. 8 සිට ප.ව. 9 දක්වා ඇණවුම් කර, දොරකඩදී ගෙවන්න.',
+      ta: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து {km} கி.மீ.க்குள் உள்ள மொரகல்ல வீடுகளுக்கு Blynk மளிகைப் பொருட்களையும் அன்றாடத் தேவைகளையும் டெலிவரி செய்கிறது. காலை 8 முதல் இரவு 9 வரை ஆர்டர் செய்து, வாசலில் பணம் செலுத்துங்கள்.',
     },
     localH2: { en: 'Moragalla, by the coast', si: 'මොරගල්ල, මුහුදු තීරය අසල', ta: 'மொரகல்ல, கடற்கரையோரம்' },
     local: {
-      en: 'Moragalla lies on the coast north of Aluthgama, inside our delivery area for addresses within 4 km of the Clock Tower. Set your pin in the app and it tells you straight away whether your home is covered.',
-      si: 'මොරගල්ල පිහිටා ඇත්තේ අළුත්ගමට උතුරින්, මුහුදු තීරයේය; ඔරලෝසු කණුවේ සිට කි.මී. 4ක් ඇතුළත ලිපින සඳහා එය අපේ බෙදාහැරීමේ ප්‍රදේශය තුළ වේ. ඇප් එකේ ඔබේ ස්ථානය සලකුණු කරන්න, ඔබේ නිවස ආවරණය වේදැයි එය වහාම පවසයි.',
-      ta: 'மொரகல்ல அளுத்கமவுக்கு வடக்கே கடற்கரையோரம் உள்ளது; மணிக்கூட்டுக் கோபுரத்திலிருந்து 4 கி.மீ.க்குள் உள்ள முகவரிகளுக்கு இது எங்கள் டெலிவரி பகுதிக்குள் அடங்கும். ஆப்பில் உங்கள் இருப்பிடத்தைக் குறியுங்கள்; உங்கள் வீடு இதில் அடங்குமா என்பதை அது உடனே சொல்லும்.',
+      en: 'Moragalla lies on the coast north of Aluthgama, inside our delivery area for addresses within {km} km of the Clock Tower. Set your pin in the app and it tells you straight away whether your home is covered.',
+      si: 'මොරගල්ල පිහිටා ඇත්තේ අළුත්ගමට උතුරින්, මුහුදු තීරයේය; ඔරලෝසු කණුවේ සිට කි.මී. {km}ක් ඇතුළත ලිපින සඳහා එය අපේ බෙදාහැරීමේ ප්‍රදේශය තුළ වේ. ඇප් එකේ ඔබේ ස්ථානය සලකුණු කරන්න, ඔබේ නිවස ආවරණය වේදැයි එය වහාම පවසයි.',
+      ta: 'மொரகல்ல அளுத்கமவுக்கு வடக்கே கடற்கரையோரம் உள்ளது; மணிக்கூட்டுக் கோபுரத்திலிருந்து {km} கி.மீ.க்குள் உள்ள முகவரிகளுக்கு இது எங்கள் டெலிவரி பகுதிக்குள் அடங்கும். ஆப்பில் உங்கள் இருப்பிடத்தைக் குறியுங்கள்; உங்கள் வீடு இதில் அடங்குமா என்பதை அது உடனே சொல்லும்.',
     },
     popular: ['milk-powder-delivery-aluthgama', 'sanitary-pads-home-delivery', 'rice-and-dhal-delivery-dharga-town'],
+  },
+  {
+    // Added 2026-11-01 (owner: "we are going wider to Beruwala"): Beruwala town is about 4.9 km from the store,
+    // so it is inside the 6 km radius. The app still checks each pin, so the copy never promises the whole town.
+    slug: 'beruwala',
+    name: { en: 'Beruwala', si: 'බේරුවල', ta: 'பேருவளை' },
+    to: { si: 'බේරුවලට' }, in: { si: 'බේරුවලේ' },
+    lead: {
+      en: 'Blynk delivers groceries and daily essentials to homes in and around Beruwala town that are within {km} km of the Dharga Town Clock Tower. Order in the app and pay in cash at your door.',
+      si: 'දර්ගා නගරයේ ඔරලෝසු කණුවේ සිට කි.මී. {km}ක් ඇතුළත පිහිටි බේරුවල නගරයේ සහ අවට නිවාසවලට Blynk සිල්ලර බඩු සහ දෛනික අත්‍යවශ්‍ය දෑ බෙදාහරියි. ඇප් එකෙන් ඇණවුම් කර, දොරකඩදී මුදලින් ගෙවන්න.',
+      ta: 'தர்கா நகர் மணிக்கூட்டுக் கோபுரத்திலிருந்து {km} கி.மீ.க்குள் உள்ள பேருவளை நகரிலும் சுற்றுவட்டாரத்திலும் உள்ள வீடுகளுக்கு Blynk மளிகைப் பொருட்களையும் அன்றாடத் தேவைகளையும் டெலிவரி செய்கிறது. ஆப்பில் ஆர்டர் செய்து, வாசலில் பணமாகச் செலுத்துங்கள்.',
+    },
+    localH2: { en: 'Beruwala is now in range', si: 'බේරුවල දැන් අපේ ප්‍රදේශය තුළයි', ta: 'பேருவளை இப்போது எங்கள் பகுதிக்குள்' },
+    local: {
+      en: 'Beruwala is the next town up the coast from Moragalla, and our delivery area now reaches it: Beruwala town is inside the {km} km around the Clock Tower. Set your pin in the app and it tells you straight away whether your home is covered, before you order anything.',
+      si: 'බේරුවල පිහිටා ඇත්තේ මොරගල්ලෙන් ඔබ්බට, වෙරළ තීරයේ ඊළඟ නගරයේය; අපේ බෙදාහැරීමේ ප්‍රදේශය දැන් එයටත් ළඟා වේ: බේරුවල නගරය ඔරලෝසු කණුව වටා කි.මී. {km}ක් ඇතුළත පිහිටයි. ඇප් එකේ ඔබේ ස්ථානය සලකුණු කරන්න; කිසිවක් ඇණවුම් කිරීමට පෙර ඔබේ නිවස ආවරණය වේදැයි එය වහාම පවසයි.',
+      ta: 'பேருவளை மொரகல்லவுக்கு அடுத்து கடற்கரையோரம் உள்ள நகரம்; எங்கள் டெலிவரி பகுதி இப்போது அதையும் எட்டுகிறது: பேருவளை நகரம் மணிக்கூட்டுக் கோபுரத்தைச் சுற்றிய {km} கி.மீ.க்குள் உள்ளது. ஆப்பில் உங்கள் இருப்பிடத்தைக் குறியுங்கள்; எதையும் ஆர்டர் செய்வதற்கு முன்பே உங்கள் வீடு இதில் அடங்குமா என்பதை அது உடனே சொல்லும்.',
+    },
+    popular: ['rice-and-dhal-delivery-dharga-town', 'sanitary-pads-home-delivery', 'milk-powder-delivery-aluthgama'],
   },
 ];
 
@@ -283,28 +303,28 @@ export const CATEGORY_PAGES = [
     slug: 'baby-diapers-delivery-aluthgama',
     crumb: 'Baby diapers & wipes',
     title: 'Baby diapers & wipes delivery in Aluthgama | Blynk',
-    description: 'Order baby diapers, wipes, baby soap, powder and baby food from Blynk, delivered to your door in Aluthgama and Dharga Town. Pay cash on delivery.',
+    description: 'Order baby diapers, wipes, baby soap, powder and baby food from Blynk, delivered to your door in Aluthgama, Dharga Town and Beruwala. Pay cash on delivery.',
     h1: 'Baby diapers and wipes, delivered in Aluthgama',
-    lead: 'Running low on diapers? Order them from your phone with the rest of the shopping and pay in cash when the rider arrives. We deliver across Aluthgama and everywhere within 4 km of the Dharga Town Clock Tower.',
+    lead: 'Running low on diapers? Order them from your phone with the rest of the shopping and pay in cash when the rider arrives. We deliver across Aluthgama, Beruwala and everywhere within {km} km of the Dharga Town Clock Tower.',
     groups: [
       { main: 'Baby Items › Diapers & Wipes', items: ['Diapers', 'Wipes'] },
       { main: 'Baby Items', items: ['Baby Soap & Powder', 'Baby Food & Bottles'] },
       { main: 'Often added with them', items: ['Milk Powder & Eggs', 'Soap & Toothpaste', 'Tissue, Foil & Lunch Sheets'] },
     ],
-    areas: ['aluthgama', 'dharga-town', 'bentota', 'kaluwamodara', 'moragalla'],
+    areas: ['aluthgama', 'dharga-town', 'bentota', 'kaluwamodara', 'moragalla', 'beruwala'],
   },
   {
     slug: 'sanitary-pads-home-delivery',
     crumb: 'Sanitary pads',
-    title: 'Sanitary pads home delivery in Dharga Town & Aluthgama | Blynk',
-    description: 'Get sanitary pads and ladies’ items delivered to your home in Dharga Town, Aluthgama and nearby areas within 4 km. Pay cash on delivery.',
+    title: 'Sanitary pads home delivery in Dharga Town, Aluthgama & Beruwala | Blynk',
+    description: 'Get sanitary pads and ladies’ items delivered to your home in Dharga Town, Aluthgama, Beruwala and nearby areas within {km} km. Pay cash on delivery.',
     h1: 'Sanitary pads, delivered to your home',
-    lead: 'Order sanitary pads and other ladies’ items from your phone, without a trip to the shop. Blynk delivers to homes within 4 km of the Dharga Town Clock Tower, including Aluthgama, Bentota, Kaluwamodara and Moragalla.',
+    lead: 'Order sanitary pads and other ladies’ items from your phone, without a trip to the shop. Blynk delivers to homes within {km} km of the Dharga Town Clock Tower, including Aluthgama, Bentota, Kaluwamodara, Moragalla and Beruwala.',
     groups: [
       { main: 'Ladies Items', items: ['Sanitary Pads', 'Hair Oil & Shampoo', 'Creams & Beauty', 'Clips, Bands & Pins'] },
       { main: 'Personal Care', items: ['Soap & Toothpaste', 'First Aid'] },
     ],
-    areas: ['dharga-town', 'aluthgama', 'bentota', 'kaluwamodara', 'moragalla'],
+    areas: ['dharga-town', 'aluthgama', 'bentota', 'kaluwamodara', 'moragalla', 'beruwala'],
   },
   {
     slug: 'rice-and-dhal-delivery-dharga-town',
@@ -318,7 +338,7 @@ export const CATEGORY_PAGES = [
       { main: 'Grocery › Oil, Sugar & Salt', items: ['Oil', 'Sugar & Salt', 'Coconut & Coconut Milk', 'Sauces'] },
       { main: 'Grocery › Spices', items: ['Chilli & Curry Powder', 'Whole Spices', 'Curry Mixes', 'Goraka & Tamarind'] },
     ],
-    areas: ['dharga-town', 'aluthgama', 'kaluwamodara', 'bentota', 'moragalla'],
+    areas: ['dharga-town', 'aluthgama', 'kaluwamodara', 'bentota', 'moragalla', 'beruwala'],
   },
   {
     slug: 'milk-powder-delivery-aluthgama',
@@ -331,48 +351,48 @@ export const CATEGORY_PAGES = [
       { main: 'Breakfast & Drinks', items: ['Milk Powder & Eggs', 'Jam, Butter & Cereal', 'Tea & Coffee'] },
       { main: 'Breakfast & Drinks › Drinks', items: ['Milo & Nestomalt', 'Soft Drinks', 'Water & Juice'] },
     ],
-    areas: ['aluthgama', 'dharga-town', 'bentota', 'moragalla', 'kaluwamodara'],
+    areas: ['aluthgama', 'dharga-town', 'bentota', 'moragalla', 'kaluwamodara', 'beruwala'],
   },
 ];
 
 // ---------------------------------------------------------------- translated home pages
 const HOME = {
   si: {
-    title: 'Blynk — දර්ගා නගරයට සහ අළුත්ගමට සිල්ලර බඩු නිවසටම',
-    description: 'නැවුම් සිල්ලර බඩු සහ ගුණාත්මක අත්‍යවශ්‍ය දෑ දර්ගා නගරයේ සහ අළුත්ගම ඇතුළු අවට කි.මී. 4ක ප්‍රදේශයේ ඔබේ දොරකඩටම. භාණ්ඩ ලැබුණු විට ගෙවන්න.',
-    chip: 'දර්ගා නගරය සහ අළුත්ගම', chip2: 'නැවුම් • ප්‍රාදේශීය',
+    title: 'Blynk — දර්ගා නගරයට, අළුත්ගමට සහ බේරුවලට සිල්ලර බඩු නිවසටම',
+    description: 'නැවුම් සිල්ලර බඩු සහ ගුණාත්මක අත්‍යවශ්‍ය දෑ දර්ගා නගරයේ, අළුත්ගම සහ බේරුවල ඇතුළු අවට කි.මී. {km}ක ප්‍රදේශයේ ඔබේ දොරකඩටම. භාණ්ඩ ලැබුණු විට ගෙවන්න.',
+    chip: 'දර්ගා නගරය, අළුත්ගම සහ බේරුවල', chip2: 'නැවුම් • ප්‍රාදේශීය',
     h1a: 'ඔබට අවශ්‍ය සියල්ල,', h1b: 'ඔබ ළඟටම.',
-    lead: 'නැවුම්ව තෝරාගත් සිල්ලර බඩු සහ ගුණාත්මක අත්‍යවශ්‍ය දෑ — දර්ගා නගරයේ සහ අළුත්ගම ඇතුළු අවට කි.මී. 4ක ප්‍රදේශයේ ඔබේ දොරකඩටම.',
-    perks: ['පුළුල් භාණ්ඩ<br>පරාසයක්', 'කි.මී. 4ක<br>ප්‍රදේශය', 'භාණ්ඩ ලැබුණු<br>විට ගෙවීම', 'Blynk<br>Points'],
+    lead: 'නැවුම්ව තෝරාගත් සිල්ලර බඩු සහ ගුණාත්මක අත්‍යවශ්‍ය දෑ — දර්ගා නගරයේ, අළුත්ගම සහ බේරුවල ඇතුළු අවට කි.මී. {km}ක ප්‍රදේශයේ ඔබේ දොරකඩටම.',
+    perks: ['පුළුල් භාණ්ඩ<br>පරාසයක්', 'කි.මී. {km}ක<br>ප්‍රදේශය', 'භාණ්ඩ ලැබුණු<br>විට ගෙවීම', 'Blynk<br>Points'],
     ctaSmall: 'iPhone සහ Android සඳහා',
     assure: 'Play Store හෝ App Store අවශ්‍ය නැත — ඔබේ දුරකථනයේ බ්‍රවුසරයෙන්ම ඇණවුම් කරන්න.',
     phonesAlt: 'Blynk ඇප් එක: කාණ්ඩ සහ ජනප්‍රිය භාණ්ඩ සහිත මුල් තිරය, සහ පිළිගැනීමේ තිරය',
     nav: ['මුල් පිටුව', 'ක්‍රියා කරන ආකාරය', 'භාණ්ඩ', 'බෙදාහැරීම', 'අප ගැන'],
-    howArea: 'දර්ගා නගරයේ, අළුත්ගමේ හෝ කි.මී. 4ක් ඇතුළත ඕනෑම තැනක',
+    howArea: 'දර්ගා නගරයේ, අළුත්ගමේ, බේරුවලේ හෝ කි.මී. {km}ක් ඇතුළත ඕනෑම තැනක',
     prodKicker: 'භාණ්ඩ', prodH2: 'නැවුම්ව තෝරාගත් ගුණාත්මක අත්‍යවශ්‍ය දෑ.', more: 'සියල්ල බැලීමට Blynk විවෘත කරන්න',
     delLead: 'පෙ.ව. 8 සිට ප.ව. 9 දක්වා ඇණවුම්, සතියේ සෑම දිනකම, ඔබේ දොරකඩදී ගෙවීම.',
-    stAreaT: 'දර්ගා නගරය සහ අවට, අළුත්ගම ද ඇතුළුව',
+    stAreaT: 'දර්ගා නගරය සහ අවට, අළුත්ගම සහ බේරුවල ද ඇතුළුව',
     aboutKicker: 'Blynk ගැන', aboutH2: 'ගුණාත්මක සිල්ලර බඩු, නැවුම්ව ඔබ වෙත.',
-    aboutP: 'Blynk දර්ගා නගරයේ සහ අළුත්ගම ඇතුළු අවට කි.මී. 4ක ප්‍රදේශයේ ඔබේ දොරකඩට නැවුම් සිල්ලර බඩු සහ ගුණාත්මක අත්‍යවශ්‍ය දෑ ගෙනෙයි. ස්පර්ශ කිහිපයකින් ඇණවුම් කර, සිතියමේ ඔබේ රයිඩර් අනුගමනය කර, ඇණවුම ලැබුණු විට මුදලින් ගෙවන්න. සෑම ඇණවුමකින්ම Blynk Points උපයන්න: වියදම් කරන සෑම LKR 100කටම ලකුණු 1ක්.',
+    aboutP: 'Blynk දර්ගා නගරයේ, අළුත්ගම සහ බේරුවල ඇතුළු අවට කි.මී. {km}ක ප්‍රදේශයේ ඔබේ දොරකඩට නැවුම් සිල්ලර බඩු සහ ගුණාත්මක අත්‍යවශ්‍ය දෑ ගෙනෙයි. ස්පර්ශ කිහිපයකින් ඇණවුම් කර, සිතියමේ ඔබේ රයිඩර් අනුගමනය කර, ඇණවුම ලැබුණු විට මුදලින් ගෙවන්න. සෑම ඇණවුමකින්ම Blynk Points උපයන්න: වියදම් කරන සෑම LKR 100කටම ලකුණු 1ක්.',
     areasH2: 'අප බෙදාහරින ප්‍රදේශ',
   },
   ta: {
-    title: 'Blynk — தர்கா நகர், அளுத்கம பகுதிகளுக்கு மளிகைப் பொருள் டெலிவரி',
-    description: 'புதிதாகத் தேர்ந்தெடுத்த மளிகைப் பொருட்களும் தரமான அன்றாடத் தேவைகளும் தர்கா நகர், அளுத்கம உட்பட சுற்றியுள்ள 4 கி.மீ. பகுதிகளில் உங்கள் வாசலுக்கே. பொருள் கிடைத்ததும் பணம் செலுத்துங்கள்.',
-    chip: 'தர்கா நகர் & அளுத்கம', chip2: 'புதியது • உள்ளூர்',
+    title: 'Blynk — தர்கா நகர், அளுத்கம, பேருவளை பகுதிகளுக்கு மளிகைப் பொருள் டெலிவரி',
+    description: 'புதிதாகத் தேர்ந்தெடுத்த மளிகைப் பொருட்களும் தரமான அன்றாடத் தேவைகளும் தர்கா நகர், அளுத்கம, பேருவளை உட்பட சுற்றியுள்ள {km} கி.மீ. பகுதிகளில் உங்கள் வாசலுக்கே. பொருள் கிடைத்ததும் பணம் செலுத்துங்கள்.',
+    chip: 'தர்கா நகர், அளுத்கம & பேருவளை', chip2: 'புதியது • உள்ளூர்',
     h1a: 'உங்களுக்குத் தேவையான அனைத்தும்,', h1b: 'உங்கள் அருகிலேயே.',
-    lead: 'புதிதாகத் தேர்ந்தெடுத்த மளிகைப் பொருட்களும் தரமான அன்றாடத் தேவைகளும் — தர்கா நகர், அளுத்கம உட்பட சுற்றியுள்ள 4 கி.மீ. பகுதிகளில் உங்கள் வாசலுக்கே.',
-    perks: ['பலவகைப்<br>பொருட்கள்', '4 கி.மீ.<br>சுற்றளவு', 'கிடைத்ததும்<br>பணம்', 'Blynk<br>Points'],
+    lead: 'புதிதாகத் தேர்ந்தெடுத்த மளிகைப் பொருட்களும் தரமான அன்றாடத் தேவைகளும் — தர்கா நகர், அளுத்கம, பேருவளை உட்பட சுற்றியுள்ள {km} கி.மீ. பகுதிகளில் உங்கள் வாசலுக்கே.',
+    perks: ['பலவகைப்<br>பொருட்கள்', '{km} கி.மீ.<br>சுற்றளவு', 'கிடைத்ததும்<br>பணம்', 'Blynk<br>Points'],
     ctaSmall: 'iPhone & Android இரண்டிலும்',
     assure: 'Play Store அல்லது App Store தேவையில்லை — உங்கள் போனின் பிரவுசரிலேயே ஆர்டர் செய்யுங்கள்.',
     phonesAlt: 'Blynk ஆப்: வகைகளும் பிரபலமான பொருட்களும் உள்ள முகப்புத் திரை, வரவேற்புத் திரை',
     nav: ['முகப்பு', 'எப்படி வேலை செய்கிறது', 'பொருட்கள்', 'டெலிவரி', 'எங்களைப் பற்றி'],
-    howArea: 'தர்கா நகர், அளுத்கம அல்லது 4 கி.மீ.க்குள் உள்ள ஏதேனும் ஒரு',
+    howArea: 'தர்கா நகர், அளுத்கம, பேருவளை அல்லது {km} கி.மீ.க்குள் உள்ள ஏதேனும் ஒரு',
     prodKicker: 'பொருட்கள்', prodH2: 'புதிதாகத் தேர்ந்தெடுத்த தரமான தேவைகள்.', more: 'அனைத்தையும் பார்க்க Blynk-ஐத் திறங்கள்',
     delLead: 'காலை 8 முதல் இரவு 9 வரை ஆர்டர் செய்யலாம், வாரத்தின் ஒவ்வொரு நாளும், வாசலில் பணம் செலுத்தலாம்.',
-    stAreaT: 'தர்கா நகரும் சுற்றுப்புறமும், அளுத்கம உட்பட',
+    stAreaT: 'தர்கா நகரும் சுற்றுப்புறமும், அளுத்கம, பேருவளை உட்பட',
     aboutKicker: 'Blynk பற்றி', aboutH2: 'தரமான மளிகைப் பொருட்கள், புதிதாக உங்களிடம்.',
-    aboutP: 'தர்கா நகர், அளுத்கம உட்பட சுற்றியுள்ள 4 கி.மீ. பகுதிகளில் உங்கள் வாசலுக்கு Blynk புதிய மளிகைப் பொருட்களையும் தரமான அன்றாடத் தேவைகளையும் கொண்டு வருகிறது. சில தட்டல்களில் ஆர்டர் செய்து, வரைபடத்தில் உங்கள் ரைடரைப் பின்தொடர்ந்து, ஆர்டர் வந்ததும் பணமாகச் செலுத்துங்கள். ஒவ்வொரு ஆர்டரிலும் Blynk Points பெறுங்கள்: செலவிடும் ஒவ்வொரு LKR 100க்கும் 1 புள்ளி.',
+    aboutP: 'தர்கா நகர், அளுத்கம, பேருவளை உட்பட சுற்றியுள்ள {km} கி.மீ. பகுதிகளில் உங்கள் வாசலுக்கு Blynk புதிய மளிகைப் பொருட்களையும் தரமான அன்றாடத் தேவைகளையும் கொண்டு வருகிறது. சில தட்டல்களில் ஆர்டர் செய்து, வரைபடத்தில் உங்கள் ரைடரைப் பின்தொடர்ந்து, ஆர்டர் வந்ததும் பணமாகச் செலுத்துங்கள். ஒவ்வொரு ஆர்டரிலும் Blynk Points பெறுங்கள்: செலவிடும் ஒவ்வொரு LKR 100க்கும் 1 புள்ளி.',
     areasH2: 'நாங்கள் டெலிவரி செய்யும் பகுதிகள்',
   },
 };
@@ -411,7 +431,7 @@ ${alt}  <meta name="theme-color" content="#FFE141">
   <meta property="og:image" content="${OG_IMAGE}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Blynk: groceries delivered in Dharga Town and Aluthgama">
+  <meta property="og:image:alt" content="Blynk: groceries delivered in Dharga Town, Aluthgama and Beruwala">
   <meta property="og:locale" content="${t.locale}">
 ${altLocales}  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${esc(title)}">
@@ -533,7 +553,7 @@ function statsSection(lang, { lead = '', areaText } = {}) {
           <h2 id="delivery-title">${esc(t.delH2)}</h2>${lead ? `\n          <p class="lead">${hrs(esc(lead))}</p>` : ''}
         </div>
         <dl class="stats">
-          <div><dt>${esc(t.stArea)}</dt><dd><b>4<small>KM</small></b><span>${esc(areaText || t.stAreaT)}</span></dd></div>
+          <div><dt>${esc(t.stArea)}</dt><dd><b>{km}<small>KM</small></b><span>${esc(areaText || t.stAreaT)}</span></dd></div>
           <div><dt>${hrs(esc(t.stHours), true)}</dt><dd><b data-hours="short">8–9</b><span>${hrs(esc(t.stHoursT))}</span></dd></div>
           <div><dt>${esc(t.stPay)}</dt><dd><b class="stats__words">${esc(t.stPayB)}</b><span>${esc(t.stPayT)}</span></dd></div>
           <div><dt>${esc(t.stPts)}</dt><dd><b>1</b><span>${esc(t.stPtsT)}</span></dd></div>
@@ -574,11 +594,18 @@ const reviewComment = (lang) => {
      Product, category and brand names stay in English, as in the app.
      Generated by apps/customer-site/scripts/build-seo-pages.mjs: edit the copy there, not here. -->\n`;
 };
+// The delivery radius is an Admin setting (owner, 2026-11-01: "6 km, with Beruwala"), so no page types it as fixed
+// text. The copy above writes {km}; on the page it becomes <span data-radius>6</span>, which store-hours.js fills
+// from GET /store radius_km. Without JavaScript, and in meta tags, titles and structured data (which a script
+// cannot update), it is the plain default below.
+export const DEFAULT_RADIUS = '6';
+const radius = (html) => html.split('{km}').join(`<span data-radius>${DEFAULT_RADIUS}</span>`);
+const radiusPlain = (html) => html.split('{km}').join(DEFAULT_RADIUS);
 const generatedComment = '<!-- Generated by apps/customer-site/scripts/build-seo-pages.mjs: edit the copy there, not here. -->\n';
 
 function page({ lang, headHtml, body }) {
   const top = lang === 'en' ? generatedComment : reviewComment(lang);
-  return `<!doctype html>\n${top}<html lang="${lang}">\n${headHtml}\n<body class="seo-page">\n  ${GTM.body}\n${body}\n</body>\n</html>\n`;
+  return `<!doctype html>\n${top}<html lang="${lang}">\n${radiusPlain(headHtml)}\n<body class="seo-page">\n  ${GTM.body}\n${radius(body)}\n</body>\n</html>\n`;
 }
 
 // ---------------------------------------------------------------- area page

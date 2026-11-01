@@ -49,7 +49,7 @@ export const LEGAL_PAGES = [
     name: 'terms',
     title: 'Terms and Conditions',
     lead: 'The rules for using the Blynk app, website and delivery service: orders, delivery, payment, Blynk Points and the Blynk Wallet.',
-    description: 'The terms for ordering from Blynk in Aluthgama and Dharga Town, Sri Lanka: orders, delivery, payment, Blynk Points and the Blynk Wallet.',
+    description: 'The terms for ordering from Blynk in Aluthgama, Dharga Town and Beruwala, Sri Lanka: orders, delivery, payment, Blynk Points and the Blynk Wallet.',
     footer: 'Terms and Conditions',
   },
   {
@@ -110,6 +110,8 @@ function tokens(c) {
     // The hours come from the API Admin / Ops control (store-hours.js fills the data-hours spans in; owner,
     // 2026-10-20: no typed-in opening hours). The words written here only show if that script cannot run.
     hours: '<span data-hours="dash">8 AM – 9 PM</span>, <span data-hours="days-lower">every day</span>',
+    // The delivery radius is an Admin setting (owner, 2026-11-01); store-hours.js fills the span from GET /store radius_km.
+    radius: '<span data-radius>6</span>',
     supportEmail: mail(c.supportEmail),
     privacyEmail: mail(privacyEmail),
     registeredAddress: esc(c.registeredAddress || ''),
@@ -247,7 +249,7 @@ ${main}
       </nav>
       <p class="footer__help">Need help? ${tok.callUs}
         ${tok.whatsappUs}</p>
-      <small>© ${c.lastUpdated.slice(0, 4)} Blynk · Dharga Town &amp; Aluthgama, Sri Lanka</small>
+      <small>© ${c.lastUpdated.slice(0, 4)} Blynk · Dharga Town, Aluthgama &amp; Beruwala, Sri Lanka</small>
       <nav class="footer__legal" aria-label="Legal">
         ${[LEGAL_PAGES[1], LEGAL_PAGES[0], LEGAL_PAGES[2], LEGAL_PAGES[3]].map(footerLink).join('\n        ')}
       </nav>
@@ -294,7 +296,7 @@ ${body}
   return shell({
     meta, c, tok, main,
     note: `legal/${meta.name}.md and legal/legal-config.json`,
-    scripts: '  <script src="/store-hours.js?v=20261020a" defer></script>\n',
+    scripts: '  <script src="/store-hours.js?v=20261101a" defer></script>\n',
   });
 }
 

@@ -4,7 +4,7 @@ Blynk.lk ("Blynk", "we", "us") is a quick commerce and delivery service operated
 
 ### 2. Service area
 
-We currently deliver to Aluthgama, Dharga Town and areas within about 4 km of them. If your address is outside this area, we may decline or cancel the order. We will tell you before you pay or before we dispatch.
+We currently deliver to Aluthgama, Dharga Town, Beruwala and areas within about {{radius}} km of the Dharga Town Clock Tower. If your address is outside this area, we may decline or cancel the order. We will tell you before you pay or before we dispatch.
 
 ### 3. Your account
 

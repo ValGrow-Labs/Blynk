@@ -112,7 +112,7 @@ test('links to the page: landing footer, legal footers, the page itself, the sit
   const privacy = read('privacy.html');
   assert.ok(visible(privacy).includes('Seller applications Shop name, your name, phone number, town, what you sell'), 'what is stored');
   assert.ok(privacy.includes('Seller applications — we use what you send at blynk.lk/seller only to call you about selling with Blynk, keep it for up to <strong>12 months</strong>, and delete it when you ask us to'), 'why, how long, how to delete');
-  assert.equal(JSON.parse(read('legal/legal-config.json')).lastUpdated, '2026-10-27');
+  assert.equal(JSON.parse(read('legal/legal-config.json')).lastUpdated, '2026-11-01');
 });
 
 test('nginx serves /seller and /seller/ like /privacy; the Dockerfile ships the files and fills in the API address', () => {

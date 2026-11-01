@@ -114,7 +114,7 @@
 
   // Delivery figures count up the first time they are seen; the last frame
   // writes the exact figure.
-  const formatCount = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+  const formatCount = (n) => (Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2))));
   const counters = document.querySelectorAll('[data-count]');
   if (!still && 'IntersectionObserver' in window) {
     const co = new IntersectionObserver((entries) => {

@@ -78,13 +78,13 @@ Play Console > **Grow users > Store presence > Main store listing**.
 
 **App name (30 max):** `Blynk` (or `Blynk: Grocery Delivery`, 22 characters, which helps people find it by search; the launcher still shows "Blynk").
 
-**Short description (80 max), English (73 characters):**
+**Short description (80 max), English (80 characters, the limit; shorten it if you add a name):**
 
-> Groceries and essentials delivered in Dharga Town, Aluthgama and Bentota.
+> Groceries and essentials delivered in Dharga Town, Aluthgama, Bentota, Beruwala.
 
 **Full description (4000 max), English (about 1,700 characters):**
 
-> Blynk brings groceries and everyday essentials to your door in Dharga Town, Aluthgama and Bentota.
+> Blynk brings groceries and everyday essentials to your door in Dharga Town, Aluthgama, Bentota and Beruwala.
 >
 > Shop the aisles you use every week: rice, dairy, chicken, cooking essentials, food cupboard, beverages, juices and shakes, snacks, seeds and spices, baby products, health and hygiene, household items and school stationery.
 >
@@ -113,16 +113,16 @@ Play Console > **Grow users > Store presence > Main store listing**.
 >
 > Need help? Use Help in the app, or email help@blynk.lk.
 >
-> Blynk is for customers in and around Dharga Town, Aluthgama and Bentota, Sri Lanka.
+> Blynk is for customers in and around Dharga Town, Aluthgama, Bentota and Beruwala, Sri Lanka.
 
-Before publishing, check every line against the live shop: the card payment line (PayHere must be switched on), Bentota as an area (the SEO pages say "Dharga Town, Aluthgama and 4 km around"; the web manifest and the address screen include Bentota), reorder, tracking and notifications. Do not add opening hours, delivery times or prices that are not set in Admin/Ops.
+Before publishing, check every line against the live shop: the card payment line (PayHere must be switched on), the areas named (Beruwala was added 2026-11-01 with the delivery radius raised to 6 km, which is an Admin setting, so the listing names areas and never a distance; the SEO pages list Dharga Town, Aluthgama, Bentota, Kaluwamodara, Moragalla and Beruwala; the web manifest and the address screen include Bentota), reorder, tracking and notifications. Do not add opening hours, delivery times or prices that are not set in Admin/Ops.
 
-**Sinhala and Tamil short descriptions** (add as translations: Store listing > **Manage translations** > Add Sinhala (si-LK) and Tamil (ta-IN, Play has no ta-LK)). Built from the phrasing already used on the site's Sinhala and Tamil pages (`apps/customer-site/pages/si/`, `pages/ta/`). **Have a native speaker read them before publishing**: these were not written by one, and they name only Dharga Town and Aluthgama, as those pages do.
+**Sinhala and Tamil short descriptions** (add as translations: Store listing > **Manage translations** > Add Sinhala (si-LK) and Tamil (ta-IN, Play has no ta-LK)). Built from the phrasing already used on the site's Sinhala and Tamil pages (`apps/customer-site/pages/si/`, `pages/ta/`). **Have a native speaker read them before publishing**: these were not written by one, and they name Dharga Town, Aluthgama and Beruwala, as those pages do (not Bentota, to stay within the 80-character limit).
 
-- Sinhala (65 characters): `සිල්ලර බඩු දර්ගා නගරයේ සහ අළුත්ගම ඔබේ දොරකඩටම. ලැබුණු විට ගෙවන්න.`
-  ("Groceries to your doorstep in Dharga Town and Aluthgama. Pay when you receive them.")
-- Tamil (74 characters): `தர்கா நகர், அளுத்கம பகுதிகளுக்கு மளிகைப் பொருள் டெலிவரி. கிடைத்ததும் பணம்.`
-  ("Grocery delivery to Dharga Town and Aluthgama areas. Pay on receipt.")
+- Sinhala (73 characters): `සිල්ලර බඩු දර්ගා නගරයේ, අළුත්ගම සහ බේරුවල ඔබේ දොරකඩටම. ලැබුණු විට ගෙවන්න.`
+  ("Groceries to your doorstep in Dharga Town, Aluthgama and Beruwala. Pay when you receive them.")
+- Tamil (74 characters): `தர்கா நகர், அளுத்கம, பேருவளை பகுதிகளுக்கு மளிகை டெலிவரி. கிடைத்ததும் பணம்.`
+  ("Grocery delivery to Dharga Town, Aluthgama and Beruwala areas. Pay on receipt.")
 
 No Sinhala or Tamil full description is supplied: I could not write 1,700 characters in either language accurately enough to publish. Play shows the English full description for those languages until one is added.
 
@@ -180,7 +180,7 @@ Sign-in is by SMS code only, so give Google a review number with a fixed code. T
      > 2. Tap Continue.
      > 3. Enter the code <REVIEW_CODE>.
      > 4. You are signed in. The account has a saved delivery address, so you can browse, add items to the cart and open checkout.
-     > Browsing products works without signing in ("Skip for now"). Orders are delivered only in Dharga Town, Aluthgama and Bentota, Sri Lanka, and are paid on delivery, so please do not complete a real order, or cancel it from Orders right away.
+     > Browsing products works without signing in ("Skip for now"). Orders are delivered only in Dharga Town, Aluthgama, Bentota and Beruwala, Sri Lanka, and are paid on delivery, so please do not complete a real order, or cancel it from Orders right away.
 4. Keep the review number working for as long as the app is on Play (Google re-reviews updates). Changing the code means updating this form.
 
 ### 8.3 Ads
