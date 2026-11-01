@@ -1,7 +1,8 @@
 /*
  * The places around the Blynk store that the delivery-area map shows (owner's sketch,
  * 2026-10-14): the store at the Clock Tower in Dharga Town, the towns inside the radius and
- * the two nearest ones outside it. Coordinates are the owner's own points (2026-10-14,
+ * the two nearest ones outside it. Beruwala is listed (owner, 2026-11-01: "we are going wider to Beruwala"):
+ * it shows by name in the area list once the radius (an Admin setting) reaches it (about 4.9 km). Coordinates are the owner's own points (2026-10-14,
  * checked against the sketch's straight-line distances); the map and the
  * area list compute every distance from the store location GET /store sends, so they stay
  * right if the store or its radius changes. Whether an address is delivered to is always the
@@ -33,7 +34,7 @@ export const PLACES: readonly Place[] = [
   { id: 'kaluwamodara', name: 'Kaluwamodara', lat: 6.440202, lng: 79.994271, label: { side: 'right', dy: 9 }, listed: true },
   { id: 'bentota', name: 'Bentota', lat: 6.41876, lng: 80.002455, label: { side: 'left', dy: 6 }, listed: true },
   { id: 'moragalla', name: 'Moragalla', lat: 6.448725, lng: 79.985009, label: { side: 'left', dy: 4 }, listed: true },
-  { id: 'beruwala', name: 'Beruwala town', lat: 6.475923, lng: 79.984144, label: { side: 'right', dy: 0 }, listed: false },
+  { id: 'beruwala', name: 'Beruwala town', lat: 6.475923, lng: 79.984144, label: { side: 'right', dy: 0 }, listed: true },
   { id: 'welipenna', name: 'Welipenna', lat: 6.468199, lng: 80.106565, label: { side: 'left', dy: 0 }, listed: false },
 ];
 

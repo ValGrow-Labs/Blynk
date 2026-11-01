@@ -11,6 +11,30 @@ const STORE = { radius_km: 4, store_location: { lat: 6.441313, lng: 80.011437 },
 const cov = coverageOf(STORE);
 const byName = (name: string) => placesAround(cov).find((p) => p.name === name)!;
 
+// Owner, 2026-11-01: "we are going wider to Beruwala" - the radius is an Admin setting; at 6 km Beruwala town is inside,
+// listed by name in the delivery area, offered as an area on the address form, and the address pinned there is named Beruwala.
+describe('Beruwala at a 6 km radius', () => {
+  const wide = coverageOf({ ...STORE, radius_km: 6 });
+  const pin = { lat: 6.4759, lng: 79.9842 };
+
+  test('Beruwala town is inside, listed in the area list, and an area choice', () => {
+    const areas = deliveryAreas(wide);
+    expect(areas.inside.map((a) => a.name)).toContain('Beruwala town');
+    expect(areas.outside.map((a) => a.name)).not.toContain('Beruwala town');
+    expect(areaChoices(wide)).toContain('Beruwala');
+    expect(AREA.within(wide)).toBe('We deliver within 6 km of the Clock Tower, Dharga Town.');
+  });
+
+  test('an address pinned in Beruwala town is inside the area and named Beruwala', () => {
+    expect(insideCoverage(wide, pin).inside).toBe(true);
+    expect(areaOfPin(wide, pin)).toBe('Beruwala');
+  });
+
+  test('at the old 4 km radius the same pin is outside (the server still decides)', () => {
+    expect(insideCoverage(cov, pin).inside).toBe(false);
+  });
+});
+
 describe('coverage from GET /store', () => {
   test('uses the server centre and radius; landmark while at the Clock Tower', () => {
     expect(cov).toMatchObject({ radiusKm: 4, fromServer: true, landmark: 'Clock Tower', town: 'Dharga Town' });
