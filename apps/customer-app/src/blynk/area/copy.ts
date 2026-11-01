@@ -1,6 +1,10 @@
 import { localized } from '@/blynk/i18n/localized';
 import { centreName, kmText, placeName, radiusText, type Coverage } from './coverage';
 import type { Note } from './flow';
+import { zoneNames } from './zones';
+
+/** The extra areas that are switched on, named ("Beruwala", "Beruwala and Kalutara"), or '' (also for a hand-made coverage). */
+const extra = (c: Coverage) => zoneNames(c?.zones);
 
 /*
  * Delivery-area words in English, Sinhala and Tamil. Place names (Dharga Town, Aluthgama...) are
@@ -36,10 +40,11 @@ export const AREA = localized(
     near: (name: string) => `Near ${name}`,
     radiusLabel: (c: Coverage) => `${radiusText(c.radiusKm)} delivery area`,
     /** Screen-reader name of the map. */
-    mapLabel: (c: Coverage) => `${radiusText(c.radiusKm)} delivery area around ${placeName(c)}`,
-    within: (c: Coverage) => `We deliver within ${radiusText(c.radiusKm)} of the ${centreName(c)}.`,
-    withinShort: (c: Coverage) => `We deliver within ${radiusText(c.radiusKm)} of ${centreName(c)}`,
-    farLine: (km: number, c: Coverage) => `This spot is ${kmText(km)} from the store. We deliver within ${radiusText(c.radiusKm)}. Move the pin closer to continue.`,
+    mapLabel: (c: Coverage) => `${radiusText(c.radiusKm)} delivery area around ${placeName(c)}${extra(c) ? `, and ${extra(c)}` : ''}`,
+    /** One clause per extra area that is switched on: "We deliver within 4 km of the Clock Tower, Dharga Town, and in Beruwala." */
+    within: (c: Coverage) => `We deliver within ${radiusText(c.radiusKm)} of the ${centreName(c)}${extra(c) ? `, and in ${extra(c)}` : ''}.`,
+    withinShort: (c: Coverage) => `We deliver within ${radiusText(c.radiusKm)} of ${centreName(c)}${extra(c) ? `, and in ${extra(c)}` : ''}`,
+    farLine: (km: number, c: Coverage) => `This spot is ${kmText(km)} from the store. We deliver within ${radiusText(c.radiusKm)}${extra(c) ? `, and in ${extra(c)}` : ''}. Move the pin closer to continue.`,
     farHead: 'Looks outside our delivery area',
     areaLine: (name: string) => `We put the pin in the middle of ${name}. Move the map so the pin sits on your house.`,
   },
@@ -70,10 +75,16 @@ export const AREA = localized(
       outsideTag: 'පිටත',
       near: (name: string) => `${name} ළඟ`,
       radiusLabel: (c: Coverage) => `${radiusText(c.radiusKm)} බෙදාහැරීමේ ප්‍රදේශය`,
-      mapLabel: (c: Coverage) => `${placeName(c)} වටා ${radiusText(c.radiusKm)} බෙදාහැරීමේ ප්‍රදේශය`,
-      within: (c: Coverage) => `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා.`,
-      withinShort: (c: Coverage) => `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා`,
-      farLine: (km: number, c: Coverage) => `මෙම ස්ථානය සාප්පුවේ සිට ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`,
+      mapLabel: (c: Coverage) => `${placeName(c)} වටා ${radiusText(c.radiusKm)} බෙදාහැරීමේ ප්‍රදේශය${extra(c) ? `, සහ ${extra(c)} ප්‍රදේශය` : ''}`,
+      within: (c: Coverage) => (extra(c)
+        ? `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළතත්, ${extra(c)} ප්‍රදේශයේත් බෙදාහරිනවා.`
+        : `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා.`),
+      withinShort: (c: Coverage) => (extra(c)
+        ? `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළතත්, ${extra(c)} ප්‍රදේශයේත් බෙදාහරිනවා`
+        : `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා`),
+      farLine: (km: number, c: Coverage) => (extra(c)
+        ? `මෙම ස්ථානය සාප්පුවේ සිට ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළතත්, ${extra(c)} ප්‍රදේශයේත් බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`
+        : `මෙම ස්ථානය සාප්පුවේ සිට ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`),
       farHead: 'අපගේ බෙදාහැරීමේ ප්‍රදේශයෙන් පිටත වගේ',
       areaLine: (name: string) => `අපි පින් එක ${name} මැදට දැම්මා. පින් එක ඔබේ ගෙදර උඩට එන්න සිතියම ගෙන යන්න.`,
     },
@@ -103,10 +114,16 @@ export const AREA = localized(
       outsideTag: 'வெளியே',
       near: (name: string) => `${name} அருகில்`,
       radiusLabel: (c: Coverage) => `${radiusText(c.radiusKm)} டெலிவரி பகுதி`,
-      mapLabel: (c: Coverage) => `${placeName(c)} சுற்றி ${radiusText(c.radiusKm)} டெலிவரி பகுதி`,
-      within: (c: Coverage) => `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம்.`,
-      withinShort: (c: Coverage) => `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம்`,
-      farLine: (km: number, c: Coverage) => `இந்த இடம் கடையிலிருந்து ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`,
+      mapLabel: (c: Coverage) => `${placeName(c)} சுற்றி ${radiusText(c.radiusKm)} டெலிவரி பகுதி${extra(c) ? `, மற்றும் ${extra(c)} பகுதி` : ''}`,
+      within: (c: Coverage) => (extra(c)
+        ? `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள்ளும், ${extra(c)} பகுதியிலும் டெலிவரி செய்கிறோம்.`
+        : `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம்.`),
+      withinShort: (c: Coverage) => (extra(c)
+        ? `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள்ளும், ${extra(c)} பகுதியிலும் டெலிவரி செய்கிறோம்`
+        : `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம்`),
+      farLine: (km: number, c: Coverage) => (extra(c)
+        ? `இந்த இடம் கடையிலிருந்து ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள்ளும், ${extra(c)} பகுதியிலும் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`
+        : `இந்த இடம் கடையிலிருந்து ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`),
       farHead: 'எங்கள் டெலிவரி பகுதிக்கு வெளியே போலத் தெரிகிறது',
       areaLine: (name: string) => `பின்னை ${name} நடுவில் வைத்துள்ளோம். பின் உங்கள் வீட்டின் மேல் வரும்படி வரைபடத்தை நகர்த்துங்கள்.`,
     },

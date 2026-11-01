@@ -2,11 +2,16 @@ import type { StoreInfo } from '@/blynk/api/types';
 import { townFromHub } from '@/blynk/address/forms';
 import { localized } from '@/blynk/i18n/localized';
 import { CENTRE_PLACE_ID, CLOCK_TOWER, FALLBACK_RADIUS_KM, PLACES, type LatLng, type Place } from './places';
+import { parseZones, type Zone } from './zones';
+
+export type { Zone } from './zones';
 
 /*
  * The delivery area: the circle around the active dark store (GET /store radius_km and
- * store_location), the named places with their distance from it, and the area list's pin
- * placement. Everything here is advisory - for drawing and for guiding the customer; the
+ * store_location) PLUS the extra zone circles (GET /store delivery_zones, e.g. Beruwala; the store
+ * radius itself is never made bigger - owner's brother, 2026-11-01), the named places with their
+ * distance from the store, and the area list's pin placement. A spot is inside when it is inside the
+ * store circle OR any zone circle. Everything here is advisory - for drawing and for guiding the customer; the
  * address book and checkout refuse an address outside the zone (422 DELIVERY_OUTSIDE_RADIUS).
  */
 
@@ -19,6 +24,8 @@ export type Coverage = {
   landmark: string | null;
   /** The store's town, from the hub name ("Dharga Town"). */
   town: string;
+  /** The extra delivery areas that are switched on (GET /store delivery_zones); none on an older server. */
+  zones: Zone[];
 };
 
 export type PlaceAt = Place & { km: number; inside: boolean };
@@ -48,7 +55,7 @@ export function bearing(a: LatLng, b: LatLng): number {
 }
 
 /** The delivery area from GET /store, or the Clock Tower and 4 km until it answers. */
-export function coverageOf(store: Pick<StoreInfo, 'radius_km' | 'store_location' | 'hub_name'> | null | undefined): Coverage {
+export function coverageOf(store: (Pick<StoreInfo, 'radius_km' | 'store_location' | 'hub_name'> & { delivery_zones?: StoreInfo['delivery_zones'] }) | null | undefined): Coverage {
   const loc = store?.store_location;
   const centerOk = validLatLng(loc);
   const r = Number(store?.radius_km);
@@ -60,8 +67,26 @@ export function coverageOf(store: Pick<StoreInfo, 'radius_km' | 'store_location'
     fromServer: centerOk && radiusOk,
     landmark: kmBetween(center, CLOCK_TOWER) <= 0.15 ? 'Clock Tower' : null,
     town: townFromHub(store?.hub_name),
+    zones: parseZones(store?.delivery_zones),
   };
 }
+
+/** The extra areas of a coverage (tolerates a hand-made one without the field). */
+const zonesIn = (c: Pick<Coverage, 'zones'> | null | undefined): readonly Zone[] => c?.zones ?? [];
+
+/** The extra delivery area containing this spot (the one it is deepest inside), or null. */
+export function zoneAt(c: Pick<Coverage, 'zones'>, p: LatLng): Zone | null {
+  let best: Zone | null = null;
+  let bestDepth = 0;
+  for (const z of zonesIn(c)) {
+    const depth = z.radiusKm - kmBetween(z, p);
+    if (depth >= 0 && (!best || depth > bestDepth)) { best = z; bestDepth = depth; }
+  }
+  return best;
+}
+
+/** Inside the store circle OR any enabled zone circle: the whole delivery area. */
+export const insideArea = (c: Coverage, p: LatLng): boolean => kmBetween(c.center, p) <= c.radiusKm || zoneAt(c, p) !== null;
 
 /** The landmark's name as people say it in each language (Coverage.landmark itself stays the English key). */
 const LANDMARKS = localized(
@@ -90,12 +115,12 @@ export function radiusText(km: number): string {
   return Number.isInteger(r) ? `${r} km` : `${r.toFixed(1)} km`;
 }
 
-/** Every named place with its distance from the store and whether it is inside the radius, nearest first. */
+/** Every named place with its distance from the store and whether it is inside the delivery area (store circle or a zone), nearest first. */
 export function placesAround(c: Coverage, places: readonly Place[] = PLACES): PlaceAt[] {
   return places
     .map((p) => {
       const km = kmBetween(c.center, p);
-      return { ...p, km, inside: km <= c.radiusKm };
+      return { ...p, km, inside: insideArea(c, p) };
     })
     .sort((a, b) => a.km - b.km);
 }
@@ -126,6 +151,17 @@ const areaName = (c: Coverage, p: Place) => (p.id === CENTRE_PLACE_ID ? c.town :
  */
 export function areaOfPin(c: Coverage, p: LatLng, places: readonly Place[] = PLACES): string {
   if (!validLatLng(p)) return c.town;
+  // beyond the store circle but inside an extra area: a known place of that area wins, else the area's own name
+  const zone = kmBetween(c.center, p) > c.radiusKm ? zoneAt(c, p) : null;
+  if (zone) {
+    let inZone: Place | null = null;
+    let zoneKm = AREA_MAX_KM;
+    for (const q of places) {
+      const d = kmBetween(p, q);
+      if (d <= zoneKm && kmBetween(zone, q) <= zone.radiusKm) { inZone = q; zoneKm = d; }
+    }
+    return inZone ? areaName(c, inZone) : zone.name;
+  }
   let best: Place | null = null;
   let bestKm = AREA_MAX_KM;
   for (const q of places) {
@@ -136,13 +172,23 @@ export function areaOfPin(c: Coverage, p: LatLng, places: readonly Place[] = PLA
 }
 const AREA_MAX_KM = 3;
 
-/** The areas offered on the address form: the store's town, the listed places inside the radius, then Beruwala. */
+/**
+ * The areas offered on the address form: the store's town, the listed places inside the delivery area (store
+ * circle or a zone), the name of every enabled extra area, then Beruwala (always a name an address may carry).
+ */
 export function areaChoices(c: Coverage, places: readonly Place[] = PLACES): string[] {
   const names = placesAround(c, places)
     .filter((q) => q.id === CENTRE_PLACE_ID || q.id === 'beruwala' || (q.listed && q.inside))
     .map((q) => areaName(c, q));
   const centre = names.filter((n) => n === c.town);
-  return [...new Set([...centre, ...names.filter((n) => n !== c.town && n !== 'Beruwala'), ...names.filter((n) => n === 'Beruwala')])];
+  const isBeruwala = (n: string) => n.toLowerCase() === 'beruwala';
+  const zoneNames = zonesIn(c).map((z) => z.name);
+  return [...new Set([
+    ...centre,
+    ...names.filter((n) => n !== c.town && !isBeruwala(n)),
+    ...zoneNames.filter((n) => n !== c.town && !isBeruwala(n)),
+    ...[...names, ...zoneNames].filter(isBeruwala).slice(0, 1),
+  ])];
 }
 
 /**
@@ -156,10 +202,13 @@ export function isDefaultPin(c: Coverage, p: LatLng, places: readonly Place[] = 
 }
 const DEFAULT_PIN_KM = 0.03;
 
-/** Is this spot inside the drawn circle? Advisory only (the server decides). */
+/**
+ * Is this spot inside the delivery area: the store circle or an enabled extra area? `km` stays the straight-line
+ * distance from the store (what "x km from Blynk" shows). Advisory only (the server decides).
+ */
 export function insideCoverage(c: Coverage, p: LatLng): { inside: boolean; km: number } {
   const km = kmBetween(c.center, p);
-  return { inside: km <= c.radiusKm, km };
+  return { inside: km <= c.radiusKm || zoneAt(c, p) !== null, km };
 }
 
 /** The nearest listed place within `maxKm` of a spot ("Near Aluthgama"), or null. */
@@ -168,7 +217,7 @@ export function nearestPlace(c: Coverage, p: LatLng, maxKm = 1.2, places: readon
   for (const q of places) {
     if (!q.listed) continue;
     const d = kmBetween(p, q);
-    if (d <= maxKm && (!best || d < kmBetween(p, best))) best = { ...q, km: kmBetween(c.center, q), inside: kmBetween(c.center, q) <= c.radiusKm };
+    if (d <= maxKm && (!best || d < kmBetween(p, best))) best = { ...q, km: kmBetween(c.center, q), inside: insideArea(c, q) };
   }
   return best;
 }
@@ -194,6 +243,16 @@ export function circleRing(c: Coverage, steps = 72): [number, number][] {
   return ring;
 }
 
+/** An extra area's outline as a closed GeoJSON ring ([lng, lat] pairs), for the map picker's overlay. */
+export function zoneRing(z: Zone, steps = 72): [number, number][] {
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const p = destination(z, z.radiusKm, (360 * i) / steps);
+    ring.push([p.lng, p.lat]);
+  }
+  return ring;
+}
+
 /**
  * A flat projection around the store for the drawn map: km east/north of the centre, then
  * pixels. Good to well under 1% at this size.
@@ -207,9 +266,26 @@ export function toKm(c: Coverage, p: LatLng): { x: number; y: number } {
 
 export type Frame = { width: number; height: number; cx: number; cy: number; pxPerKm: number };
 
-/** Fit the circle (plus a margin of `pad` x the radius) into a width x height drawing. */
+/**
+ * Fit the store circle AND every extra-area circle (plus a margin: `pad` x their span) into a width x height
+ * drawing. `cx`, `cy` stay where the STORE is drawn; with no extra area the store sits in the middle.
+ */
 export function frameFor(c: Coverage, width: number, height: number, pad = 1.32): Frame {
-  return { width, height, cx: width / 2, cy: height / 2, pxPerKm: Math.min(width, height) / (2 * c.radiusKm * pad) };
+  let minX = -c.radiusKm;
+  let maxX = c.radiusKm;
+  let minY = -c.radiusKm;
+  let maxY = c.radiusKm;
+  for (const z of zonesIn(c)) {
+    const k = toKm(c, z);
+    minX = Math.min(minX, k.x - z.radiusKm);
+    maxX = Math.max(maxX, k.x + z.radiusKm);
+    minY = Math.min(minY, k.y - z.radiusKm);
+    maxY = Math.max(maxY, k.y + z.radiusKm);
+  }
+  const pxPerKm = Math.min(width / ((maxX - minX) * pad), height / ((maxY - minY) * pad));
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+  return { width, height, cx: width / 2 - midX * pxPerKm, cy: height / 2 + midY * pxPerKm, pxPerKm };
 }
 
 export function project(c: Coverage, f: Frame, p: LatLng): { x: number; y: number } {

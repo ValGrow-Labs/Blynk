@@ -1,37 +1,165 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import { AREA, noteText } from './copy';
 import {
   centreName, circleRing, coverageOf, deliveryAreas, edgePoint, frameFor, inFrame, insideCoverage, kmBetween, kmText,
-  areaChoices, areaOfPin, isDefaultPin, nearestPlace, pinForArea, placesAround, project, radiusText,
+  areaChoices, areaOfPin, isDefaultPin, nearestPlace, pinForArea, placesAround, project, radiusText, zoneRing,
 } from './coverage';
 import { cityFor, flowReducer, gpsFailureOf, initialFlow, leavesScreen, type FlowState } from './flow';
 import { CLOCK_TOWER } from './places';
+import { joinNames } from './zones';
+import { setLang } from '@/blynk/i18n/lang';
+import { radiusText as radiusLine } from '@/blynk/lib/storeText';
+import { store } from '@/blynk/test/fixtures';
+
+afterEach(() => setLang('en'));
 
 const STORE = { radius_km: 4, store_location: { lat: 6.441313, lng: 80.011437 }, hub_name: 'Dharga Town Central Dark Store' };
 const cov = coverageOf(STORE);
 const byName = (name: string) => placesAround(cov).find((p) => p.name === name)!;
 
-// Owner, 2026-11-01: "we are going wider to Beruwala" - the radius is an Admin setting; at 6 km Beruwala town is inside,
-// listed by name in the delivery area, offered as an area on the address form, and the address pinned there is named Beruwala.
-describe('Beruwala at a 6 km radius', () => {
-  const wide = coverageOf({ ...STORE, radius_km: 6 });
-  const pin = { lat: 6.4759, lng: 79.9842 };
+// Owner's brother, 2026-11-01: "I don't want the radius to be increased ... We have to include Beruwala only." The radius stays 4;
+// Beruwala is an extra circle (GET /store delivery_zones, the enabled ones). Beruwala town centre 6.4759, 79.9842; 3 km.
+const BERUWALA = { id: 'beruwala', name: 'Beruwala', lat: 6.4759, lng: 79.9842, radius_km: 3 };
+const withZone = coverageOf({ ...STORE, delivery_zones: [BERUWALA] });
+const BERUWALA_PIN = { lat: 6.4759, lng: 79.9842 };
+const BENTOTA_SIDE = { lat: 6.385, lng: 80.005 }; // about 6.3 km south of the store, beyond 4 km
 
-  test('Beruwala town is inside, listed in the area list, and an area choice', () => {
-    const areas = deliveryAreas(wide);
-    expect(areas.inside.map((a) => a.name)).toContain('Beruwala town');
-    expect(areas.outside.map((a) => a.name)).not.toContain('Beruwala town');
-    expect(areaChoices(wide)).toContain('Beruwala');
-    expect(AREA.within(wide)).toBe('We deliver within 6 km of the Clock Tower, Dharga Town.');
+describe('Beruwala as an extra delivery area (the radius stays 4 km)', () => {
+  test('coverageOf carries the enabled zones; the store radius is untouched', () => {
+    expect(withZone.radiusKm).toBe(4);
+    expect(withZone.zones).toEqual([{ id: 'beruwala', name: 'Beruwala', lat: 6.4759, lng: 79.9842, radiusKm: 3 }]);
+    expect(cov.zones).toEqual([]);
   });
 
-  test('an address pinned in Beruwala town is inside the area and named Beruwala', () => {
-    expect(insideCoverage(wide, pin).inside).toBe(true);
-    expect(areaOfPin(wide, pin)).toBe('Beruwala');
+  test('an older server (no delivery_zones), an empty list, a disabled zone and junk rows change nothing', () => {
+    expect(coverageOf(STORE).zones).toEqual([]);
+    expect(coverageOf({ ...STORE, delivery_zones: [] }).zones).toEqual([]);
+    expect(coverageOf({ ...STORE, delivery_zones: [{ ...BERUWALA, enabled: false } as never] }).zones).toEqual([]);
+    const junk = [null, 7, { name: '', lat: 6.4, lng: 80, radius_km: 3 }, { name: 'X', lat: 'a', lng: 80, radius_km: 3 }, { name: 'Y', lat: 6.4, lng: 80, radius_km: 0 }] as never;
+    expect(coverageOf({ ...STORE, delivery_zones: junk }).zones).toEqual([]);
+    expect(coverageOf({ ...STORE, delivery_zones: 'nope' as never }).zones).toEqual([]);
+    expect(insideCoverage(coverageOf(STORE), BERUWALA_PIN).inside).toBe(false);
+    expect(AREA.within(coverageOf({ ...STORE, delivery_zones: [] }))).toBe('We deliver within 4 km of the Clock Tower, Dharga Town.');
+    // at most 10 zones, whatever the server sends
+    const many = Array.from({ length: 14 }, (_, i) => ({ ...BERUWALA, id: `z${i}`, name: `Z${i}` }));
+    expect(coverageOf({ ...STORE, delivery_zones: many }).zones).toHaveLength(10);
   });
 
-  test('at the old 4 km radius the same pin is outside (the server still decides)', () => {
-    expect(insideCoverage(cov, pin).inside).toBe(false);
+  test('a pin in Beruwala town is inside and named Beruwala; without the zone it is outside', () => {
+    expect(insideCoverage(withZone, BERUWALA_PIN).inside).toBe(true);
+    expect(areaOfPin(withZone, BERUWALA_PIN)).toBe('Beruwala');
+    expect(insideCoverage(cov, BERUWALA_PIN).inside).toBe(false);
+    // km stays the straight-line distance from the store
+    expect(insideCoverage(withZone, BERUWALA_PIN).km).toBeCloseTo(4.9, 1);
+  });
+
+  test('a pin on the Bentota side beyond 4 km is still outside, zone or not', () => {
+    expect(insideCoverage(withZone, BENTOTA_SIDE).inside).toBe(false);
+    expect(insideCoverage(withZone, BENTOTA_SIDE).km).toBeGreaterThan(4);
+    expect(insideCoverage(cov, BENTOTA_SIDE).inside).toBe(false);
+    // the area's edge is the zone's circle: 3.2 km from the Beruwala centre is outside, 2.8 km is inside
+    expect(insideCoverage(withZone, { lat: BERUWALA.lat + 3.2 / 110.574, lng: BERUWALA.lng }).inside).toBe(false);
+    expect(insideCoverage(withZone, { lat: BERUWALA.lat + 2.8 / 110.574, lng: BERUWALA.lng }).inside).toBe(true);
+    // and the store circle is the same as ever
+    expect(insideCoverage(withZone, { lat: cov.center.lat + 3.9 / 110.574, lng: cov.center.lng }).inside).toBe(true);
+    expect(insideCoverage(withZone, { lat: cov.center.lat - 4.1 / 110.574, lng: cov.center.lng }).inside).toBe(false);
+  });
+
+  test('Beruwala town moves into "we deliver here" with the zone on, and stays "not yet" without it', () => {
+    const on = deliveryAreas(withZone);
+    expect(on.inside.map((a) => a.name)).toEqual(['Dharga Town', 'Aluthgama', 'Kande Vihara', 'Kaluwamodara', 'Bentota', 'Moragalla', 'Beruwala town']);
+    expect(on.outside.map((a) => a.name)).toEqual(['Welipenna']);
+    const off = deliveryAreas(cov);
+    expect(off.outside.map((a) => a.name)).toEqual(['Beruwala town', 'Welipenna']);
+    expect(placesAround(withZone).find((p) => p.name === 'Beruwala town')).toMatchObject({ inside: true });
+  });
+
+  test('area choices and nearest place follow the union', () => {
+    expect(areaChoices(withZone)).toContain('Beruwala');
+    expect(areaChoices(withZone).filter((n) => n === 'Beruwala')).toHaveLength(1);
+    expect(areaChoices(withZone)[0]).toBe('Dharga Town');
+    expect(nearestPlace(withZone, BERUWALA_PIN)).toMatchObject({ name: 'Beruwala town', inside: true });
+    expect(nearestPlace(cov, BERUWALA_PIN)).toMatchObject({ name: 'Beruwala town', inside: false });
+    // another extra area is offered by its own name; a pin in it with no known place nearby takes the area's name
+    const kalutara = { id: 'kalutara', name: 'Kalutara', lat: 6.5854, lng: 79.9607, radius_km: 3 };
+    const two = coverageOf({ ...STORE, delivery_zones: [BERUWALA, kalutara] });
+    expect(areaChoices(two)).toEqual(expect.arrayContaining(['Kalutara', 'Beruwala']));
+    expect(areaChoices(two)[areaChoices(two).length - 1]).toBe('Beruwala');
+    expect(areaOfPin(two, { lat: 6.5854, lng: 79.9607 })).toBe('Kalutara');
+    expect(insideCoverage(two, { lat: 6.5854, lng: 79.9607 }).inside).toBe(true);
+  });
+
+  test('the map frame fits the store circle AND the zone circle, store off-centre', () => {
+    const f = frameFor(withZone, 360, 360, 1.3);
+    const store = project(withZone, f, withZone.center);
+    expect(store.x).toBeGreaterThan(180); // the zone is north-west, so the store moves south-east
+    expect(store.y).toBeGreaterThan(180);
+    // every point of both circles is inside the drawing
+    for (const [lng, lat] of circleRing(withZone, 36)) expect(inFrame(f, project(withZone, f, { lat, lng }), 0)).toBe(true);
+    for (const [lng, lat] of zoneRing(withZone.zones[0]!, 36)) expect(inFrame(f, project(withZone, f, { lat, lng }), 0)).toBe(true);
+    expect(inFrame(f, project(withZone, f, BERUWALA_PIN))).toBe(true);
+    // the zone ring is 3 km from its centre all round
+    for (const [lng, lat] of zoneRing(withZone.zones[0]!, 36)) expect(kmBetween(BERUWALA, { lat, lng })).toBeCloseTo(3, 3);
+    // a small drawing (the card) fits them too
+    const g = frameFor(withZone, 92, 92, 1.12);
+    for (const [lng, lat] of zoneRing(withZone.zones[0]!, 36)) expect(inFrame(g, project(withZone, g, { lat, lng }), 0)).toBe(true);
+    // no zone: the old frame, the store in the middle
+    expect(project(cov, frameFor(cov, 360, 360, 1.3), cov.center)).toEqual({ x: 180, y: 180 });
+  });
+
+  test('the legend: one clause per enabled area, in English', () => {
+    expect(AREA.within(withZone)).toBe('We deliver within 4 km of the Clock Tower, Dharga Town, and in Beruwala.');
+    expect(AREA.withinShort(withZone)).toBe('We deliver within 4 km of Clock Tower, Dharga Town, and in Beruwala');
+    const two = coverageOf({ ...STORE, delivery_zones: [BERUWALA, { id: 'kalutara', name: 'Kalutara', lat: 6.5854, lng: 79.9607, radius_km: 3 }] });
+    expect(AREA.within(two)).toBe('We deliver within 4 km of the Clock Tower, Dharga Town, and in Beruwala and Kalutara.');
+    const three = coverageOf({ ...STORE, delivery_zones: [BERUWALA, { ...BERUWALA, id: 'k', name: 'Kalutara' }, { ...BERUWALA, id: 'p', name: 'Panadura' }] });
+    expect(AREA.within(three)).toBe('We deliver within 4 km of the Clock Tower, Dharga Town, and in Beruwala, Kalutara and Panadura.');
+    expect(AREA.mapLabel(withZone)).toBe('4 km delivery area around Clock Tower, and Beruwala');
+  });
+
+  test('the refusal line (a spot beyond the area) names the zone and does not claim the radius alone', () => {
+    const far = insideCoverage(withZone, BENTOTA_SIDE);
+    expect(AREA.farLine(far.km, withZone)).toBe('This spot is 6.3 km from the store. We deliver within 4 km, and in Beruwala. Move the pin closer to continue.');
+    expect(AREA.farLine(far.km, cov)).toMatch(/We deliver within 4 km\. Move the pin closer to continue\./);
+  });
+
+  test('the address flow: a GPS fix in Beruwala opens the map; one on the Bentota side beyond 4 km shows the area map', () => {
+    expect(initialFlow({ coverage: withZone, fix: BERUWALA_PIN })).toMatchObject({ step: 'map', start: BERUWALA_PIN, fresh: false });
+    expect(initialFlow({ coverage: cov, fix: BERUWALA_PIN })).toMatchObject({ step: 'area', note: 'outsideFix' });
+    expect(initialFlow({ coverage: withZone, fix: BENTOTA_SIDE })).toMatchObject({ step: 'area', note: 'outsideFix' });
+    // Beruwala town can be picked from the list only while the zone is on
+    const listed = (c: typeof cov) => placesAround(c).find((p) => p.name === 'Beruwala town')!;
+    const s = flowReducer(initialFlow({ coverage: withZone }), { type: 'openList' });
+    expect(flowReducer(s, { type: 'pickArea', area: listed(withZone) })).toMatchObject({ step: 'map', note: 'areaPicked' });
+    const s0 = flowReducer(initialFlow({ coverage: cov }), { type: 'openList' });
+    expect(flowReducer(s0, { type: 'pickArea', area: listed(cov) })).toBe(s0);
+  });
+
+  test('Sinhala and Tamil: the same clause, with the zone name kept as the server sends it', () => {
+    const SI = /[඀-෿]/;
+    const TA = /[஀-௿]/;
+    setLang('si');
+    expect(AREA.within(withZone)).toMatch(SI);
+    expect(AREA.within(withZone)).toContain('Beruwala');
+    expect(AREA.within(withZone)).not.toBe(AREA.within(cov));
+    expect(AREA.farLine(6.3, withZone)).toContain('Beruwala');
+    expect(AREA.withinShort(withZone)).toContain('Beruwala');
+    expect(AREA.mapLabel(withZone)).toContain('Beruwala');
+    expect(joinNames(['A', 'B', 'C'])).toBe('A, B සහ C');
+    expect(radiusLine({ ...store, radius_km: 4, delivery_zones: [BERUWALA] })).toContain('Beruwala');
+    setLang('ta');
+    expect(AREA.within(withZone)).toMatch(TA);
+    expect(AREA.within(withZone)).toContain('Beruwala');
+    expect(AREA.farLine(6.3, withZone)).toContain('Beruwala');
+    expect(AREA.mapLabel(withZone)).toContain('Beruwala');
+    expect(joinNames(['A', 'B'])).toBe('A மற்றும் B');
+    expect(radiusLine({ ...store, radius_km: 4, delivery_zones: [BERUWALA] })).toContain('Beruwala');
+  });
+
+  test('the help line follows: "Groceries delivered within 4 km, and in Beruwala"', () => {
+    expect(radiusLine({ ...store, radius_km: 4 })).toBe('Groceries delivered within 4 km');
+    expect(radiusLine({ ...store, radius_km: 4, delivery_zones: [] })).toBe('Groceries delivered within 4 km');
+    expect(radiusLine({ ...store, radius_km: 4, delivery_zones: [BERUWALA] })).toBe('Groceries delivered within 4 km, and in Beruwala');
   });
 });
 

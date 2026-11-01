@@ -128,6 +128,11 @@ export interface StoreInfo {
   radius_km: number | null; coupons_enabled: boolean; show_offer_savings: boolean;
   /** Where the radius is measured from (the active dark store); absent on an older server. */
   store_location?: { lat: number; lng: number } | null;
+  /**
+   * Extra delivery areas (2026-11-01, Admin / Ops "Extra delivery areas", e.g. Beruwala): the ENABLED ones only, each a circle.
+   * An address is deliverable inside the store radius OR inside any of these. Absent on an older server = none.
+   */
+  delivery_zones?: { id: string; name: string; lat: number; lng: number; radius_km: number }[];
   /** PayHere (docs/api/payhere.md): "Pay online" is offered only while enabled. Absent = off. */
   online_payment?: OnlinePaymentInfo;
   new_customer_free_deliveries: { enabled: boolean; count: number; since: string };

@@ -14,7 +14,7 @@ import { useTrackOnce } from '@/blynk/analytics/AnalyticsHost';
 import { trackOutOfZone } from '@/blynk/analytics/track';
 import { AreaIntro } from '@/blynk/area/AreaSteps';
 import { AREA, noteText } from '@/blynk/area/copy';
-import { areaChoices, areaOfPin, circleRing, coverageOf, insideCoverage, isDefaultPin, kmText, nearestPlace, type Coverage } from '@/blynk/area/coverage';
+import { areaChoices, areaOfPin, circleRing, coverageOf, insideCoverage, isDefaultPin, kmText, nearestPlace, zoneRing, type Coverage } from '@/blynk/area/coverage';
 import { cityFor, flowReducer, gpsFailureOf, initialFlow, leavesScreen } from '@/blynk/area/flow';
 import { formatPhone } from '@/blynk/auth/phone';
 import { useSession } from '@/blynk/auth/session';
@@ -59,6 +59,33 @@ function drawCoverage(map: MlMap, c: Coverage) {
     map.addSource('blynk-store', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [c.center.lng, c.center.lat] } } });
     map.addLayer({ id: 'blynk-store', type: 'circle', source: 'blynk-store', paint: { 'circle-radius': 7, 'circle-color': C.brand, 'circle-stroke-color': C.brandInk, 'circle-stroke-width': 2 } });
   } catch { /* the overlay is a guide only; the picker works without it */ }
+  // the extra delivery areas (Beruwala ...): a second ring drawn like the store's, named by a small label
+  if (!c.zones?.length) return;
+  try {
+    map.addSource('blynk-zones', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: c.zones.map((z) => ({ type: 'Feature', properties: { name: z.name }, geometry: { type: 'Polygon', coordinates: [zoneRing(z)] } })),
+      },
+    });
+    map.addLayer({ id: 'blynk-zones-fill', type: 'fill', source: 'blynk-zones', paint: { 'fill-color': C.brand, 'fill-opacity': 0.12 } });
+    map.addLayer({ id: 'blynk-zones-line', type: 'line', source: 'blynk-zones', paint: { 'line-color': C.brandDeep, 'line-width': 2.5, 'line-dasharray': [3, 2] } });
+  } catch { /* guide only */ }
+  try {
+    map.addSource('blynk-zone-names', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: c.zones.map((z) => ({ type: 'Feature', properties: { name: z.name }, geometry: { type: 'Point', coordinates: [z.lng, z.lat] } })),
+      },
+    });
+    map.addLayer({
+      id: 'blynk-zone-names', type: 'symbol', source: 'blynk-zone-names',
+      layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-allow-overlap': true },
+      paint: { 'text-color': C.brandText, 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 },
+    });
+  } catch { /* guide only */ }
 }
 
 export function LiveAddressScreen() {

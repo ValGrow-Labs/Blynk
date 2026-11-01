@@ -10,9 +10,10 @@ import { CENTRE_PLACE_ID, COAST, GALLE_ROAD, RIVER, type LatLng } from './places
 
 /*
  * The delivery-area map, drawn (no tiles, works offline and on native): the coast to the west,
- * the Bentota river and Galle Road, the store at the centre, the delivery circle from GET /store
- * and the named places with their distances; places outside the circle are hollow, and a place
- * beyond the drawing (Welipenna) gets an arrow at the edge.
+ * the Bentota river and Galle Road, the store, the delivery circle from GET /store plus a second
+ * dashed ring (named) for every extra area that is switched on (Beruwala; the drawing fits them
+ * all) and the named places with their distances; places outside the delivery area are hollow,
+ * and a place beyond the drawing (Welipenna) gets an arrow at the edge.
  */
 
 const LAND = '#F6F1E4';
@@ -51,6 +52,8 @@ export function CoverageMap({ coverage, width, height, compact = false, pin = nu
   const places = useMemo(() => placesAround(coverage), [coverage]);
   const pr = (p: LatLng) => project(coverage, f, p);
   const r = coverage.radiusKm * f.pxPerKm;
+  // the extra areas (GET /store delivery_zones, e.g. Beruwala): centre and radius in pixels
+  const zones = (coverage.zones ?? []).map((z) => ({ z, ...project(coverage, f, z), rr: z.radiusKm * f.pxPerKm }));
 
   // the sea: the coastline, closed off along the left edge of the drawing
   const coast = COAST.map(pr);
@@ -85,16 +88,26 @@ export function CoverageMap({ coverage, width, height, compact = false, pin = nu
         <Path d={road} stroke={ROAD_CASE} strokeWidth={compact ? 3.5 : 5.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
         <Path d={road} stroke={ROAD} strokeWidth={compact ? 2 : 3.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
-        {/* the delivery circle */}
-        <Circle cx={f.cx} cy={f.cy} r={r} fill={C.brand} fillOpacity={0.2} />
+        {/* the delivery area: the store circle and every extra area's circle, filled as one shape (the overlap is not darker) */}
+        <G opacity={0.2}>
+          <Circle cx={f.cx} cy={f.cy} r={r} fill={C.brand} />
+          {zones.map(({ z, x, y, rr }) => <Circle key={z.id} cx={x} cy={y} r={rr} fill={C.brand} />)}
+        </G>
         <Circle cx={f.cx} cy={f.cy} r={r} fill="none" stroke={C.brandDeep} strokeWidth={compact ? 1.6 : 2.2} strokeDasharray={compact ? '4 4' : '7 6'} />
+        {zones.map(({ z, x, y, rr }) => (
+          <Circle key={`ring-${z.id}`} cx={x} cy={y} r={rr} fill="none" stroke={C.brandDeep} strokeWidth={compact ? 1.6 : 2.2} strokeDasharray={compact ? '4 4' : '7 6'} />
+        ))}
 
         {!compact && (
           <>
             {/* the sea widens to the south-west: its name sits there, clear of the places */}
             <Halo x={12} y={height - 46} size={11} anchor="start" color="#4E86A8" weight={F.medium}>{AREA.sea}</Halo>
             {/* inside the top of the circle (the places outside it sit just above) */}
-            <Halo x={f.cx} y={f.cy - r + 20} size={11.5} anchor="middle" color={C.brandText} weight={F.bold}>{AREA.radiusLabel(coverage)}</Halo>
+            <Halo x={f.cx} y={f.cy - r + (zones.length ? 36 : 20)} size={11.5} anchor="middle" color={C.brandText} weight={F.bold}>{AREA.radiusLabel(coverage)}</Halo>
+            {/* each extra area's name, small, just inside the top of its ring */}
+            {zones.map(({ z, x, y, rr }) => (
+              <Halo key={`name-${z.id}`} x={x} y={y - rr + 16} size={10.5} anchor="middle" color={C.brandText} weight={F.bold}>{z.name}</Halo>
+            ))}
           </>
         )}
 

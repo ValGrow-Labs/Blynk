@@ -1,5 +1,6 @@
 import type { Product, StoreInfo } from '../api/types';
 import { localized } from '../i18n/localized';
+import { parseZones, zoneNames } from '../area/zones';
 
 /** The words the store-hours and delivery-fee lines are built from. */
 export const STORE_TEXT = localized(
@@ -10,6 +11,8 @@ export const STORE_TEXT = localized(
     hoursVary: (today: string) => `${today} today (hours vary by day)`,
     everyDay: (range: string) => `${range}, every day`,
     radius: (km: number) => `Groceries delivered within ${km} km`,
+    /** The same with the extra delivery areas that are switched on ("Beruwala"). */
+    radiusAnd: (km: number, areas: string) => `Groceries delivered within ${km} km, and in ${areas}`,
     from: (amount: string) => `From ${amount}`,
     calculated: 'Calculated at checkout',
     today: 'today',
@@ -23,6 +26,7 @@ export const STORE_TEXT = localized(
       hoursVary: (today: string) => `අද ${today} (දින අනුව වේලාවන් වෙනස් වේ)`,
       everyDay: (range: string) => `${range}, සෑම දිනකම`,
       radius: (km: number) => `කි.මී. ${km} ක් ඇතුළත සිල්ලර බඩු බෙදාහරිනවා`,
+      radiusAnd: (km: number, areas: string) => `කි.මී. ${km} ක් ඇතුළතත්, ${areas} ප්‍රදේශයේත් සිල්ලර බඩු බෙදාහරිනවා`,
       from: (amount: string) => `${amount} සිට`,
       calculated: 'ඇණවුම් කරන විට ගණනය වේ',
       today: 'අද',
@@ -35,6 +39,7 @@ export const STORE_TEXT = localized(
       hoursVary: (today: string) => `இன்று ${today} (நாளுக்கு ஏற்ப நேரம் மாறும்)`,
       everyDay: (range: string) => `${range}, தினமும்`,
       radius: (km: number) => `${km} கி.மீ.க்குள் மளிகைப் பொருட்கள் டெலிவரி`,
+      radiusAnd: (km: number, areas: string) => `${km} கி.மீ.க்குள்ளும், ${areas} பகுதியிலும் மளிகைப் பொருட்கள் டெலிவரி`,
       from: (amount: string) => `${amount} முதல்`,
       calculated: 'ஆர்டர் செய்யும்போது கணக்கிடப்படும்',
       today: 'இன்று',
@@ -89,10 +94,12 @@ export function hoursSummary(store: StoreInfo | null): string | null {
   return `${range}, ${dayText}`;
 }
 
-/** "Groceries delivered within 4 km", or null when the radius is not known. */
+/** "Groceries delivered within 4 km" (", and in Beruwala" while an extra area is on), or null when the radius is not known. */
 export function radiusText(store: StoreInfo | null): string | null {
   const r = store?.radius_km;
-  return typeof r === 'number' && Number.isFinite(r) && r > 0 ? STORE_TEXT.radius(r) : null;
+  if (!(typeof r === 'number' && Number.isFinite(r) && r > 0)) return null;
+  const areas = zoneNames(parseZones(store?.delivery_zones));
+  return areas ? STORE_TEXT.radiusAnd(r, areas) : STORE_TEXT.radius(r);
 }
 
 export const formatOfferEnd = (iso: string) =>
