@@ -1,13 +1,15 @@
-import { isWithinDeliveryRadius } from '../../utils/geo.js';
+import { isWithinDeliveryRadius, calculateHaversineKm } from '../../utils/geo.js';
 import { AppError } from '../../middleware/error.middleware.js';
 import { orderRepository, type DBConnection } from './order.repository.js';
 import { db } from '../../database/connection.js';
+import { deliveryZonesService, pointInZones } from '../configuration/delivery-zones.js';
 
 /**
- * The service-zone check shared by checkout and the address book: the
- * coordinates must lie within the active dark store's radius_km. Throws the
- * same 422 DELIVERY_OUTSIDE_RADIUS (details { distance_km, max_radius_km })
- * in both places, so an address that saves is an address that can order.
+ * The service-area check shared by checkout and the address book: the coordinates must lie within the
+ * active dark store's radius_km OR inside an enabled extra delivery area (configuration/delivery-zones.ts,
+ * e.g. Beruwala). Throws the same 422 DELIVERY_OUTSIDE_RADIUS in both places, so an address that saves is
+ * an address that can order. details: { distance_km, max_radius_km } (from the store) plus
+ * zones: [{ name, distance_km }] (from each enabled zone's centre; [] when none is on).
  */
 export async function assertWithinServiceZone(latitude: number, longitude: number, executor: DBConnection = db) {
   const store = await orderRepository.findActiveDarkStore(executor);
@@ -24,12 +26,22 @@ export async function assertWithinServiceZone(latitude: number, longitude: numbe
   );
 
   if (!isWithin) {
-    throw new AppError(
-      `Delivery address is outside the ${Number(store.radius_km).toFixed(2)} km service zone (${distanceKm} km away).`,
-      422,
-      'DELIVERY_OUTSIDE_RADIUS',
-      { distance_km: distanceKm, max_radius_km: Number(store.radius_km) }
-    );
+    const zones = (await deliveryZonesService.read(executor)).filter((zone) => zone.enabled);
+    if (!pointInZones(zones, Number(latitude), Number(longitude))) {
+      throw new AppError(
+        `Delivery address is outside our delivery area (${distanceKm} km from the store).`,
+        422,
+        'DELIVERY_OUTSIDE_RADIUS',
+        {
+          distance_km: distanceKm,
+          max_radius_km: Number(store.radius_km),
+          zones: zones.map((zone) => ({
+            name: zone.name,
+            distance_km: calculateHaversineKm(zone.lat, zone.lng, Number(latitude), Number(longitude)),
+          })),
+        }
+      );
+    }
   }
   return store;
 }

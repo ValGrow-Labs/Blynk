@@ -40,6 +40,7 @@ import { hasProductRequestsTable } from '../catalog/product-requests.ready.js';
 import { ratingsReady } from '../ratings/ratings.ready.js';
 import { repeatBasketsReady } from '../repeat-baskets/repeat.ready.js';
 import { cartRulesService } from './cart-rules.js';
+import { deliveryZonesService, publicZones } from './delivery-zones.js';
 
 /**
  * Store-wide settings and the public store facts (GET /store).
@@ -925,6 +926,9 @@ export class SettingsService {
       store_location: store && Number.isFinite(Number(store.latitude)) && Number.isFinite(Number(store.longitude))
         ? { lat: Number(store.latitude), lng: Number(store.longitude) }
         : null,
+      // Owner's brother, 2026-11-01: extra delivery areas (Beruwala) beside the store circle - the
+      // ENABLED ones only ([] when none); an address is deliverable inside the circle or any of them.
+      delivery_zones: publicZones(await deliveryZonesService.read()),
       coupons_enabled: checkout.coupons_enabled,
       new_customer_free_deliveries: checkout.new_customer_free_deliveries,
       // Owner, 2026-10-10: the customer app shows "Save LKR X" only when on.

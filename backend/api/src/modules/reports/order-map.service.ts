@@ -5,6 +5,7 @@ import { db } from '../../database/connection.js';
 import { AppError } from '../../middleware/error.middleware.js';
 import { STORE_ZONE, rangeBounds, type DateRange } from './sales.service.js';
 import { resolveDashboardRange, type DashboardRange } from './dashboard.service.js';
+import { deliveryZonesService } from '../configuration/delivery-zones.js';
 
 /**
  * Delivery heat map (owner, 2026-10-10): where orders come from, so the
@@ -26,7 +27,9 @@ import { resolveDashboardRange, type DashboardRange } from './dashboard.service.
  * * Distance is from the store hub (dark_stores lat/lng) to each order's own
  *   drop-off point (haversine, km). "Near the edge" = within EDGE_KM inside
  *   the radius; "outside" = beyond radius_km (older orders, or before the
- *   radius was changed).
+ *   radius was changed). An order inside an enabled extra delivery area
+ *   (configuration/delivery-zones.ts, e.g. Beruwala; owner's brother,
+ *   2026-11-01) is "inside": never near the edge, never outside.
  */
 export type OrderMapRange = DashboardRange | 'last_30_days' | 'last_90_days';
 export const ORDER_MAP_RANGES: OrderMapRange[] = ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days', 'last_90_days'];
@@ -66,11 +69,24 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
   if (!store) throw new AppError('No active dark store hub found.', 500, 'STORE_UNAVAILABLE');
   const hub = { lat: Number(store.latitude), lng: Number(store.longitude) };
   const radiusKm = Number(store.radius_km);
+  const zones = (await deliveryZonesService.read()).filter((z) => z.enabled);
 
   const distanceKm = sql<number>`(2 * 6371 * asin(sqrt(
       power(sin(radians(delivery_latitude - ${hub.lat}) / 2), 2) +
       cos(radians(${hub.lat})) * cos(radians(delivery_latitude)) * power(sin(radians(delivery_longitude - ${hub.lng}) / 2), 2)
     )))`;
+  // true when the order's drop-off lies inside an enabled extra delivery area (false when none is on).
+  const inZone = zones.length
+    ? sql<boolean>`(${sql.join(
+        zones.map(
+          (z) => sql`(2 * 6371 * asin(sqrt(
+      power(sin(radians(delivery_latitude - ${z.lat}) / 2), 2) +
+      cos(radians(${z.lat})) * cos(radians(delivery_latitude)) * power(sin(radians(delivery_longitude - ${z.lng}) / 2), 2)
+    ))) <= ${z.radius_km}`
+        ),
+        sql` OR `
+      )})`
+    : sql<boolean>`false`;
 
   let base = db
     .selectFrom('orders')
@@ -83,6 +99,7 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
       'delivery_address_line1',
       'customer_id',
       distanceKm.as('distance_km'),
+      inZone.as('in_zone'),
     ])
     .where('dark_store_id', '=', store.id)
     .where('placed_at', '>=', start)
@@ -105,6 +122,7 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
       sql<number>`count(DISTINCT ${addressKey})::int`.as('addresses'),
       sql<number>`count(DISTINCT customer_id)::int`.as('customers'),
       sql<number>`avg(distance_km)`.as('distance_km'),
+      sql<boolean>`bool_or(in_zone)`.as('in_zone'),
     ])
     .groupBy(['cy', 'cx'])
     .orderBy(sql`count(*)`, 'desc')
@@ -118,9 +136,9 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
     .select([
       sql<number>`count(*)::int`.as('orders'),
       sql<string>`coalesce(sum(net_amount) FILTER (WHERE order_status = 'DELIVERED'), 0)`.as('revenue'),
-      sql<number>`(count(*) FILTER (WHERE distance_km <= ${radiusKm - EDGE_KM}))::int`.as('inside'),
-      sql<number>`(count(*) FILTER (WHERE distance_km > ${radiusKm - EDGE_KM} AND distance_km <= ${radiusKm}))::int`.as('near_edge'),
-      sql<number>`(count(*) FILTER (WHERE distance_km > ${radiusKm}))::int`.as('outside'),
+      sql<number>`(count(*) FILTER (WHERE in_zone OR distance_km <= ${radiusKm - EDGE_KM}))::int`.as('inside'),
+      sql<number>`(count(*) FILTER (WHERE NOT in_zone AND distance_km > ${radiusKm - EDGE_KM} AND distance_km <= ${radiusKm}))::int`.as('near_edge'),
+      sql<number>`(count(*) FILTER (WHERE NOT in_zone AND distance_km > ${radiusKm}))::int`.as('outside'),
       sql<number | null>`max(distance_km)`.as('farthest_km'),
     ])
     .executeTakeFirstOrThrow();
@@ -142,7 +160,7 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
       addresses: r.addresses,
       customers: r.customers,
       distance_km: Number(d.toFixed(2)),
-      zone: (d > radiusKm ? 'outside' : d > radiusKm - EDGE_KM ? 'near_edge' : 'inside') as 'inside' | 'near_edge' | 'outside',
+      zone: (r.in_zone ? 'inside' : d > radiusKm ? 'outside' : d > radiusKm - EDGE_KM ? 'near_edge' : 'inside') as 'inside' | 'near_edge' | 'outside',
     };
   });
 
@@ -154,7 +172,14 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
     cell_meters: CELL_METERS,
     cell_degrees: CELL_DEG,
     edge_km: EDGE_KM,
-    store: { name: store.name, lat: hub.lat, lng: hub.lng, radius_km: radiusKm },
+    store: {
+      name: store.name,
+      lat: hub.lat,
+      lng: hub.lng,
+      radius_km: radiusKm,
+      // The enabled extra delivery areas (circles), drawn beside the store circle.
+      zones: zones.map((z) => ({ name: z.name, lat: z.lat, lng: z.lng, radius_km: z.radius_km })),
+    },
     totals: {
       orders: totals.orders,
       revenue: money(totals.revenue),

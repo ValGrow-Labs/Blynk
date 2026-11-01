@@ -33,6 +33,7 @@ import { smsLanguagePreview } from '../notifications/sms-language.preview.js';
 import { smallOrderFeeReady } from '../orders/small-order-fee.js';
 import { deliveryRadiusService, updateDeliveryRadiusSchema } from './delivery-radius.js';
 import { cartRulesService, updateCartRulesSchema } from './cart-rules.js';
+import { deliveryZonesService, updateDeliveryZonesSchema } from './delivery-zones.js';
 import { defaultMarkupSettings, updateDefaultMarkupSchema } from '../catalog/catalog.pricing.js';
 
 export const configurationRouter = Router();
@@ -111,6 +112,26 @@ adminSettingsRouter.patch('/settings/delivery-radius', requireAuth, requireRoles
   try {
     const input = updateDeliveryRadiusSchema.parse(req.body);
     res.json({ success: true, data: await deliveryRadiusService.set(input, actorOf(req)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Extra delivery areas (owner's brother, 2026-11-01): circles beside the store radius, e.g. Beruwala
+// (off until switched on). PUT replaces the list. Audited (DELIVERY_ZONES_UPDATED); orders already
+// placed are untouched. See modules/configuration/delivery-zones.ts.
+adminSettingsRouter.get('/settings/delivery-zones', requireAuth, requireRoles(['ADMIN', 'OPERATIONS']), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await deliveryZonesService.get() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminSettingsRouter.put('/settings/delivery-zones', requireAuth, requireRoles(['ADMIN', 'OPERATIONS']), async (req, res, next) => {
+  try {
+    const input = updateDeliveryZonesSchema.parse(req.body);
+    res.json({ success: true, data: await deliveryZonesService.set(input, actorOf(req)) });
   } catch (err) {
     next(err);
   }
