@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withSpring, withTiming,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient as SvgGrad, Path, Polygon, Stop } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -137,6 +138,7 @@ function Mascot({ kind }: { kind: 'WAVE' | 'RIDE' }) {
       x.value = withTiming(0, { duration: T.rideIn, easing: Easing.out(Easing.cubic) });
       w.value = withRepeat(withTiming(1, { duration: T.rideBob, easing: Easing.inOut(Easing.sin) }), -1, true);
     }
+    return () => { cancelAnimation(w); cancelAnimation(x); };
   }, [kind, reduced]);
   const a = useAnimatedStyle(() => (kind === 'WAVE'
     ? { transform: [{ rotate: `${w.value * 10}deg` }] }
@@ -154,6 +156,7 @@ function Beam({ item, right }: { item: Exclude<BandItem, { kind: 'NONE' }>; righ
     drop.value = 0;
     drop.value = withSpring(1, { damping: 12, stiffness: 150 });
     bob.value = withRepeat(withTiming(1, { duration: T.itemBob, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => { cancelAnimation(bob); cancelAnimation(drop); };
   }, [reduced, item.kind === 'IMAGE' ? item.uri : item.emoji]);
   const beamA = useAnimatedStyle(() => ({ opacity: 0.85 + bob.value * 0.15 }));
   const itemA = useAnimatedStyle(() => ({

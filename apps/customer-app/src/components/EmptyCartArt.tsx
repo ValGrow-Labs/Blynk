@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence,
   withTiming, ZoomIn,
+  cancelAnimation,
 } from 'react-native-reanimated';
 
 /*
@@ -31,6 +32,7 @@ function Drop({ glyph, x, spin, index, still }: { glyph: string; x: number; spin
       withTiming(0, { duration: 0 }),
       withTiming(0, { duration: PERIOD - FALL }),
     ), -1));
+    return () => cancelAnimation(p);
   }, [still]);
   const a = useAnimatedStyle(() => ({
     opacity: interpolate(p.value, [0, 0.12, 0.9, 1], [0, 1, 1, 0]),
@@ -50,6 +52,7 @@ export function EmptyCartArt() {
   useEffect(() => {
     if (reduced) return;
     sway.value = withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(sway);
   }, [reduced]);
   const basketA = useAnimatedStyle(() => ({
     transform: [

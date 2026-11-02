@@ -12,6 +12,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { withSpring } from '@/lib/motion';
 import Svg, { Circle, Defs, Path, Text as SvgText, TextPath } from 'react-native-svg';
@@ -61,11 +62,28 @@ export function PressScale({
 }
 
 /* ---------- Skeleton with a sweeping shimmer ---------- */
-export function Skeleton({ w, h, r = 8, style }: { w?: number | `${number}%`; h: number; r?: number; style?: StyleProp<ViewStyle> }) {
+type SkeletonProps = { w?: number | `${number}%`; h: number; r?: number; style?: StyleProp<ViewStyle>; shimmer?: boolean };
+
+/**
+ * A grey placeholder block. It is still by default: the sweeping shimmer (`shimmer`) made Reanimated fail to update
+ * its views every frame for as long as they were on screen (a logged exception each time, thousands a second on the
+ * first Home load) and froze slow phones (owner's brother, 2026-11-02: "Blynk isn't responding").
+ */
+export function Skeleton({ shimmer, ...props }: SkeletonProps) {
+  return shimmer ? <ShimmerSkeleton {...props} /> : <StillSkeleton {...props} />;
+}
+
+function StillSkeleton({ w, h, r = 8, style }: SkeletonProps) {
+  return <View style={[{ width: w, height: h, borderRadius: r, backgroundColor: C.skeleton, overflow: 'hidden' }, style]} />;
+}
+
+function ShimmerSkeleton({ w, h, r = 8, style }: SkeletonProps) {
   const x = useSharedValue(0);
   const width = useSharedValue(300);
   useEffect(() => {
     x.value = withRepeat(withTiming(1, { duration: 1150, easing: Easing.inOut(Easing.quad) }), -1, false);
+    // an unmounted skeleton must stop its clock, or Reanimated keeps updating a view that is gone (a logged exception every frame)
+    return () => cancelAnimation(x);
   }, []);
   const a = useAnimatedStyle(() => ({
     transform: [{ translateX: interpolate(x.value, [0, 1], [-width.value * 0.7, width.value * 1.1]) }],
@@ -75,7 +93,8 @@ export function Skeleton({ w, h, r = 8, style }: { w?: number | `${number}%`; h:
       onLayout={(e) => (width.value = e.nativeEvent.layout.width)}
       style={[{ width: w, height: h, borderRadius: r, backgroundColor: C.skeleton, overflow: 'hidden' }, style]}
     >
-      <Animated.View style={[StyleSheet.absoluteFill, { width: '60%' }, a]}>
+      {/* collapsable={false}: a view with no visual props of its own is flattened away by Fabric, and Reanimated then fails to update it every frame (a logged exception each time) */}
+      <Animated.View collapsable={false} style={[StyleSheet.absoluteFill, { width: '60%' }, a]}>
         <LinearGradient
           colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']}
           start={{ x: 0, y: 0.5 }}
@@ -393,6 +412,7 @@ export function Tooltip({ text, onClose, arrow = 'down', style }: { text: string
   const b = useSharedValue(0);
   useEffect(() => {
     b.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(b);
   }, []);
   const a = useAnimatedStyle(() => ({ transform: [{ translateY: (arrow === 'down' ? -1 : 1) * b.value * 4 }] }));
   const tri = <View style={[styles.tri, arrow === 'up' ? { borderBottomColor: C.ink, borderBottomWidth: 7 } : { borderTopColor: C.ink, borderTopWidth: 7 }]} />;
@@ -453,6 +473,7 @@ export function Pulse({ size, color, style }: { size: number; color: string; sty
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withRepeat(withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }), -1, false);
+    return () => cancelAnimation(p);
   }, []);
   const a = useAnimatedStyle(() => ({ opacity: 0.45 * (1 - p.value), transform: [{ scale: 0.4 + p.value * 0.9 }] }));
   return <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style, a]} />;

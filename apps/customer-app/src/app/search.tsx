@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import type { Product } from '@/blynk/api/types';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
 import { SEARCH } from '@/blynk/catalog/browseWords';
 import { categoriesHref, categoryHref } from '@/blynk/catalog/tree';
+import { cachedSearchIndex, hasCategory, MIN_TERM, searchIndexFor, searchProducts, type SearchIndex } from '@/blynk/search/smartSearch';
 import { CATEGORIES } from '@/blynk/ui/strings';
 import {
   addRecentSearch, clearRecentSearches, loadRecentSearches, normalizeSearch, saveRecentSearches, SEARCH_MAX,
@@ -34,6 +35,11 @@ const EMPTY: Answer = { key: '', results: null, total: 0, page: 0, pages: 0, err
  * "Recent searches" this customer actually ran (kept on the device), "Browse categories", an
  * All / aisle filter, the result count and more results as you scroll. ?c=<slug>&name=<aisle>
  * opens it filtered to one aisle. No suggested or trending searches: the backend has no source.
+ *
+ * Smart search (docs/superpowers/plans/2026-11-02-smart-search.md): once the catalogue is loaded the
+ * results are ranked on the phone from it (blynk/search/smartSearch.ts: typos, Singlish, Sinhala and
+ * Tamil script, synonyms), instantly and offline, 40 per "page". Without the catalogue (cold start,
+ * offline with no saved copy) and for a one-letter term it asks the server as before.
  */
 export default function Search() {
   const { c, name } = useLocalSearchParams<{ c?: string; name?: string }>();
@@ -44,6 +50,7 @@ export default function Search() {
   const [slug, setSlug] = useState<string | null>(c || null);
   const [recent, setRecent] = useState<string[]>(() => loadRecentSearches());
   const [answer, setAnswer] = useState<Answer>(EMPTY);
+  const [localPage, setLocalPage] = useState({ key: '', pages: 1 });
   const [more, setMore] = useState(false);
   const [retry, setRetry] = useState(0);
   const input = useRef<TextInput>(null);
@@ -51,9 +58,27 @@ export default function Search() {
   const term = normalizeSearch(q);
   const key = `${slug ?? ''}|${term}`;
   useSearchTracking(term);
-  const current = !!term && answer.key === key;
-  const results = current ? answer.results : null;
-  const error = current ? answer.error : null;
+  // the ranked catalogue (each hit also says why it matched: `why`, not shown yet)
+  // built once per catalogue, right after the screen is up (never inside the opening animation); until it exists the server answers
+  const [index, setIndex] = useState<SearchIndex | null>(() => (data && !DEMO ? cachedSearchIndex(data.products, data.categories) : null));
+  useEffect(() => {
+    if (!data || DEMO) return;
+    const timer = setTimeout(() => setIndex(searchIndexFor(data.products, data.categories)), 0);
+    return () => clearTimeout(timer);
+  }, [data]);
+  const local = !!index && term.length >= MIN_TERM && (!slug || hasCategory(index, slug));
+  const ranked = useMemo(
+    () => (local && index ? searchProducts(index, term, { categorySlug: slug || undefined }) : null),
+    [local, index, term, slug],
+  );
+  const localPages = localPage.key === key ? localPage.pages : 1;
+  const localResults = useMemo(() => (ranked ? ranked.slice(0, PAGE * localPages).map((r) => r.product) : null), [ranked, localPages]);
+  const current = !!term && (local || answer.key === key);
+  const results = local ? localResults : current ? answer.results : null;
+  const error = local ? null : current ? answer.error : null;
+  const total = local ? ranked?.length ?? 0 : answer.total;
+  const page = local ? localPages : answer.page;
+  const pages = local ? Math.ceil(total / PAGE) : answer.pages;
   const t = useTicker();
   const aisles = data?.aisles ?? [];
   const activeAisle = slug ? aisles.find((a) => a.slug === slug) ?? (slug === c && name ? { name, slug } : null) : null;
@@ -61,7 +86,7 @@ export default function Search() {
 
   useEffect(() => {
     const n = ++seq.current;
-    if (!term || DEMO) return;
+    if (!term || DEMO || local) return;
     const timer = setTimeout(() => {
       getProducts({ search: term, category_slug: slug || undefined, limit: PAGE })
         .then((r) => {
@@ -72,9 +97,13 @@ export default function Search() {
         });
     }, 350);
     return () => clearTimeout(timer);
-  }, [key, retry, slug, term]);
+  }, [key, local, retry, slug, term]);
 
   const loadMore = () => {
+    if (local) {
+      if (page < pages) setLocalPage({ key, pages: page + 1 });
+      return;
+    }
     if (!current || more || !results || answer.page >= answer.pages) return;
     const n = seq.current;
     setMore(true);
@@ -188,8 +217,8 @@ export default function Search() {
           updateCellsBatchingPeriod={40}
           windowSize={7}
           removeClippedSubviews
-          ListHeaderComponent={<Text style={styles.count}>{SEARCH.resultsCount(answer.total, scope)}</Text>}
-          ListFooterComponent={answer.page < answer.pages ? (
+          ListHeaderComponent={<Text style={styles.count}>{SEARCH.resultsCount(total, scope)}</Text>}
+          ListFooterComponent={page < pages ? (
             <PressScale onPress={loadMore} disabled={more} style={styles.more}>
               <Text style={styles.action}>{more ? SEARCH.loading : SEARCH.more}</Text>
             </PressScale>

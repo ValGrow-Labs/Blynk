@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing, SharedValue, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import Svg, { Defs, Ellipse, LinearGradient as SvgGrad, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import type { PublicHeroBanner } from '@/blynk/api/types';
@@ -108,6 +109,7 @@ function Sparkle({ x, y, delay, size = 12, color = V.yellow, period = 2200 }: { 
   const s = useSharedValue(0);
   useEffect(() => {
     s.value = withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 260 }), withTiming(0, { duration: 380 }), withTiming(0, { duration: period - 640 })), -1));
+    return () => cancelAnimation(s);
   }, []);
   const a = useAnimatedStyle(() => ({ opacity: s.value, transform: [{ scale: 0.3 + s.value * 0.7 }, { rotate: `${s.value * 45}deg` }] }));
   return (
@@ -149,6 +151,7 @@ function Clouds() {
   const d = useSharedValue(0);
   useEffect(() => {
     d.value = withRepeat(withTiming(1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(d);
   }, []);
   const a = useAnimatedStyle(() => ({ transform: [{ translateX: -d.value * 14 }] }));
   const cloud = 'M0 18 C2 10 10 8 15 11 C17 4 27 2 31 8 C36 4 44 7 44 13 C50 13 52 18 50 20 L2 20 C0 20 0 19 0 18 Z';
@@ -241,6 +244,7 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
   useEffect(() => {
     bob.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true);
     nudge.value = withRepeat(withSequence(withTiming(4, { duration: 280 }), withTiming(0, { duration: 280 }), withTiming(0, { duration: 1000 })), -1);
+    return () => { cancelAnimation(bob); cancelAnimation(nudge); };
   }, []);
 
   // One choreographed cycle per dish.

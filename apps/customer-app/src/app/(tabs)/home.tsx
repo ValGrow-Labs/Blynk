@@ -7,6 +7,7 @@ import Animated, {
   Easing, FadeIn, interpolate, interpolateColor, SlideOutDown,
   useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withDelay, withRepeat,
   withSequence, withTiming, type SharedValue,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomInset } from '@/lib/tabs';
@@ -394,9 +395,10 @@ export default function Home() {
                 {!DEMO && <OfflineBanner onRetry={() => void refresh()} style={{ marginHorizontal: 15, marginTop: 12 }} />}
                 {!DEMO && <BirthdayOfferBanner style={{ marginHorizontal: 15, marginTop: 12 }} />}
                 {!DEMO && !!data && <PromoCarousel promotions={data.promotions} style={{ marginTop: 16 }} />}
-                {!DEMO && <BuyAgainRail />}
+                {/* owner's brother, 2026-11-02: "Buy again no need for now" - one switch brings Buy again and Your usuals back */}
+                {!DEMO && HOME_BUY_AGAIN && <BuyAgainRail />}
                 {!DEMO && <FlashDealsRail />}
-                {!DEMO && <UsualsRow />}
+                {!DEMO && HOME_BUY_AGAIN && <UsualsRow />}
                 {!DEMO && <DoctorsHomeEntry style={{ marginHorizontal: SPACE.gutter, marginTop: SPACE.section }} />}
                 {!DEMO && !!data && <HomeCategoryGroups tree={data.tree} width={screenW} />}
                 {meals.length > 0 && (
@@ -555,6 +557,7 @@ function LocationRow({ locating, dark, name, address, onPress }: {
   const spin = useSharedValue(0);
   useEffect(() => {
     spin.value = locating ? withRepeat(withTiming(1, { duration: 900, easing: Easing.linear }), -1) : withSpring(0);
+    return () => cancelAnimation(spin);
   }, [locating]);
   const a = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   const fg = dark ? '#fff' : '#1B1B1F';
@@ -893,6 +896,9 @@ const AisleCard = memo(function AisleCard({ aisle: a, index, color, promo }: {
 });
 
 /* The yellow promo band lives in src/components/PromoBand.tsx (Admin / Ops edit it; docs/promo-surfaces.md). */
+
+/** Home shows Buy again and Your usuals only when this is on (off for now, brother 2026-11-02). */
+const HOME_BUY_AGAIN = false;
 
 /** Live: a category or product photo, or its initial while it is missing or fails to load. */
 function Photo({ uri, name, size }: { uri: string | null; name: string; size: number }) {
