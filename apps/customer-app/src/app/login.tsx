@@ -97,16 +97,17 @@ export default function Login() {
 
   // the gate's Skip, hard right in the hero's top row (a 48 pt target, Flutter); else a back arrow
   const skipButton = gate ? (
-    <PressScale
+    // a plain Pressable, not PressScale: this button leaves the screen when pressed, and a Reanimated spring left running on a view that is
+    // gone made Reanimated log a failure for it on every frame for ~3 s (owner's brother, 2026-11-03)
+    <Pressable
       onPress={skip}
-      style={styles.skip}
-      scaleTo={0.95}
+      style={({ pressed }) => [styles.skip, pressed && { opacity: 0.6 }]}
       accessibilityRole="button"
       accessibilityLabel={LOGIN_GATE.skip}
       accessibilityHint={LOGIN_GATE.skipHint}
     >
       <Text style={styles.skipTxt}>{LOGIN_GATE.skip}</Text>
-    </PressScale>
+    </Pressable>
   ) : undefined;
   const backButton = gate ? undefined : (
     <PressScale onPress={goBack} style={styles.back} accessibilityRole="button" accessibilityLabel={LOGIN_WORDS.back}>
