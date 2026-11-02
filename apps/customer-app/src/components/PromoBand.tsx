@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withSpring, withTiming,
 } from 'react-native-reanimated';
@@ -16,6 +16,7 @@ import { DEMO } from '@/demo/mode';
 import { openPromoDestination } from '@/lib/nav';
 import { F } from '@/lib/theme';
 import { CheckBoxIcon } from './icons';
+import { RemoteImage } from './RemoteImage';
 import { PressScale } from './ui';
 
 /** Blynk's rider illustration: the band's mascot (owner: illustrated, not a photo). */
@@ -175,7 +176,7 @@ function Beam({ item, right }: { item: Exclude<BandItem, { kind: 'NONE' }>; righ
       </Animated.View>
       <Animated.View style={[styles.item, { left: (w - L.item) / 2 }, itemA]}>
         {item.kind === 'IMAGE'
-          ? <Image source={{ uri: item.uri }} resizeMode="contain" style={{ width: L.item, height: L.item }} />
+          ? <RemoteImage uri={item.uri} thumbPx={L.item} fit="contain" style={{ width: L.item, height: L.item }} />
           : <Text style={styles.emoji}>{item.emoji}</Text>}
       </Animated.View>
     </View>

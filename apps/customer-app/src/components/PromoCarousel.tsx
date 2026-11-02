@@ -8,8 +8,10 @@ import type { Promotion } from '@/blynk/api/types';
 import type { PromoDestination } from '@/blynk/catalog/promoTarget';
 import { autoAdvances, bannerHeight, CAROUSEL as K, carouselSlides, nextSlide, slideLook, type SlideLook } from '@/blynk/promo/carousel';
 import { PROMO } from '@/blynk/ui/strings';
+import { imageUri } from '@/lib/imageUri';
 import { openPromoDestination } from '@/lib/nav';
 import { F } from '@/lib/theme';
+import { RemoteImage } from './RemoteImage';
 
 /*
  * Home's promotion carousel, built to docs/promo-surfaces.md §2 so it moves exactly like the
@@ -23,9 +25,12 @@ import { F } from '@/lib/theme';
 
 const EASE = Easing.bezier(0.65, 0, 0.35, 1);
 
-/** The card follows the photo's own shape (bannerHeight): the shown photo's width / height, remembered per address. */
+/**
+ * The card follows the photo's own shape (bannerHeight): the shown photo's width / height, remembered per address.
+ * `px` is the card's width: on the phone the shape is read from the same thumbnail the card then shows, not the original.
+ */
 const ratios = new Map<string, number>();
-function usePhotoRatio(uri: string | null): number | null {
+function usePhotoRatio(uri: string | null, px: number): number | null {
   const [ratio, setRatio] = useState<number | null>(uri ? ratios.get(uri) ?? null : null);
   useEffect(() => {
     if (!uri) { setRatio(null); return; }
@@ -33,7 +38,7 @@ function usePhotoRatio(uri: string | null): number | null {
     if (known) { setRatio(known); return; }
     setRatio(null);
     let alive = true;
-    Image.getSize(uri, (iw, ih) => {
+    Image.getSize(imageUri(uri, px), (iw, ih) => {
       if (iw > 0 && ih > 0) { ratios.set(uri, iw / ih); if (alive) setRatio(iw / ih); }
     }, () => {});
     return () => { alive = false; };
@@ -95,7 +100,7 @@ export function PromoCarousel({ promotions, onOpen = openPromoDestination, style
 
   const cur = slides[Math.min(idx, n - 1)] ?? null;
   const curBg = cur?.look.background;
-  const photoRatio = usePhotoRatio(curBg && (curBg.kind === 'image' || curBg.kind === 'artwork') ? curBg.uri : null);
+  const photoRatio = usePhotoRatio(curBg && (curBg.kind === 'image' || curBg.kind === 'artwork') ? curBg.uri : null, W);
   const H = bannerHeight(W, photoRatio);
   if (n === 0 || !cur) return null;
   const old = prev != null && prev !== idx ? slides[prev] : undefined;
@@ -158,12 +163,12 @@ function Slide({ look, w, h, animate, onOpen }: { look: SlideLook; w: number; h:
     >
       {bg.kind === 'solid' && <View style={[StyleSheet.absoluteFill, { backgroundColor: bg.color }]} />}
       {bg.kind === 'gradient' && <LinearGradient colors={[bg.from, bg.to]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
-      {(bg.kind === 'image' || bg.kind === 'artwork') && <FocalImage uri={bg.uri} w={w} h={h} />}
+      {(bg.kind === 'image' || bg.kind === 'artwork') && <FocalImage uri={bg.uri} w={w} />}
       {bg.kind === 'image' && <View style={[StyleSheet.absoluteFill, { backgroundColor: bg.scrim }]} />}
 
       {look.foreground && (
         <Animated.View pointerEvents="none" style={[styles.fg, { maxWidth: w * K.foreground.maxWidthPct, width: w * K.foreground.maxWidthPct }, fgA]}>
-          <Image source={{ uri: look.foreground }} resizeMode="contain" style={{ width: '100%', height: K.foreground.maxHeight }} />
+          <RemoteImage uri={look.foreground} thumbPx={w * K.foreground.maxWidthPct} fit="contain" style={{ width: '100%', height: K.foreground.maxHeight }} />
         </Animated.View>
       )}
 
@@ -193,23 +198,10 @@ function Slide({ look, w, h, animate, onOpen }: { look: SlideLook; w: number; h:
  * photo doesn't reach, same "never crop, size to the photo" approach as the product page's hero
  * photo (p/[id].tsx's HeroPhoto).
  */
-function FocalImage({ uri, w, h }: { uri: string; w: number; h: number }) {
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  useEffect(() => {
-    let alive = true;
-    Image.getSize(uri, (iw, ih) => { if (alive && iw > 0 && ih > 0) setSize({ w: iw, h: ih }); }, () => {});
-    return () => { alive = false; };
-  }, [uri]);
-  if (!size) return <Image source={{ uri }} resizeMode="contain" style={StyleSheet.absoluteFill} />;
-  const s = Math.min(w / size.w, h / size.h);
-  const dw = size.w * s;
-  const dh = size.h * s;
-  return (
-    <Image
-      source={{ uri }}
-      style={{ position: 'absolute', width: dw, height: dh, left: (w - dw) / 2, top: (h - dh) / 2 }}
-    />
-  );
+function FocalImage({ uri, w }: { uri: string; w: number }) {
+  // `contain` in the card, which already has the photo's own shape (usePhotoRatio / bannerHeight), is the same
+  // picture the old sized box drew, without downloading the picture a second time just to measure it
+  return <RemoteImage uri={uri} thumbPx={w} fit="contain" style={StyleSheet.absoluteFill} />;
 }
 
 const styles = StyleSheet.create({

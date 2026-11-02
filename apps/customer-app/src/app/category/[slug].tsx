@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useMemo, useRef } from 'react';
+import { FlatList, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { Category } from '@/blynk/api/types';
+import type { Category, Product } from '@/blynk/api/types';
 import { useTrackList } from '@/blynk/analytics/AnalyticsHost';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
+import { aisleCardWidth, AISLE_GAP, AISLE_PAD, AISLE_SIDEBAR_W } from '@/blynk/catalog/aislePrefetch';
 import { CATEGORY_SCREEN } from '@/blynk/catalog/browseWords';
 import { categoryRail, productsInView, resolveCategory, type RailRow } from '@/blynk/catalog/tree';
 import { categoryOfferActive } from '@/blynk/lib/categories';
@@ -34,9 +35,12 @@ import { C, F } from '@/lib/theme';
  * the ones in stock.
  */
 
-const SIDEBAR_W = 86;
-const PAD = 12;
-const GAP = 12;
+const SIDEBAR_W = AISLE_SIDEBAR_W;
+const PAD = AISLE_PAD;
+const GAP = AISLE_GAP;
+/** The grid is a virtualized list: only the rows near the screen are built (a category can hold hundreds of products). */
+const keyOf = (p: Product) => p.id;
+const RowGap = () => <View style={{ height: 18 }} />;
 
 export default function CategoryScreen() {
   const { slug, sub } = useLocalSearchParams<{ slug: string; sub?: string }>();
@@ -48,8 +52,7 @@ export default function CategoryScreen() {
   useTrackList(view ? (view.selected ? `${view.root.name} / ${view.selected.name}` : view.root.name) : null, products);
   const rail = useMemo(() => (data ? categoryRail(data.tree, data.categories, view) : null), [data, view]);
   const hasSidebar = !!rail && rail.rows.length > 0;
-  const gridW = width - (hasSidebar ? SIDEBAR_W : 0) - PAD * 2;
-  const card = Math.floor((gridW - GAP) / 2);
+  const card = aisleCardWidth(width, hasSidebar);
   const railRef = useRef<ScrollView>(null);
   const railRevealed = useRef(false);
 
@@ -62,6 +65,12 @@ export default function CategoryScreen() {
     const visible = height - insets.top - 64 - insets.bottom - 90;
     if (y + h > visible) railRef.current?.scrollTo({ y: Math.max(0, y - visible / 2 + h / 2), animated: false });
   };
+  // the first screenful's photos load first; the cards' pop-in delay stops growing after the 6th
+  const renderProduct = useCallback(({ item, index }: { item: Product; index: number }) => (
+    <View style={{ width: card }}>
+      <ProductCard product={item} width={card} index={Math.min(index, 6)} showRating={false} imagePriority={index < 8 ? 'normal' : 'low'} />
+    </View>
+  ), [card]);
   const search = () => view && router.push({ pathname: '/search', params: { c: view.root.slug, name: view.root.name } });
   const offer = view && categoryOfferActive(view.root) ? CATEGORY_SCREEN.offerLine(view.root.offer_percent as number) : null;
 
@@ -125,28 +134,33 @@ export default function CategoryScreen() {
               ))}
             </ScrollView>
           )}
-          <ScrollView
-            key={`${view.root.id}:${view.selected?.id ?? 'all'}`}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ padding: PAD, paddingBottom: insets.bottom + 110 }}
-            showsVerticalScrollIndicator={false}
-          >
-            <OfflineBanner onRetry={() => void refresh()} style={{ marginBottom: 10 }} />
-            <ClosedBanner style={{ marginBottom: 10 }} />
-            {!!offer && <Text style={styles.offer}>{offer}</Text>}
-            {products.length === 0 ? (
-              <Text style={styles.empty}>{CATEGORIES.noProducts}</Text>
-            ) : (
-              <Animated.View entering={FadeIn.duration(200)} style={styles.grid}>
-                {products.map((p, i) => (
-                  <View key={p.id} style={{ width: card }}>
-                    <ProductCard product={p} width={card} index={Math.min(i, 6)} showRating={false} />
-                  </View>
-                ))}
-              </Animated.View>
-            )}
-            <AskUsPrompt categoryId={view.selected?.id ?? view.root.id} style={{ marginTop: 24 }} />
-          </ScrollView>
+          <Animated.View key={`${view.root.id}:${view.selected?.id ?? 'all'}`} entering={FadeIn.duration(200)} style={{ flex: 1 }}>
+            <FlatList
+              data={products}
+              keyExtractor={keyOf}
+              renderItem={renderProduct}
+              numColumns={2}
+              columnWrapperStyle={{ columnGap: GAP }}
+              ItemSeparatorComponent={RowGap}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: PAD, paddingBottom: insets.bottom + 110 }}
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={6}
+              maxToRenderPerBatch={6}
+              updateCellsBatchingPeriod={40}
+              windowSize={7}
+              removeClippedSubviews
+              ListHeaderComponent={
+                <>
+                  <OfflineBanner onRetry={() => void refresh()} style={{ marginBottom: 10 }} />
+                  <ClosedBanner style={{ marginBottom: 10 }} />
+                  {!!offer && <Text style={styles.offer}>{offer}</Text>}
+                </>
+              }
+              ListEmptyComponent={<Text style={styles.empty}>{CATEGORIES.noProducts}</Text>}
+              ListFooterComponent={<AskUsPrompt categoryId={view.selected?.id ?? view.root.id} style={{ marginTop: 24 }} />}
+            />
+          </Animated.View>
         </View>
       )}
       <CartBar />
@@ -196,7 +210,6 @@ const styles = StyleSheet.create({
   sideTxt: { fontFamily: F.medium, fontSize: 11.5, lineHeight: 14, color: C.sub, textAlign: 'center', marginTop: 5 },
   sideTxtOn: { fontFamily: F.bold, color: C.ink },
   offer: { fontFamily: F.bold, color: C.brandText, fontSize: 12.5, marginBottom: 10 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: GAP, rowGap: 18 },
   empty: { fontFamily: F.regular, color: C.sub, fontSize: 13, textAlign: 'center', paddingVertical: 40, paddingHorizontal: 12 },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
   missingTitle: { fontFamily: F.bold, fontSize: 18, color: C.ink, textAlign: 'center' },

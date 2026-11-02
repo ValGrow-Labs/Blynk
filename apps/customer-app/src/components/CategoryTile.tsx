@@ -1,9 +1,10 @@
 import { COMPONENT_WORDS } from '@/blynk/ui/componentWords';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { Category } from '@/blynk/api/types';
 import { categoryOfferActive } from '@/blynk/lib/categories';
 import { C, F } from '@/lib/theme';
+import { RemoteImage } from './RemoteImage';
 import { PressScale } from './ui';
 
 /**
@@ -14,7 +15,7 @@ const WELLS = [C.tile];
 export const wellFor = (i: number) => WELLS[((i % WELLS.length) + WELLS.length) % WELLS.length];
 
 /** A category's picture on its well, or its initial while there is none (or it fails to load). */
-export function CategoryArt({ category, size, radius = 16, index = 0 }: { category: Pick<Category, 'name' | 'image_url'>; size: number; radius?: number; index?: number }) {
+export function CategoryArt({ category, size, radius = 16, index = 0, priority }: { category: Pick<Category, 'name' | 'image_url'>; size: number; radius?: number; index?: number; priority?: 'low' | 'normal' }) {
   const [failed, setFailed] = useState(false);
   const uri = category.image_url;
   return (
@@ -22,7 +23,7 @@ export function CategoryArt({ category, size, radius = 16, index = 0 }: { catego
       {uri && !failed ? (
         // The picture fills the whole rounded tile (owner, 2026-10-21: a smaller picture sat as a
         // white square inside the grey well).
-        <Image source={{ uri }} resizeMode="cover" onError={() => setFailed(true)} style={{ width: size, height: size }} accessibilityIgnoresInvertColors />
+        <RemoteImage uri={uri} thumbPx={size} fit="cover" priority={priority} onError={() => setFailed(true)} style={{ width: size, height: size }} />
       ) : (
         <Text style={[styles.initial, { fontSize: Math.round(size * 0.42) }]}>{category.name.trim().charAt(0).toUpperCase() || '·'}</Text>
       )}

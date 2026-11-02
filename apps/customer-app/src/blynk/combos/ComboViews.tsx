@@ -1,6 +1,6 @@
 import { COMPONENT_WORDS } from '@/blynk/ui/componentWords';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { getCombos } from '@/blynk/api/catalog';
 import type { Combo } from '@/blynk/api/types';
@@ -9,6 +9,7 @@ import { formatLkr } from '@/blynk/lib/money';
 import { offerSavingsOn } from '@/blynk/lib/storeText';
 import { useStore } from '@/blynk/store/StoreContext';
 import { ProductImage } from '@/components/ProductImage';
+import { RemoteImage } from '@/components/RemoteImage';
 import { PressScale, tap } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
 import { cartActions, useCartSelect } from '@/lib/cart';
@@ -57,7 +58,7 @@ export function ComboThumb({ combo, size, radius = 10 }: { combo: Combo; size: n
   if (combo.image_url && !failed) {
     return (
       <View style={[s.thumb, { width: size, height: size, borderRadius: radius }]}>
-        <Image source={{ uri: combo.image_url }} accessibilityLabel={combo.name} resizeMode="cover" onError={() => setFailed(true)} style={{ width: size, height: size }} />
+        <RemoteImage uri={combo.image_url} thumbPx={size} accessibilityLabel={combo.name} fit="cover" onError={() => setFailed(true)} style={{ width: size, height: size }} />
       </View>
     );
   }

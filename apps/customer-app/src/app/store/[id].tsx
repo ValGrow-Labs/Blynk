@@ -1,7 +1,7 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, Share, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Extrapolation, FadeIn, FadeOut, interpolate, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
   useAnimatedStyle, useSharedValue, withDelay, withTiming, ZoomIn, ZoomOut,
@@ -23,6 +23,7 @@ import { CART_BAR, CartBar } from '@/components/CartBar';
 import { ClosedBanner } from '@/components/ClosedBanner';
 import { VegMark } from '@/components/icons';
 import { ProductCard } from '@/components/ProductCard';
+import { RemoteImage } from '@/components/RemoteImage';
 import { ProductImage } from '@/components/ProductImage';
 import { AddButton, Chevron, Collapsible, Hearts, PressScale, Skeleton, StampBadge } from '@/components/ui';
 import { extraOf } from '@/demo/extras';
@@ -259,7 +260,7 @@ function StoreScreen() {
               <Text style={styles.heroEmoji}>{STORE.heroEmoji}</Text>
             </View>
           ) : live?.hero?.kind === 'category' ? (
-            <Image source={{ uri: live.hero.uri }} resizeMode="cover" accessibilityLabel={name} style={StyleSheet.absoluteFill} />
+            <RemoteImage uri={live.hero.uri} thumbPx={width} fit="cover" accessibilityLabel={name} style={StyleSheet.absoluteFill} />
           ) : live?.hero?.kind === 'product' ? (
             <View style={[styles.heroArt, { paddingTop: insets.top }]}>
               <ProductImage product={live.hero.product} size={64} radius={0} style={{ backgroundColor: 'transparent', marginBottom: 14 }} />

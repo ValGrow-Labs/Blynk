@@ -15,6 +15,7 @@ import { ChevronIcon, SearchIcon } from '@/components/icons';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { PressScale } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
+import { prefetchAisle } from '@/lib/prefetchImages';
 import { C, F } from '@/lib/theme';
 
 /*
@@ -66,7 +67,7 @@ export default function CategoriesScreen() {
               <Text style={[styles.main, main.id === group && styles.mainOn]} accessibilityRole="header">{main.name}</Text>
               {main.categories.map((node, ci) => (
                 <Animated.View key={node.category.id} entering={FadeInDown.delay(Math.min(mi * 3 + ci, 10) * 30).duration(220)} style={styles.card}>
-                  <PressScale onPress={() => router.push(categoryHref(node.category.slug))} scaleTo={0.98} style={styles.catRow}>
+                  <PressScale onPress={() => { prefetchAisle(data, node.category.slug); router.push(categoryHref(node.category.slug)); }} scaleTo={0.98} style={styles.catRow}>
                     <CategoryArt category={node.category} size={52} radius={14} index={ci} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.catName} numberOfLines={2}>{node.category.name}</Text>
@@ -79,7 +80,7 @@ export default function CategoriesScreen() {
                       {node.subs.map((s) => (
                         <PressScale
                           key={s.id}
-                          onPress={() => router.push(categoryHref(node.category.slug, s.slug))}
+                          onPress={() => { prefetchAisle(data, node.category.slug, s.slug); router.push(categoryHref(node.category.slug, s.slug)); }}
                           scaleTo={0.95}
                           style={styles.sub}
                           accessibilityRole="link"

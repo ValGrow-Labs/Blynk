@@ -42,7 +42,7 @@ const money = (n: number) => (DEMO ? rupees(n) : formatLkr(n));
  * "Other apps / Our app" footer.
  */
 export const ProductCard = memo(function ProductCard({
-  product: p, width = 128, height, sub, index = 0, showRating = true, seen = true, tileColor,
+  product: p, width = 128, height, sub, index = 0, showRating = true, seen = true, tileColor, imagePriority,
 }: {
   product: Product; width?: number; height?: number; sub?: string; index?: number;
   /** The photo's well (an aisle card's light surface wants a white one). */
@@ -51,6 +51,8 @@ export const ProductCard = memo(function ProductCard({
   showRating?: boolean;
   /** The footer rolls to "Our app: n% lower" a moment after this turns true. */
   seen?: boolean;
+  /** `low` for a card off screen (a later rail, past the first screenful): its photo loads after the visible ones. */
+  imagePriority?: 'low' | 'normal';
 }) {
   const inCart = useCartSelect((c) => (c.qty[p.id] ?? 0) > 0);
   const store = useStore();
@@ -92,7 +94,8 @@ export const ProductCard = memo(function ProductCard({
   const pop = useSharedValue(0.6);
   useEffect(() => {
     // the photo pops in as if it just finished loading
-    pop.value = withDelay(120 + index * 70, withSpring(1, { damping: 11, stiffness: 160 }));
+    // later cards of a long rail do not wait seconds at 60% size: the stagger stops after the 8th
+    pop.value = withDelay(120 + Math.min(index, 8) * 70, withSpring(1, { damping: 11, stiffness: 160 }));
   }, []);
   const ea = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }], opacity: pop.value }));
   const line = sub ?? (wide ? undefined : x?.store);
@@ -111,7 +114,7 @@ export const ProductCard = memo(function ProductCard({
           {x?.emoji ? (
             <Text style={{ fontSize: Math.round(h * 0.5), lineHeight: Math.round(h * 0.62) }}>{x.emoji}</Text>
           ) : (
-            <ProductImage product={p} size={Math.min(width, h)} style={{ backgroundColor: 'transparent' }} />
+            <ProductImage product={p} size={Math.min(width, h)} priority={imagePriority} style={{ backgroundColor: 'transparent' }} />
           )}
         </Animated.View>
         {x?.popular && (

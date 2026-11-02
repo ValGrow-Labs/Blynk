@@ -2,7 +2,7 @@ import { hoursBadge, hoursButton } from '@/blynk/catalog/hours';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTrackOnce } from '@/blynk/analytics/AnalyticsHost';
@@ -37,6 +37,7 @@ import { openSignIn } from '@/blynk/ui/signIn';
 import { BackIcon, ShareIcon } from '@/components/icons';
 import { FlashPill, useFlashEnd } from '@/components/FlashPill';
 import { BundleBadgeLine, useBundleOffer } from '@/blynk/bundles/BundleViews';
+import { RemoteImage } from '@/components/RemoteImage';
 import { StruckPrice } from '@/components/StruckPrice';
 import { Chevron as Caret, Collapsible, PressScale, Skeleton } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
@@ -252,8 +253,8 @@ export default function ProductPage() {
 
 /**
  * The product's hero photo, "full frame" (owner, 2026-10-18): the box height follows the
- * photo's own aspect ratio (fetched via Image.getSize, cross-platform unlike onLoad's event
- * shape which differs on web) instead of a fixed square, so "contain" fills it completely with
+ * photo's own aspect ratio (RemoteImage's onNaturalSize: the phone reads it from the picture it
+ * shows, the browser from Image.getSize) instead of a fixed square, so "contain" fills it completely with
  * no letterboxing - the photo is still never cropped. Capped to 0.6-1.3x the width so an
  * unusually tall or wide photo cannot distort the layout.
  */
@@ -261,24 +262,19 @@ function HeroPhoto({ product, size }: { product: Product; size: number }) {
   const [ratio, setRatio] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const uri = product.image_url && !failed ? product.image_url : null;
-  useEffect(() => {
-    if (!uri) return;
-    let alive = true;
-    Image.getSize(
-      uri,
-      (iw, ih) => { if (alive && iw > 0 && ih > 0) setRatio(iw / ih); },
-      () => { if (alive) setFailed(true); },
-    );
-    return () => { alive = false; };
-  }, [uri]);
+  // the shape comes from the picture the box shows (RemoteImage's onNaturalSize), not from a second download of it
+  const known = useCallback((iw: number, ih: number) => setRatio(iw / ih), []);
   const height = uri && ratio ? Math.round(Math.min(Math.max(size / ratio, size * 0.6), size * 1.3)) : size;
   return (
     <View style={[styles.hero, { width: size, height }, !product.is_available && { opacity: 0.45 }]}>
       {uri ? (
-        <Image
-          source={{ uri }}
+        <RemoteImage
+          uri={uri}
+          thumbPx={size}
           accessibilityLabel={product.name}
-          resizeMode="contain"
+          fit="contain"
+          priority="high"
+          onNaturalSize={known}
           onError={() => setFailed(true)}
           style={{ width: size, height }}
         />

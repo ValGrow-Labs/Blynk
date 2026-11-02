@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { RemoteImage } from '@/components/RemoteImage';
 import { C } from '@/lib/theme';
 
 export const ToothGlyph = ({ size = 22, color = C.ink }: { size?: number; color?: string }) => (
@@ -26,7 +27,7 @@ export function GlyphTile({ size = 48, photo, kind = 'clinic' }: { size?: number
   return (
     <View style={[s.tile, { width: size, height: size, borderRadius: size * 0.28 }]}>
       {uri ? (
-        <Image source={{ uri }} style={{ width: size, height: size }} resizeMode="cover" onError={() => setFailed(true)} accessibilityIgnoresInvertColors />
+        <RemoteImage uri={uri} thumbPx={size} fit="cover" style={{ width: size, height: size }} onError={() => setFailed(true)} />
       ) : kind === 'person' ? <PersonGlyph size={size * 0.5} /> : <ToothGlyph size={size * 0.5} color={C.sub} />}
     </View>
   );

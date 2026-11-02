@@ -1,7 +1,8 @@
-import { Image, StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import type { Category, Product, Promotion } from '@/blynk/api/types';
 import { openAisle } from '@/lib/nav';
+import { RemoteImage } from './RemoteImage';
 import { PressScale } from './ui';
 
 /** Where a tapped promotion goes (mirrors customer-web's promoPath); null when it has none. */
@@ -24,13 +25,14 @@ function promoAction(p: Promotion, categories: Category[], products: Product[]):
 
 /** Admin's first active image promotion, when there is one. */
 export function PromoImage({ promotions, categories, products }: { promotions: Promotion[]; categories: Category[]; products: Product[] }) {
+  const { width } = useWindowDimensions();
   const promo = promotions.find((p) => p.image_url);
   if (!promo) return null;
   const act = promoAction(promo, categories, products);
   return (
     <Animated.View entering={FadeIn.duration(350)}>
       <PressScale scaleTo={0.985} onPress={act ?? undefined} disabled={!act} style={styles.wrap}>
-        <Image source={{ uri: promo.image_url as string }} accessibilityLabel={promo.title ?? 'Offer'} resizeMode="cover" style={styles.img} />
+        <RemoteImage uri={promo.image_url as string} thumbPx={width - 32} accessibilityLabel={promo.title ?? 'Offer'} fit="cover" style={styles.img} />
       </PressScale>
     </Animated.View>
   );

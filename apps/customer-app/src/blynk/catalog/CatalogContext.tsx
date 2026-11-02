@@ -55,10 +55,11 @@ function assemble({ products, groups, promotions, categories: all }: RawCatalog)
   };
 }
 
-async function loadAll(): Promise<CatalogData> {
+/** The catalogue plus a signature of what the server sent: an unchanged shelf must not re-render the whole app. */
+async function loadAll(): Promise<{ data: CatalogData; sig: string }> {
   const raw = await loadRaw();
   writeCatalogCache(raw, Platform.OS !== 'web');
-  return assemble(raw);
+  return { data: assemble(raw), sig: JSON.stringify(raw) };
 }
 
 interface CatalogApi {
@@ -80,14 +81,19 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   });
   const [error, setError] = useState<ApiError | null>(null);
   const seq = useRef(0);
+  // what the shown catalogue was built from (the phone's saved copy counts: a live reload equal to it changes nothing)
+  const lastSig = useRef<string | null>(null);
   const refresh = useCallback(async () => {
     if (DEMO) return true;
     const n = ++seq.current;
     try {
-      const d = await loadAll();
+      const { data: d, sig } = await loadAll();
       if (n !== seq.current) return true; // a newer request is in flight; drop the stale answer
-      setData(d);
       setError(null);
+      // the 30 s safety poll finds the same shelf almost every time: do not re-render every screen for nothing
+      if (sig === lastSig.current) return true;
+      lastSig.current = sig;
+      setData(d);
       cartActions.reconcileWith(d.products);
       return true;
     } catch (e) {
@@ -98,7 +104,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (DEMO) return; // design mock: screens read src/demo/*, nothing is fetched
     void Promise.resolve().then(refresh); // first load, off the effect's synchronous path
-    return startCatalogLive(() => void refresh(), appHidden);
+    // the phone has no live stream, so it polls; a minute is plenty and halves the background work
+    return startCatalogLive(() => void refresh(), appHidden, Platform.OS === 'web' ? 30_000 : 60_000);
   }, [refresh]);
   const api = useMemo(() => ({ data, error, refresh }), [data, error, refresh]);
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing, FadeIn, interpolate, interpolateColor, SlideOutDown,
   useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withDelay, withRepeat,
@@ -34,6 +34,7 @@ import {
   BagBadge, ChevronIcon, CloseIcon, HeartsIcon, LocateIcon, MenuIcon, NavIcon, OfferBadge, SearchIcon, SlidersIcon, StarBadge,
 } from '@/components/icons';
 import { HomeFooter } from '@/components/HomeFooter';
+import { RemoteImage } from '@/components/RemoteImage';
 import { FlashDealsRail } from '@/components/FlashDealsRail';
 import { HomeSections } from '@/components/HomeSections';
 import { ProductCard } from '@/components/ProductCard';
@@ -409,7 +410,7 @@ export default function Home() {
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 15 }}>
                       {meals.map((p, i) => (
-                        <ProductCard key={p.id} product={p} index={i} width={MEAL_W} sub={DEMO ? undefined : p.category_name} />
+                        <ProductCard key={p.id} product={p} index={i} width={MEAL_W} sub={DEMO ? undefined : p.category_name} imagePriority={i >= 3 ? 'low' : 'normal'} />
                       ))}
                     </ScrollView>
                   </>
@@ -882,7 +883,7 @@ const AisleCard = memo(function AisleCard({ aisle: a, index, color, promo }: {
           contentContainerStyle={{ gap: 12, paddingHorizontal: 15 }}
         >
           {a.items.slice(0, 10).map((p: Product, i) => (
-            <ProductCard key={p.id} product={p} width={DISH_W} height={DISH_H} index={i} showRating={false} tileColor={C.white} />
+            <ProductCard key={p.id} product={p} width={DISH_W} height={DISH_H} index={i} showRating={false} tileColor={C.white} imagePriority={index > 0 || i >= 3 ? 'low' : 'normal'} />
           ))}
         </ScrollView>
       </PressScale>
@@ -897,7 +898,7 @@ const AisleCard = memo(function AisleCard({ aisle: a, index, color, promo }: {
 function Photo({ uri, name, size }: { uri: string | null; name: string; size: number }) {
   const [failed, setFailed] = useState(false);
   if (uri && !failed) {
-    return <Image source={{ uri }} accessibilityLabel={name} resizeMode="contain" onError={() => setFailed(true)} style={{ width: size, height: size }} />;
+    return <RemoteImage uri={uri} thumbPx={size} accessibilityLabel={name} fit="contain" onError={() => setFailed(true)} style={{ width: size, height: size }} />;
   }
   return <Text style={[styles.initial, { fontSize: Math.round(size * 0.5) }]}>{name.trim().charAt(0).toUpperCase() || '·'}</Text>;
 }

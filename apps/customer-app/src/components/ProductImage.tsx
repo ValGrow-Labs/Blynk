@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Image, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import type { Product } from '@/blynk/api/types';
 import { C, F } from '@/lib/theme';
+import { RemoteImage } from './RemoteImage';
 
 /**
  * A product photo on a neutral tile. While the photo is missing or fails to load,
  * the tile shows the product's initial instead of a broken image.
  */
-export function ProductImage({ product, size, radius = 14, inset = 0.92, style }: {
+export function ProductImage({ product, size, radius = 14, inset = 0.92, style, priority }: {
   product: Pick<Product, 'name' | 'image_url' | 'image_focal_x' | 'image_focal_y'>;
   size: number; radius?: number;
   /**
@@ -21,6 +22,8 @@ export function ProductImage({ product, size, radius = 14, inset = 0.92, style }
    * small, even margin on every side fixes that without bringing back the old, much emptier look.
    */
   inset?: number; style?: StyleProp<ViewStyle>;
+  /** `low` for photos below the fold or off to the side of a rail (they load after the visible ones). */
+  priority?: 'low' | 'normal';
 }) {
   const [failed, setFailed] = useState(false);
   const uri = product.image_url && !failed ? product.image_url : null;
@@ -30,10 +33,14 @@ export function ProductImage({ product, size, radius = 14, inset = 0.92, style }
     // 2026-10-18: "still this img problem")
     <View style={[styles.tile, { width: size, height: size, borderRadius: radius }, !!uri && styles.photoTile, style]}>
       {uri ? (
-        <Image
-          source={{ uri }}
+        <RemoteImage
+          uri={uri}
+          thumbPx={size * inset}
           accessibilityLabel={product.name}
-          resizeMode="contain"
+          fit="contain"
+          focalX={product.image_focal_x}
+          focalY={product.image_focal_y}
+          priority={priority}
           onError={() => setFailed(true)}
           style={{ width: size * inset, height: size * inset }}
         />

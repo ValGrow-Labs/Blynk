@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
-import { Keyboard, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSearchTracking } from '@/blynk/analytics/AnalyticsHost';
@@ -110,8 +110,13 @@ export default function Search() {
   };
 
   const tile = (width - 16 * 2 - 12) / 2;
-  const rows: Product[][] = [];
-  for (let i = 0; i < (results ?? []).length; i += 2) rows.push((results ?? []).slice(i, i + 2));
+  // results are a virtualized two-column list (a search can load several pages of 40): only the rows near the screen are built
+  const renderResult = useCallback(({ item, index }: { item: Product; index: number }) => (
+    // only the first screenful fades in; later products (and every newly loaded page) just appear
+    <Animated.View entering={index < 6 ? FadeInDown.delay(Math.floor(index / 2) * 70 + (index % 2) * 40).duration(320) : undefined}>
+      <ProductCard product={item} width={tile} sub={item.category_name} index={Math.min(index, 6)} imagePriority={index < 8 ? 'normal' : 'low'} />
+    </Animated.View>
+  ), [tile]);
   const scope = activeAisle ? activeAisle.name : null;
 
   return (
@@ -165,6 +170,32 @@ export default function Search() {
         </ScrollView>
       )}
 
+      {!!term && !DEMO && !error && !!results && results.length > 0 ? (
+        <FlatList
+          data={results}
+          keyExtractor={keyOfProduct}
+          renderItem={renderResult}
+          numColumns={2}
+          columnWrapperStyle={{ columnGap: 12 }}
+          ItemSeparatorComponent={RowGap}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScroll={onScroll}
+          scrollEventThrottle={64}
+          contentContainerStyle={{ padding: 16, paddingBottom: 140 }}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={40}
+          windowSize={7}
+          removeClippedSubviews
+          ListHeaderComponent={<Text style={styles.count}>{SEARCH.resultsCount(answer.total, scope)}</Text>}
+          ListFooterComponent={answer.page < answer.pages ? (
+            <PressScale onPress={loadMore} disabled={more} style={styles.more}>
+              <Text style={styles.action}>{more ? SEARCH.loading : SEARCH.more}</Text>
+            </PressScale>
+          ) : null}
+        />
+      ) : (
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -220,30 +251,16 @@ export default function Search() {
             onPress={() => { setQ(''); setSlug(null); }}
             extra={<AskUsPrompt name={term} categoryId={activeAisle && 'id' in activeAisle ? activeAisle.id : null} style={{ marginTop: 26, alignSelf: 'stretch' }} />}
           />
-        ) : (
-          <>
-            <Text style={styles.count}>{SEARCH.resultsCount(answer.total, scope)}</Text>
-            {rows.map((row, ri) => (
-              <View key={ri} style={{ flexDirection: 'row', gap: 12, marginBottom: 18 }}>
-                {row.map((p, ci) => (
-                  <Animated.View key={p.id} entering={FadeInDown.delay(Math.min(ri, 5) * 70 + ci * 40).duration(320)}>
-                    <ProductCard product={p} width={tile} sub={p.category_name} index={Math.min(ri * 2 + ci, 6)} />
-                  </Animated.View>
-                ))}
-              </View>
-            ))}
-            {answer.page < answer.pages && (
-              <PressScale onPress={loadMore} disabled={more} style={styles.more}>
-                <Text style={styles.action}>{more ? SEARCH.loading : SEARCH.more}</Text>
-              </PressScale>
-            )}
-          </>
-        )}
+        ) : null}
       </ScrollView>
+      )}
       <CartBar />
     </View>
   );
 }
+
+const keyOfProduct = (p: Product) => p.id;
+const RowGap = () => <View style={{ height: 18 }} />;
 
 function Chip({ label, on, onPress }: { label: string; on?: boolean; onPress: () => void }) {
   return (

@@ -93,7 +93,7 @@ function SectionRail({ view }: { view: HomeSectionView }) {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail}>
         {view.products.map((p, i) => (
-          <ProductCard key={p.id} product={p} index={i} width={CARD_W} sub={p.category_name} />
+          <ProductCard key={p.id} product={p} index={i} width={CARD_W} sub={p.category_name} imagePriority="low" />
         ))}
       </ScrollView>
     </View>

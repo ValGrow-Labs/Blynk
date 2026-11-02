@@ -4,8 +4,10 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { CategoryTile } from '@/components/CategoryTile';
 import { ChevronIcon } from '@/components/icons';
 import { PressScale } from '@/components/ui';
+import { prefetchAisle } from '@/lib/prefetchImages';
 import { C, F, SPACE, T } from '@/lib/theme';
 import { CATEGORIES } from '../ui/strings';
+import { useCatalog } from './CatalogContext';
 import { categoriesHref, categoryHref, type MainNode } from './tree';
 
 /*
@@ -41,7 +43,8 @@ export function HomeCategoryGroups({ tree, width }: { tree: MainNode[]; width: n
 /** One row that scrolls sideways, the next tile peeking in - however many categories the Main has. */
 function Group({ main, cell, start }: { main: MainNode; cell: number; start: number }) {
   const cats = main.categories;
-  const open = (slug: string) => router.push(categoryHref(slug));
+  const { data } = useCatalog();
+  const open = (slug: string) => { prefetchAisle(data, slug); router.push(categoryHref(slug)); };
   return (
     <View style={{ marginTop: SPACE.section }}>
       <View style={styles.head}>

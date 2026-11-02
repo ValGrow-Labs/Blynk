@@ -5,9 +5,9 @@ export const documentHidden = (): boolean => typeof document !== 'undefined' && 
 
 /**
  * Calls onChange when staff change the catalogue (SSE where EventSource exists),
- * and every 30 s as a safety net. The poll skips while `isHidden()` is true.
+ * and every `pollMs` (30 s by default) as a safety net. The poll skips while `isHidden()` is true.
  */
-export function startCatalogLive(onChange: () => void, isHidden: () => boolean = documentHidden): () => void {
+export function startCatalogLive(onChange: () => void, isHidden: () => boolean = documentHidden, pollMs = 30_000): () => void {
   let es: EventSource | null = null;
   const ES = (globalThis as { EventSource?: typeof EventSource }).EventSource;
   if (typeof ES === 'function') {
@@ -16,6 +16,6 @@ export function startCatalogLive(onChange: () => void, isHidden: () => boolean =
       es.addEventListener('catalog', () => onChange());
     } catch { /* no SSE: the poll still runs */ }
   }
-  const poll = setInterval(() => { if (!isHidden()) onChange(); }, 30_000);
+  const poll = setInterval(() => { if (!isHidden()) onChange(); }, pollMs);
   return () => { clearInterval(poll); es?.close(); };
 }
