@@ -1,0 +1,26 @@
+diff --git a/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt b/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
+--- a/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
++++ b/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
+@@ -245,6 +245,8 @@
+             }.apply { isAccessible = true }
+     }
+ 
++    private var loggedSyncUpdateFailure = false
++
+     @DoNotStrip
+     fun synchronouslyUpdateUIProps(
+         intBuffer: IntArray,
+@@ -255,7 +257,12 @@
+                 try {
+                     updatePropsSynchronouslyMethod.invoke(mountingManager, viewTag, props)
+                 } catch (e: Exception) {
+-                    Log.w("Reanimated", "synchronouslyUpdateUIProps failed for tag $viewTag", e)
++                    // BLYNK PATCH: the view is already gone or not mounted yet and the next frame sorts it out. Printing the exception
++                    // (a 135-line stack) for every failed update on every frame froze slow phones ("app isn't responding"): say it once.
++                    if (!loggedSyncUpdateFailure) {
++                        loggedSyncUpdateFailure = true
++                        Log.w("Reanimated", "synchronouslyUpdateUIProps failed for tag $viewTag (more are not logged): ${e.cause?.message ?: e.message}")
++                    }
+                 }
+             } else {
+                 mFabricUIManager.synchronouslyUpdateViewOnUIThread(viewTag, props)
