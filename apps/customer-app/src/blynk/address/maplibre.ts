@@ -2,6 +2,8 @@
  * MapLibre GL JS, loaded on the address screen only (never bundled): the same CDN build and
  * OpenFreeMap "liberty" style the Flutter web shop used. Web only.
  */
+import { phoneLocateOnce } from '@/blynk/location/position';
+
 export const MAPLIBRE_JS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
 export const MAPLIBRE_CSS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
 export const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -61,8 +63,12 @@ export function loadMapLibre(): Promise<MapLibre> {
 
 export type Fix = { lat: number; lng: number };
 
-/** One high-accuracy position from the browser (about 10 s), or a rejection on denial / error / no support. */
+/**
+ * One high-accuracy position from the browser (about 10 s), or a rejection on denial / error / no support.
+ * On a phone it is the expo-location fix instead (src/blynk/location), rejecting with { code } the same way.
+ */
 export function locateOnce(timeout = 10_000): Promise<Fix> {
+  if (phoneLocateOnce) return phoneLocateOnce();
   return new Promise((resolve, reject) => {
     const geo = (globalThis as { navigator?: { geolocation?: Geolocation } }).navigator?.geolocation;
     if (!geo) { reject(new Error('unsupported')); return; }

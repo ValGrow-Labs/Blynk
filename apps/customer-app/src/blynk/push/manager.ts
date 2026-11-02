@@ -28,6 +28,17 @@ export interface PushPlatform {
   deleteToken(): Promise<void>;
   /** A notification was tapped (its data). Returns an unsubscribe. */
   onTap(cb: (data: Record<string, unknown>) => void): () => void;
+  /**
+   * Optional. The platform's token was rotated (the phone's Firebase token changes now and
+   * then); the new token is registered while signed in. The browser build has no such event.
+   */
+  onTokenRefresh?(cb: (token: string) => void): () => void;
+  /**
+   * Optional. Re-read the permission when it cannot be read synchronously (the phone's runtime
+   * permission, which the user can also change in system settings). The browser reads it
+   * synchronously and has no refresh, so its prompt stays inside the tap.
+   */
+  refresh?(): Promise<void>;
 }
 
 export type PushDeps = {
@@ -60,9 +71,21 @@ export function createPushManager(deps: PushDeps) {
     }
   }
 
+  async function refreshOf(p: PushPlatform) {
+    if (!p.refresh) return;
+    try { await p.refresh(); } catch { /* keep the permission we already know */ }
+  }
+
+  async function tokenRefreshed(token: string) {
+    const p = await ready();
+    if (p && isSignedIn && token) await registerToken(p, token);
+  }
+
   async function syncToken() {
     const p = await ready();
-    if (!p || !isSignedIn || p.permission() !== 'granted') return;
+    if (!p || !isSignedIn) return;
+    await refreshOf(p);
+    if (p.permission() !== 'granted') return;
     if (registering) return registering;
     registering = (async () => {
       try {
@@ -82,6 +105,7 @@ export function createPushManager(deps: PushDeps) {
         try {
           await p.initialize();
           p.onTap((data) => deps.onTap?.(data));
+          p.onTokenRefresh?.((token) => { void tokenRefreshed(token); });
           platformNow = p;
           return p;
         } catch {
@@ -109,6 +133,8 @@ export function createPushManager(deps: PushDeps) {
     async requestPermission(): Promise<PushPermission> {
       const p = platformNow ?? (await ready());
       if (!p) return 'unsupported';
+      // (the browser has no refresh, so nothing is awaited before its prompt)
+      if (p.refresh) await refreshOf(p);
       let result: PushPermission = p.permission();
       if (result === 'default') {
         try { result = await p.requestPermission(); } catch { result = p.permission(); }
@@ -118,13 +144,12 @@ export function createPushManager(deps: PushDeps) {
       return result;
     },
     /** A rotated token while signed in. */
-    async tokenRefreshed(token: string) {
-      const p = await ready();
-      if (p && isSignedIn && token) await registerToken(p, token);
-    },
+    tokenRefreshed,
     async permission(): Promise<PushPermission> {
       const p = await ready();
-      return p ? p.permission() : 'unsupported';
+      if (!p) return 'unsupported';
+      await refreshOf(p);
+      return p.permission();
     },
     subscribe(l: () => void) {
       listeners.add(l);

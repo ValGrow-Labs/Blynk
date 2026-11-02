@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useReducer, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deleteReducer, DELETE_COPY, runDelete } from '@/blynk/account/deleteFlow';
 import { showNotice } from '@/blynk/account/notice';
@@ -14,7 +14,7 @@ import { doctorsVisible, showMyAppointments } from '@/blynk/doctors/access';
 import { fetchMyAppointments } from '@/blynk/doctors/api';
 import { useStore } from '@/blynk/store/StoreContext';
 import { needsRegistration, signOut, useSession } from '@/blynk/auth/session';
-import { requestPushPermission } from '@/blynk/push';
+import { push, requestPushPermission } from '@/blynk/push';
 import { fetchPoints, fetchReferral } from '@/blynk/rewards/api';
 import { pointsBalanceText } from '@/blynk/rewards/models';
 import { LanguagePicker } from '@/components/LanguagePicker';
@@ -54,6 +54,13 @@ export default function Account() {
   const [logout, setLogout] = useState(false);
   const [del, dispatch] = useReducer(deleteReducer, { step: 'closed' });
   const [perm, setPerm] = useState(() => (webPushPossible() ? browserPermission() : 'unsupported'));
+  // on the phone the runtime permission is read asynchronously
+  useEffect(() => {
+    if (Platform.OS === 'web' || DEMO) return;
+    let live = true;
+    push.permission().then((p) => live && setPerm(p)).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   // Flutter ProfileRewardsTiles: the points balance and Refer a friend, each while its programme is on
   const [points, setPoints] = useState<{ enabled: boolean; text: string; balance: number; valueLkr: number } | null>(null);
   const [referOn, setReferOn] = useState(false);
@@ -135,10 +142,10 @@ export default function Account() {
   const askPush = async () => {
     const r = await requestPushPermission();
     setPerm(r);
-    if (r === 'denied') showNotice(W.updatesBlockedNotice);
+    if (r === 'denied') showNotice(Platform.OS === 'web' ? W.updatesBlockedNotice : W.updatesBlockedNoticePhone);
   };
 
-  const pushSub = perm === 'granted' ? W.updatesOn : perm === 'denied' ? W.updatesBlocked : W.updatesAsk;
+  const pushSub = perm === 'granted' ? W.updatesOn : perm === 'denied' ? (Platform.OS === 'web' ? W.updatesBlocked : W.updatesBlockedPhone) : W.updatesAsk;
 
   return (
     <View style={A.screen}>

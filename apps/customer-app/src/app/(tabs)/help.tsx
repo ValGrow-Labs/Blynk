@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showNotice } from '@/blynk/account/notice';
 import { HELP_SCREEN as W } from '@/blynk/account/screenWords';
@@ -43,11 +43,18 @@ export default function Help() {
       if (Platform.OS === 'web') {
         const w = (globalThis as { open?: (u: string, t?: string) => unknown }).open;
         if (w) { w(url, url.startsWith('http') ? '_blank' : '_self'); return; }
-      } else if (await Linking.canOpenURL(url)) {
+      } else {
+        // openURL itself, not canOpenURL: on Android 11+ canOpenURL says false for tel: / https: links
+        // unless the manifest declares <queries>, though openURL opens them fine
         await Linking.openURL(url);
         return;
       }
     } catch { /* fall through to copying */ }
+    if (Platform.OS !== 'web') {
+      // no dialler or browser took it: share the number so it is not lost (no clipboard module in the app)
+      try { await Share.share({ message: SUPPORT.phone }); } catch { /* ignore */ }
+      return;
+    }
     try { await (globalThis as { navigator?: Navigator }).navigator?.clipboard?.writeText(SUPPORT.phone); } catch { /* ignore */ }
     showNotice(HELP_HERO.copied);
   };

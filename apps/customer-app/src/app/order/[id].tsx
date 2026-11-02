@@ -194,7 +194,7 @@ export default function OrderStatus() {
                   <Text style={styles.small}>{riderArrived(order) ? W.atDoor : W.yourRider}</Text>
                   <Text style={styles.strong}>{W.riderLine(order.rider_contact.first_name ?? W.yourRider, riderArrived(order))}</Text>
                 </View>
-                <PressScale onPress={() => Linking.openURL(`tel:${order.rider_contact!.phone}`)} style={styles.callBtn} haptic>
+                <PressScale onPress={() => void Linking.openURL(`tel:${order.rider_contact!.phone}`).catch(() => {})} style={styles.callBtn} haptic>
                   <Text style={styles.callTxt}>{W.callRider}</Text>
                 </PressScale>
               </View>

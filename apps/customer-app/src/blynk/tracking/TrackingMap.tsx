@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { loadMapLibre, MAP_ATTRIBUTION, MAP_STYLE } from '@/blynk/address/maplibre';
+import { DOOR_SVG, riderSvg } from '@/blynk/map/markers';
+import { lineOf, routeOverlay } from '@/blynk/map/overlays';
 import { PressScale } from '@/components/ui';
 import { C, F } from '@/lib/theme';
 import type { RiderPoint } from './model';
@@ -41,11 +43,6 @@ type MlLib = {
   Map: new (o: Record<string, unknown>) => TrackMap;
   Marker: new (o: Record<string, unknown>) => MlMarker;
 };
-
-const DOOR_SVG =
-  '<svg width="30" height="40" viewBox="0 0 32 46"><path d="M16 1a15 15 0 0115 15c0 7.5-5.4 13.3-12 14.7L16 35l-3-4.3C6.4 29.3 1 23.5 1 16A15 15 0 0116 1z" fill="#1A1D2E" stroke="#fff" stroke-width="1.8"/><path d="M10 17.5l6-5 6 5V23h-4v-3.5h-4V23h-4z" fill="#FFE141"/></svg>';
-const riderSvg = (stale: boolean) =>
-  `<svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="15" fill="${stale ? '#C9CAD3' : '#FFE141'}" stroke="#1A1D2E" stroke-width="2"/><path d="M19 9l6 14-6-3.6-6 3.6z" fill="#1A1D2E"/></svg>`;
 
 function el(html: string, label: string): HTMLElement {
   const d = (globalThis as { document: Document }).document.createElement('div');
@@ -110,17 +107,9 @@ export function TrackingMap({
           .addTo(m);
         m.once('load', () => {
           if (!alive) return;
-          m.addSource('route', { type: 'geojson', data: lineOf([]) });
-          m.addLayer({
-            id: 'route-casing', type: 'line', source: 'route',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#FFFFFF', 'line-width': 8 },
-          });
-          m.addLayer({
-            id: 'route-line', type: 'line', source: 'route',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': C.brandInk, 'line-width': 4.5 },
-          });
+          const route = routeOverlay();
+          for (const s of route.sources) m.addSource(s.id, { type: 'geojson', data: s.data });
+          for (const l of route.layers) m.addLayer(l);
           setState('ready');
         });
         map.current = m;
@@ -232,15 +221,6 @@ export function TrackingMap({
       <Text style={styles.attr} pointerEvents="none">{MAP_ATTRIBUTION}</Text>
     </View>
   );
-}
-
-function lineOf(points: [number, number][]) {
-  return {
-    type: 'FeatureCollection',
-    features: points.length >= 2
-      ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: points.map(([lat, lng]) => [lng, lat]) } }]
-      : [],
-  };
 }
 
 const styles = StyleSheet.create({

@@ -14,10 +14,14 @@ import { useTrackOnce } from '@/blynk/analytics/AnalyticsHost';
 import { trackOutOfZone } from '@/blynk/analytics/track';
 import { AreaIntro } from '@/blynk/area/AreaSteps';
 import { AREA, noteText } from '@/blynk/area/copy';
-import { areaChoices, areaOfPin, circleRing, coverageOf, insideCoverage, isDefaultPin, kmText, nearestPlace, zoneRing, type Coverage } from '@/blynk/area/coverage';
+import { areaChoices, areaOfPin, coverageOf, insideCoverage, isDefaultPin, kmText, nearestPlace, type Coverage } from '@/blynk/area/coverage';
 import { cityFor, flowReducer, gpsFailureOf, initialFlow, leavesScreen } from '@/blynk/area/flow';
 import { formatPhone } from '@/blynk/auth/phone';
 import { useSession } from '@/blynk/auth/session';
+import type { MapState } from '@/blynk/map/bridge';
+import { NativeMapView, type NativeMapHandle } from '@/blynk/map/NativeMapView';
+import { coverageOverlay } from '@/blynk/map/overlays';
+import type { FromPage } from '@/blynk/map/protocol';
 import { useStore } from '@/blynk/store/StoreContext';
 import { BackIcon, CloseIcon } from '@/components/icons';
 import { PressScale, Skeleton } from '@/components/ui';
@@ -50,42 +54,15 @@ const ZOOM = { store: 15, area: 15.5, gps: 17 } as const;
 /** The screen's words (src/blynk/address/words.ts); read while rendering, never copied at load. */
 const T = LIVE_ADDRESS;
 
-/** The delivery circle and the store on the MapLibre picker (drawn once the style has loaded). */
+/** The delivery circle, the store and the extra zone rings on the MapLibre picker (drawn once the style has loaded). */
 function drawCoverage(map: MlMap, c: Coverage) {
-  try {
-    map.addSource('blynk-area', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [circleRing(c)] } } });
-    map.addLayer({ id: 'blynk-area-fill', type: 'fill', source: 'blynk-area', paint: { 'fill-color': C.brand, 'fill-opacity': 0.12 } });
-    map.addLayer({ id: 'blynk-area-line', type: 'line', source: 'blynk-area', paint: { 'line-color': C.brandDeep, 'line-width': 2.5, 'line-dasharray': [3, 2] } });
-    map.addSource('blynk-store', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [c.center.lng, c.center.lat] } } });
-    map.addLayer({ id: 'blynk-store', type: 'circle', source: 'blynk-store', paint: { 'circle-radius': 7, 'circle-color': C.brand, 'circle-stroke-color': C.brandInk, 'circle-stroke-width': 2 } });
-  } catch { /* the overlay is a guide only; the picker works without it */ }
-  // the extra delivery areas (Beruwala ...): a second ring drawn like the store's, named by a small label
-  if (!c.zones?.length) return;
-  try {
-    map.addSource('blynk-zones', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: c.zones.map((z) => ({ type: 'Feature', properties: { name: z.name }, geometry: { type: 'Polygon', coordinates: [zoneRing(z)] } })),
-      },
-    });
-    map.addLayer({ id: 'blynk-zones-fill', type: 'fill', source: 'blynk-zones', paint: { 'fill-color': C.brand, 'fill-opacity': 0.12 } });
-    map.addLayer({ id: 'blynk-zones-line', type: 'line', source: 'blynk-zones', paint: { 'line-color': C.brandDeep, 'line-width': 2.5, 'line-dasharray': [3, 2] } });
-  } catch { /* guide only */ }
-  try {
-    map.addSource('blynk-zone-names', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: c.zones.map((z) => ({ type: 'Feature', properties: { name: z.name }, geometry: { type: 'Point', coordinates: [z.lng, z.lat] } })),
-      },
-    });
-    map.addLayer({
-      id: 'blynk-zone-names', type: 'symbol', source: 'blynk-zone-names',
-      layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-allow-overlap': true },
-      paint: { 'text-color': C.brandText, 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 },
-    });
-  } catch { /* guide only */ }
+  // one group at a time: the overlay is a guide only, so a failing group never stops the picker or the next group
+  for (const g of coverageOverlay(c)) {
+    try {
+      for (const src of g.sources) map.addSource(src.id, { type: 'geojson', data: src.data });
+      for (const layer of g.layers) map.addLayer(layer);
+    } catch { /* guide only */ }
+  }
 }
 
 export function LiveAddressScreen() {
@@ -134,6 +111,7 @@ export function LiveAddressScreen() {
 
   const hostRef = useRef<View>(null);
   const mapRef = useRef<MlMap | null>(null);
+  const nativeRef = useRef<NativeMapHandle>(null);
   const lift = useSharedValue(0);
 
   // a new way into the map (GPS fix, the store, an area): say what to do there
@@ -146,6 +124,19 @@ export function LiveAddressScreen() {
   }
 
   const zoomFor = () => (flow.area ? ZOOM.area : flow.note === 'drag' ? ZOOM.store : editing ? MAP_ZOOM.start : ZOOM.gps);
+
+  // the map starts moving (the pin lifts) / settles (the pin drops and the spot is read): the same on the web map and the phone's
+  const onMoveStart = (user: boolean) => {
+    setMoving(true);
+    setOutOfArea(false);
+    lift.set(withSpring(1, { damping: 14, stiffness: 260 }));
+    if (user) { setTip(false); setNote(null); }
+  };
+  const onMoveEnd = (c: LatLng) => {
+    setPin({ lat: c.lat, lng: c.lng });
+    setMoving(false);
+    lift.set(withSequence(withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) }), withSpring(0)));
+  };
 
   // the camera centre sits under the pin's tail dot, not the middle of the screen
   const ground = { x: width / 2 + PIN_DX, y: insets.top + PIN_TOP + PIN_GROUND_Y };
@@ -181,18 +172,10 @@ export function LiveAddressScreen() {
         map.keyboard.disableRotation();
         map.setPadding(padding);
         map.jumpTo({ center: [start.lng, start.lat] });
-        map.on('movestart', (e) => {
-          const user = !!(e as { originalEvent?: unknown } | undefined)?.originalEvent;
-          setMoving(true);
-          setOutOfArea(false);
-          lift.set(withSpring(1, { damping: 14, stiffness: 260 }));
-          if (user) { setTip(false); setNote(null); }
-        });
+        map.on('movestart', (e) => onMoveStart(!!(e as { originalEvent?: unknown } | undefined)?.originalEvent));
         map.on('moveend', () => {
           const c = map.getCenter();
-          setPin({ lat: c.lat, lng: c.lng });
-          setMoving(false);
-          lift.set(withSequence(withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) }), withSpring(0)));
+          onMoveEnd({ lat: c.lat, lng: c.lng });
         });
         map.once('load', () => {
           if (!alive) return;
@@ -212,10 +195,27 @@ export function LiveAddressScreen() {
 
   useEffect(() => { mapRef.current?.setPadding(padding); }, [padding]);
 
+  // on a phone the map is a WebView (src/blynk/map): it opens where the web map would, and reports the same events
+  const native = Platform.OS !== 'web';
+  const nativeOn = native && mapOn && !waiting && !gone;
+  const nativeStart = editing ? { lat: editing.latitude, lng: editing.longitude } : flow.start;
+  const onNativeState = (s: MapState) => {
+    setMapState(s);
+    if (s === 'ready') setPin(nativeStart); // the pin starts where this attempt's map opened (the web effect does the same)
+  };
+  const onNativeEvent = (e: Exclude<FromPage, { t: 'ready' } | { t: 'error' }>) => {
+    if (e.t === 'moveStart') onMoveStart(e.user);
+    else if (e.t === 'moveEnd') onMoveEnd({ lat: e.lat, lng: e.lng });
+  };
+  const overlayKey = JSON.stringify([coverage.center, coverage.radiusKm, coverage.zones]);
+
   // ...and move the open map there
   useEffect(() => {
     const s = flow.start;
-    if (flow.startKey > 0) mapRef.current?.jumpTo({ center: [s.lng, s.lat], zoom: zoomFor() });
+    if (flow.startKey > 0) {
+      mapRef.current?.jumpTo({ center: [s.lng, s.lat], zoom: zoomFor() });
+      nativeRef.current?.send({ t: 'camera', mode: 'jump', lat: s.lat, lng: s.lng, zoom: zoomFor() });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.startKey]);
 
@@ -224,7 +224,11 @@ export function LiveAddressScreen() {
     setLocating(true);
     setNote(null);
     locateOnce()
-      .then((p) => { setChosen(true); mapRef.current?.easeTo({ center: [p.lng, p.lat], zoom: Math.max(MAP_ZOOM.start, ZOOM.gps), duration: 600 }); })
+      .then((p) => {
+        setChosen(true);
+        mapRef.current?.easeTo({ center: [p.lng, p.lat], zoom: Math.max(MAP_ZOOM.start, ZOOM.gps), duration: 600 });
+        nativeRef.current?.send({ t: 'camera', mode: 'ease', lat: p.lat, lng: p.lng, zoom: Math.max(MAP_ZOOM.start, ZOOM.gps), duration: 600 });
+      })
       .catch((e) => setNote(noteText(gpsFailureOf(e)) ?? T.gpsOff))
       .finally(() => setLocating(false));
   };
@@ -264,13 +268,25 @@ export function LiveAddressScreen() {
       {/* the map: MapLibre needs a plain block element with a size (its CSS makes it position: relative) */}
       <View style={StyleSheet.absoluteFill}>
         {Platform.OS === 'web' && mapOn && !waiting && !gone && <View key={mapTry} ref={hostRef} style={{ width: '100%', height: '100%' }} />}
+        {nativeOn && (
+          <NativeMapView
+            key={mapTry}
+            ref={nativeRef}
+            initial={{ lat: nativeStart.lat, lng: nativeStart.lng, zoom: zoomFor(), minZoom: MAP_ZOOM.min, maxZoom: MAP_ZOOM.max, padding }}
+            padding={padding}
+            overlay={coverageOverlay(coverage)}
+            overlayKey={overlayKey}
+            onState={onNativeState}
+            onEvent={onNativeEvent}
+          />
+        )}
       </View>
-      {onMap && (mapState === 'loading' || waiting) && !gone && Platform.OS === 'web' && (
+      {onMap && (mapState === 'loading' || waiting) && !gone && (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.mapLoading]}><ActivityIndicator color={C.brandInk} /></View>
       )}
-      {onMap && (mapState === 'failed' || Platform.OS !== 'web' || gone) && (
+      {onMap && (mapState === 'failed' || gone) && (
         <View style={[StyleSheet.absoluteFill, styles.mapLoading]}>
-          <Text style={styles.failTxt}>{gone ? T.gone : Platform.OS !== 'web' ? T.web : T.mapFailed}</Text>
+          <Text style={styles.failTxt}>{gone ? T.gone : T.mapFailed}</Text>
           {mapState === 'failed' && !gone && (
             <PressScale onPress={() => { setMapState('loading'); setMapTry((n) => n + 1); }} style={styles.retry}><Text style={styles.retryTxt}>{T.retry}</Text></PressScale>
           )}
@@ -319,7 +335,7 @@ export function LiveAddressScreen() {
               <Text style={styles.noteTxt}>{note}</Text>
             </Animated.View>
           )}
-          {Platform.OS === 'web' && !gone && (
+          {!gone && (
             <Animated.View layout={LinearTransition.duration(140)} style={{ alignSelf: 'center' }}>
               <PressScale onPress={toCurrent} style={styles.current}>
                 {locating ? <ActivityIndicator size="small" color={C.brandInk} /> : <TargetIcon />}

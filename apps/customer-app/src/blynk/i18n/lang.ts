@@ -29,7 +29,11 @@ export function langFromLocale(locale: string | null | undefined): Lang | null {
 function deviceLocale(): string | null {
   try {
     const nav = (globalThis as { navigator?: { language?: string } }).navigator;
-    return nav?.language ?? null;
+    if (nav?.language) return nav.language;
+  } catch { /* fall through */ }
+  // a phone (Hermes) has no navigator.language: the system language is in Intl
+  try {
+    return new Intl.DateTimeFormat().resolvedOptions().locale || null;
   } catch {
     return null;
   }

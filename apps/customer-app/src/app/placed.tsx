@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { BackHandler, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   cancelAnimation, Easing, FadeIn, FadeInDown, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue,
   withDelay, withRepeat, withSequence, withTiming, type SharedValue,
@@ -95,7 +95,9 @@ export default function Placed() {
 
   useFocusEffect(useCallback(() => {
     setFocused(true);
-    return () => setFocused(false);
+    // Android back from "Order placed" goes Home, not back into the (now empty) cart and pay screens
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { router.dismissTo('/home'); return true; });
+    return () => { setFocused(false); sub.remove(); };
   }, []));
 
   const live = focused && !reduced;

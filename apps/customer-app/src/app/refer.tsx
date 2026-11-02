@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { trackShare } from '@/blynk/analytics/track';
 import { useSession } from '@/blynk/auth/session';
 import { applyReferralCode, fetchReferral } from '@/blynk/rewards/api';
@@ -49,7 +49,11 @@ function Details({ info, onApplied, toast }: { info: ReferralInfo; onApplied: (t
     trackShare(r, 'referral');
     if (r === 'copied') toast(W.codeCopied);
   };
-  const copy = async () => toast((await copyText(info.code)) ? W.codeCopied : W.copyFailed);
+  const copy = async () => {
+    // a phone has no clipboard module in this app: the system share sheet carries the code (it has a Copy action)
+    if (Platform.OS !== 'web') { await shareText(info.code, W.shareTitle); return; }
+    toast((await copyText(info.code)) ? W.codeCopied : W.copyFailed);
+  };
   return (
     <View>
       {info.reward && (

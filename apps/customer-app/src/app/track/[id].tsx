@@ -94,7 +94,7 @@ export default function TrackOrder() {
       </View>
       {!!order?.rider_contact?.phone && isTrackable(order) && (
         <View style={[styles.callWrap, { bottom: insets.bottom + 16 }]} pointerEvents="box-none">
-          <PressScale onPress={() => Linking.openURL(`tel:${order.rider_contact!.phone}`)} style={styles.call} haptic>
+          <PressScale onPress={() => void Linking.openURL(`tel:${order.rider_contact!.phone}`).catch(() => {})} style={styles.call} haptic>
             <Text style={styles.callTxt}>{W.callRider}</Text>
           </PressScale>
         </View>

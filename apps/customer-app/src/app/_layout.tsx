@@ -54,10 +54,12 @@ export default function RootLayout() {
 function AppShell() {
   // a new language restarts the screens (never the cart or the store): every word is read afresh
   const lang = useLang();
-  const [loaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold, Outfit_800ExtraBold,
     BowlbyOne_400Regular, Anton_400Regular,
   });
+  // a font that fails to load must not leave the splash up for ever: go on with the system font
+  const loaded = fontsLoaded || !!fontError;
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync();
   }, [loaded]);

@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { type RefObject, useEffect, useRef, useState } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '@/blynk/api/client';
@@ -39,7 +39,9 @@ export default function Birthday() {
 
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    // no hardware back out of registration (Android), as on the name screen
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => { mounted.current = false; sub.remove(); };
   }, []);
 
   const en = useSharedValue(0);

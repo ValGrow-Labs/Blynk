@@ -56,6 +56,7 @@ import {
   liveAisles, liveBanner, liveHints, livePromo, liveRail,
   liveUnder, liveVs, type LiveAisleCard, type LiveVs,
 } from '@/demo/homeLive';
+import { phoneLocateOnce } from '@/blynk/location/position';
 import { extraOf } from '@/demo/extras';
 import { DEMO } from '@/demo/mode';
 import { rupees } from '@/demo/money';
@@ -310,8 +311,11 @@ export default function Home() {
   const grant = () => {
     if (!DEMO) { here.grant(); return; }
     try {
-      const geo = (globalThis as { navigator?: { geolocation?: Geolocation } }).navigator?.geolocation;
-      geo?.getCurrentPosition(() => {}, () => {}, { timeout: 8000 });
+      if (phoneLocateOnce) phoneLocateOnce().catch(() => {}); // a phone: expo-location, never navigator.geolocation
+      else {
+        const geo = (globalThis as { navigator?: { geolocation?: Geolocation } }).navigator?.geolocation;
+        geo?.getCurrentPosition(() => {}, () => {}, { timeout: 8000 });
+      }
     } catch { /* no geolocation here */ }
     reveal();
   };

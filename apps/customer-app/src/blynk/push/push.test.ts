@@ -122,12 +122,55 @@ test('a tapped notification reaches onTap', async () => {
   expect(d.onTap).toHaveBeenCalledWith({ type: 'order', order_id: 'o1' });
 });
 
-test('push targets: order updates open the order; anything else just opens the app', () => {
+test('push targets: every type the server sends a customer with a screen opens it; anything else just opens the app', () => {
   expect(pushTargetOf({ type: 'order', order_id: ' 3f1c ' })).toEqual({ kind: 'order', id: '3f1c', path: '/order/3f1c' });
+  // a repeat basket that was ordered carries the order id too
+  expect(pushTargetOf({ type: 'order', order_id: 'o9', basket_id: 'b1' })).toEqual({ kind: 'order', id: 'o9', path: '/order/o9' });
   expect(pushTargetOf({ type: 'order', order_id: '' })).toBeNull();
   expect(pushTargetOf({ type: 'order', order_id: '../admin' })).toBeNull();
-  expect(pushTargetOf({ type: 'product', product_id: 'p1' })).toBeNull();
+  expect(pushTargetOf({ type: 'order' })).toBeNull();
+  // back in stock / "is now available"
+  expect(pushTargetOf({ type: 'product', product_id: 'p1' })).toEqual({ kind: 'product', id: 'p1', path: '/p/p1' });
+  expect(pushTargetOf({ type: 'product', product_id: 'p/1?x' })).toBeNull();
+  // dental / doctor reminder and the rating prompt
+  expect(pushTargetOf({ type: 'appointment', appointment_id: 'a1' })).toEqual({ kind: 'appointment', id: 'a1', path: '/doctors/appointments/a1' });
+  expect(pushTargetOf({ type: 'appointment' })).toBeNull();
+  expect(pushTargetOf({ type: 'wallet' })).toEqual({ kind: 'wallet', path: '/wallet' });
+  expect(pushTargetOf({ type: 'repeat_basket', basket_id: 'b1' })).toEqual({ kind: 'repeat_basket', path: '/repeat-baskets' });
+  // staff broadcast (offers): no screen of its own, the app just opens
+  expect(pushTargetOf({ kind: 'broadcast', broadcast_id: 'x' })).toBeNull();
+  // other apps' pushes
+  for (const type of ['staff_order', 'staff_rating', 'rider_delivery', 'SELLER_NEW_ORDER', 'staff_expiry']) {
+    expect(pushTargetOf({ type, order_id: 'o1' })).toBeNull();
+  }
   expect(pushTargetOf(null)).toBeNull();
+  expect(pushTargetOf('order')).toBeNull();
+});
+
+test('a platform with a token-refresh event: a rotated token is registered while signed in, and its permission is re-read', async () => {
+  const p = fakePlatform('default');
+  let refreshCb: ((t: string) => void) | null = null;
+  const refresh = vi.fn(async () => { p.set('granted'); });
+  const withRefresh = Object.assign(p, {
+    onTokenRefresh: (cb: (t: string) => void) => { refreshCb = cb; return () => { refreshCb = null; }; },
+    refresh,
+  });
+  const d = deps(withRefresh);
+  const m = createPushManager(d);
+  await m.start();
+  expect(refreshCb).not.toBeNull();
+  // allowed in system settings while the app was closed: signing in re-reads it and registers
+  await m.signedIn();
+  expect(refresh).toHaveBeenCalled();
+  expect(d.register).toHaveBeenCalledWith('tok-1', 'web');
+  refreshCb!('tok-2');
+  await vi.waitFor(() => expect(d.register).toHaveBeenLastCalledWith('tok-2', 'web'));
+  // the same token again is not sent twice; a refresh while signed out is dropped
+  refreshCb!('tok-2');
+  await m.signedOut('a');
+  refreshCb!('tok-3');
+  await new Promise((r) => setTimeout(r, 0));
+  expect(d.register).toHaveBeenCalledTimes(2);
 });
 
 test('only Firebase "notification-clicked" worker messages count as taps', () => {
