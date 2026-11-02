@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from '../config/env.js';
+import { removeThumbnails } from '../modules/media/thumbnails.js';
 
 /**
  * Media storage for admin-uploaded images (product photos, promotion
@@ -92,6 +93,8 @@ export class LocalDiskStorage implements MediaStorage {
     const target = this.pathFor(key);
     if (!target) return;
     await fs.promises.rm(target, { force: true });
+    // Cached ?w= thumbnails of this file (MEDIA_ROOT/.thumbs) go with it.
+    await removeThumbnails(this.root, path.relative(this.root, target));
   }
 
   async exists(key: string): Promise<boolean> {

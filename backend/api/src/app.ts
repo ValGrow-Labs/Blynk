@@ -51,6 +51,7 @@ import { adminPurchasingRouter } from './modules/purchasing/purchasing.routes.js
 import { adminDailyReportRouter } from './modules/daily-report/daily-report.routes.js';
 // Seller applications from blynk.lk/seller (owner's brother, 2026-10-27; migration 064).
 import { adminSellerApplicationsRouter, sellerApplicationsRouter } from './modules/sellers/seller-applications.js';
+import { createUploadsHandler } from './modules/media/thumbnails.js';
 
 export function createApp(): Express {
   const app = express();
@@ -193,21 +194,10 @@ export function createApp(): Express {
   // Admin-uploaded media (product photos, promotion visuals). Served from
   // the same origin as the API so the customer app and admin UI need no
   // extra host configuration. See utils/storage.ts for the storage choice.
-  app.use(
-    '/uploads',
-    express.static(env.MEDIA_ROOT, {
-      maxAge: '7d',
-      index: false,
-      dotfiles: 'ignore',
-      setHeaders: (res) => {
-        // Helmet defaults every response to same-origin CORP, which stops
-        // the admin web app (a different origin) from displaying these
-        // images. Media is public, non-credentialed content, so it is
-        // marked cross-origin here - and only here.
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      },
-    })
-  );
+  // Thumbnails (?w=<width>, cached under MEDIA_ROOT/.thumbs) come first, then
+  // the original files with a 7-day cache and the cross-origin resource
+  // policy the admin web app needs (modules/media/thumbnails.ts).
+  app.use('/uploads', createUploadsHandler(env.MEDIA_ROOT));
 
   // Self-hosted PMTiles map archive for the customer live-delivery map. Public
   // (no auth), read-only, Range-capable; see modules/map-tiles/index.ts.
