@@ -20,7 +20,8 @@ import { cartActions, useCartSelect } from '@/lib/cart';
 import { keyOf } from '@/blynk/cart/cartStore';
 import { openSizePicker } from '@/blynk/catalog/sizePicker';
 import { hasVariants } from '@/blynk/catalog/variants';
-import { startClocks, sway } from '@/lib/clock';
+import { holdSway, sway } from '@/lib/clock';
+import { useLoop, useLoops } from '@/lib/useLoops';
 import type { Product } from '@/blynk/api/types';
 import { C, F } from '@/lib/theme';
 import { ChevronIcon, CloseIcon, HeartsIcon } from './icons';
@@ -315,7 +316,9 @@ export function StampBadge({ size = 58, style, variant = 'lowest' }: {
   /** 'lowest' (default): the reference's "EVERYDAY - LOWEST PRICE - EVERYDAY" stamp. 'free': Blynk's free-delivery stamp. */
   variant?: 'free' | 'lowest';
 }) {
-  useEffect(startClocks, []);
+  // the sway clock runs only while a stamp is showing on the screen in front
+  const loops = useLoops();
+  useEffect(() => (loops ? holdSway() : undefined), [loops]);
   const a = useAnimatedStyle(() => ({ transform: [{ rotate: `${-18 + sway.value * 8}deg` }, { scale: 1 + sway.value * 0.04 }] }));
   const R = 24;
   if (variant === 'lowest') {
@@ -410,10 +413,7 @@ export function Confetti({ burstKey, x, y, count = 34 }: { burstKey: number; x: 
 /* ---------- Bobbing dark tooltip ---------- */
 export function Tooltip({ text, onClose, arrow = 'down', style }: { text: string; onClose?: () => void; arrow?: 'up' | 'down'; style?: StyleProp<ViewStyle> }) {
   const b = useSharedValue(0);
-  useEffect(() => {
-    b.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => cancelAnimation(b);
-  }, []);
+  useLoop(b, () => withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true), useLoops());
   const a = useAnimatedStyle(() => ({ transform: [{ translateY: (arrow === 'down' ? -1 : 1) * b.value * 4 }] }));
   const tri = <View style={[styles.tri, arrow === 'up' ? { borderBottomColor: C.ink, borderBottomWidth: 7 } : { borderTopColor: C.ink, borderTopWidth: 7 }]} />;
   return (
@@ -471,10 +471,7 @@ export function Collapsible({ open, children }: { open: boolean; children: React
 /** Pulsing ring used for "you are here" dots and live indicators. */
 export function Pulse({ size, color, style }: { size: number; color: string; style?: StyleProp<ViewStyle> }) {
   const p = useSharedValue(0);
-  useEffect(() => {
-    p.value = withRepeat(withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }), -1, false);
-    return () => cancelAnimation(p);
-  }, []);
+  useLoop(p, () => withRepeat(withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }), -1, false), useLoops());
   const a = useAnimatedStyle(() => ({ opacity: 0.45 * (1 - p.value), transform: [{ scale: 0.4 + p.value * 0.9 }] }));
   return <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style, a]} />;
 }

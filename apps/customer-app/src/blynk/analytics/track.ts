@@ -39,6 +39,9 @@ function layer(): Layer | null {
   }
 }
 
+/** Is anything listening (web with a GTM container)? On the phone it is not: callers skip building events nobody receives. */
+export const trackingActive = (): boolean => layer() !== null;
+
 function push(entry: Record<string, unknown>): boolean {
   const dl = layer();
   if (!dl) return false;

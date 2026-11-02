@@ -18,7 +18,7 @@ export interface Clock {
 }
 
 /** A clock with its own timer; the app uses the shared one below, tests pass fakes. */
-export function createClock(opts: { now?: () => number; everyMs?: number } = {}): Clock {
+export function createClock(opts: { now?: () => number; everyMs?: number; paused?: () => boolean } = {}): Clock {
   const now = opts.now ?? Date.now;
   const every = opts.everyMs ?? 1000;
   const listeners = new Set<(t: number) => void>();
@@ -28,6 +28,8 @@ export function createClock(opts: { now?: () => number; everyMs?: number } = {})
       listeners.add(fn);
       if (timer === null) {
         timer = setInterval(() => {
+          // the app is in the background: nobody sees the text change, so nothing re-renders (the next tick after it returns catches up)
+          if (opts.paused?.()) return;
           const t = now();
           // copy: a listener may unsubscribe while we notify
           [...listeners].forEach((l) => l(t));
@@ -43,7 +45,12 @@ export function createClock(opts: { now?: () => number; everyMs?: number } = {})
   };
 }
 
-export const clock = createClock();
+let pausedCheck: () => boolean = () => false;
+/** The app tells the shared clock how to know it is hidden (the root layout passes appHidden); tests never call this. */
+export function setClockPausedCheck(fn: () => boolean): void {
+  pausedCheck = fn;
+}
+export const clock = createClock({ paused: () => pausedCheck() });
 
 /**
  * A value worked out from the current time, kept fresh once a second but re-rendering only when the

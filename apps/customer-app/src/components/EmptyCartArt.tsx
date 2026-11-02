@@ -1,8 +1,9 @@
 import { COMPONENT_WORDS } from '@/blynk/ui/componentWords';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useDecorLoops, useLoop } from '@/lib/useLoops';
 import Animated, {
-  Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence,
+  Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence,
   withTiming, ZoomIn,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -47,13 +48,10 @@ function Drop({ glyph, x, spin, index, still }: { glyph: string; x: number; spin
 }
 
 export function EmptyCartArt() {
-  const reduced = useReducedMotion();
+  // reduced motion, a low-end phone, or the screen covered / app in the background: just the basket, still
+  const loops = useDecorLoops();
   const sway = useSharedValue(0);
-  useEffect(() => {
-    if (reduced) return;
-    sway.value = withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => cancelAnimation(sway);
-  }, [reduced]);
+  useLoop(sway, () => withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true), loops);
   const basketA = useAnimatedStyle(() => ({
     transform: [
       { translateY: interpolate(sway.value, [0, 1], [0, -5]) },
@@ -62,7 +60,7 @@ export function EmptyCartArt() {
   }));
   return (
     <View style={styles.box} accessible accessibilityRole="image" accessibilityLabel={COMPONENT_WORDS.emptyBasket}>
-      {ITEMS.map((it, i) => <Drop key={it.glyph} {...it} index={i} still={!!reduced} />)}
+      {ITEMS.map((it, i) => <Drop key={it.glyph} {...it} index={i} still={!loops} />)}
       <Animated.Text entering={ZoomIn.springify().mass(1).energyThreshold(1e-4)} style={[styles.basket, basketA]}>🧺</Animated.Text>
     </View>
   );

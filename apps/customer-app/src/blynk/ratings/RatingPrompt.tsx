@@ -1,7 +1,7 @@
 import { usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Sheet } from '@/blynk/account/ui';
+import { Sheet, useSheetRoom } from '@/blynk/account/ui';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
 import { useFeatureOn } from '@/blynk/lib/featureGate';
 import { storage } from '@/blynk/lib/storage';
@@ -10,7 +10,7 @@ import { listOrders } from '@/blynk/orders/api';
 import type { Order } from '@/blynk/orders/types';
 import { useStore } from '@/blynk/store/StoreContext';
 import { DEMO } from '@/demo/mode';
-import { useKeyboardInset } from '@/lib/keyboard';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { fetchRating } from './api';
 import { PROMPT_KEY, promptCandidate, readPrompted, withPrompted, type RatingAnswer } from './model';
 import { OrderRatingCard } from './RatingCard';
@@ -64,10 +64,12 @@ export function RatingPromptHost() {
 }
 
 function PromptSheet({ order, answer, onClose }: { order: Order; answer: RatingAnswer; onClose: () => void }) {
-  const kb = useKeyboardInset();
+  // the Sheet lifts itself above the keyboard; the body shortens to fit and scrolls the focused field into view
+  const room = useSheetRoom(620);
+  const fs = useFieldScroll(useKeyboardCover());
   return (
     <Sheet label={RATING_WORDS.promptLabel} onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 620 }} contentContainerStyle={{ paddingBottom: kb }}>
+      <ScrollView {...fs.props} ref={fs.ref} keyboardShouldPersistTaps="handled" style={{ maxHeight: room }}>
         <View>
           <OrderRatingCard order={order} initial={answer} look="bare" onClose={onClose} />
         </View>

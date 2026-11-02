@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getStore } from '../api/catalog';
 import type { StoreInfo } from '../api/types';
 import { ruleFromStore, setOneSellerRule } from '../cart/sellerRule';
@@ -9,10 +9,20 @@ import { DEMO } from '@/demo/mode';
 export const StoreContext = createContext<StoreInfo | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [s, setS] = useState<StoreInfo | null>(null);
+  // what the shown store was built from: the 30 s poll finds the same answer almost every time, and a
+  // new object would re-render every screen that reads the store (nearly all of them) for nothing
+  const lastSig = useRef<string | null>(null);
   useEffect(() => {
     if (DEMO) return; // design mock: nothing is fetched
     let alive = true;
-    const load = () => getStore().then((d) => { if (alive) { setOneSellerRule(ruleFromStore(d)); setS(d); } }).catch(() => {});
+    const load = () => getStore().then((d) => {
+      if (!alive) return;
+      const sig = JSON.stringify(d);
+      if (sig === lastSig.current) return;
+      lastSig.current = sig;
+      setOneSellerRule(ruleFromStore(d));
+      setS(d);
+    }).catch(() => {});
     void load();
     const t = setInterval(() => { if (!appHidden()) void load(); }, 30_000);
     const off = onVisible(() => void load());

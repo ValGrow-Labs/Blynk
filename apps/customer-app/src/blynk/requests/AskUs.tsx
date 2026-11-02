@@ -5,14 +5,14 @@ import Animated, {
   Easing, FadeIn, FadeInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { showNotice } from '@/blynk/account/notice';
-import { Card, Row, Sheet } from '@/blynk/account/ui';
+import { Card, Row, Sheet, useSheetRoom } from '@/blynk/account/ui';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
 import { isNotReady, useFeatureOn } from '@/blynk/lib/featureGate';
 import { useStore } from '@/blynk/store/StoreContext';
 import { PressScale, tap } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
-import { useKeyboardInset } from '@/lib/keyboard';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { withSpring } from '@/lib/motion';
 import { C, F } from '@/lib/theme';
 import { sendProductRequest } from './api';
@@ -62,7 +62,9 @@ function AskUsSheet({ opts }: { opts: AskOpts }) {
   const [error, setError] = useState<{ field: 'name' | 'note' | 'form'; text: string } | null>(null);
   const [done, setDone] = useState(false);
   const sending = useRef(false);
-  const kb = useKeyboardInset();
+  // the Sheet lifts itself above the keyboard; the body shortens to fit and scrolls the focused field into view
+  const room = useSheetRoom(600);
+  const fs = useFieldScroll(useKeyboardCover());
 
   const send = async () => {
     if (sending.current) return;
@@ -88,7 +90,7 @@ function AskUsSheet({ opts }: { opts: AskOpts }) {
       {done ? (
         <Thanks signedIn={signedIn} />
       ) : (
-        <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 600 }} contentContainerStyle={{ paddingBottom: kb }}>
+        <ScrollView {...fs.props} ref={fs.ref} keyboardShouldPersistTaps="handled" style={{ maxHeight: room }}>
           <View style={s.headRow}>
             <Text style={{ fontSize: 26 }}>🛒</Text>
             <View style={{ flex: 1 }}>
@@ -249,7 +251,7 @@ const s = StyleSheet.create({
   chipOn: { backgroundColor: C.brandTint, borderColor: C.brandDeep, borderWidth: 1.4 },
   chipTxt: { fontFamily: F.medium, fontSize: 13, color: '#4A4A52', maxWidth: 180 },
   chipTxtOn: { fontFamily: F.semi, color: C.brandInk },
-  btn: { height: 48, borderRadius: 24, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  btn: { minHeight: 48, borderRadius: 24, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 6 },
   btnQuiet: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.line },
   btnTxt: { fontFamily: F.semi, fontSize: 15, color: C.brandInk },
   art: { width: 110, height: 96, alignItems: 'center', justifyContent: 'center' },

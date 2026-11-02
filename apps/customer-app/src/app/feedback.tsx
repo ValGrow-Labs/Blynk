@@ -10,7 +10,9 @@ import { accountStyles as A, Button, ErrorText, ScreenHeader } from '@/blynk/acc
 import { FEEDBACK_CATEGORIES, FEEDBACK_MAX, feedbackBody, sendFeedback, type FeedbackCategory } from '@/blynk/api/account';
 import { useSession } from '@/blynk/auth/session';
 import { StarIcon } from '@/components/icons';
+import { bottomRoom } from '@/blynk/lib/keyboardMath';
 import { DEMO } from '@/demo/mode';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { goBack } from '@/lib/nav';
 import { C, F } from '@/lib/theme';
 
@@ -21,6 +23,9 @@ import { C, F } from '@/lib/theme';
  */
 export default function Feedback() {
   const insets = useSafeAreaInsets();
+  // the keyboard covers the window's bottom: the form ends at its top and scrolls the focused field into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
   const session = useSession();
   const [rating, setRating] = useState<number | null>(null);
   const [category, setCategory] = useState<FeedbackCategory | null>(null);
@@ -53,10 +58,10 @@ export default function Feedback() {
   };
 
   return (
-    <View style={A.screen}>
+    <View style={[A.screen, { paddingBottom: cover }]}>
       <StatusBar style="dark" />
       <ScreenHeader title={W.title} top={insets.top} />
-      <ScrollView contentContainerStyle={{ padding: 15, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView {...fs.props} ref={fs.ref} contentContainerStyle={{ padding: 15, paddingBottom: bottomRoom(cover, insets.bottom, 40) }} keyboardShouldPersistTaps="handled">
         <Text style={A.body}>{W.intro}</Text>
 
         <Text style={[A.label, styles.gap]}>{W.experience}</Text>

@@ -9,8 +9,11 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, ChevronIcon, StarIcon } from '@/components/icons';
 import { PressScale, Skeleton } from '@/components/ui';
+import { bottomRoom } from '@/blynk/lib/keyboardMath';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { goBack } from '@/lib/nav';
 import { C, F } from '@/lib/theme';
+import { useBackLikeArrow } from '@/lib/useBackPress';
 
 /*
  * The plain building blocks of the catalog-extras, rewards and doctors screens, in the look the
@@ -23,8 +26,13 @@ export function Page({ title, right, children, footer, scroll = true, onBack, bg
   title: string; right?: ReactNode; children: ReactNode; footer?: ReactNode; scroll?: boolean; onBack?: () => void; bg?: string;
 }) {
   const insets = useSafeAreaInsets();
+  // a keyboard (a field in the page) covers the bottom of the window: the page ends at its top, and the focused field scrolls into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
+  // a custom back arrow (e.g. "to the shop") is the hardware back button's too; the plain one only when there is nothing to go back to
+  useBackLikeArrow(onBack ?? goBack, !!onBack);
   return (
-    <View style={{ flex: 1, backgroundColor: bg }}>
+    <View style={{ flex: 1, backgroundColor: bg, paddingBottom: cover }}>
       <StatusBar style="dark" />
       <View style={[k.head, { paddingTop: insets.top + 8 }]}>
         <PressScale onPress={onBack ?? goBack} style={{ padding: 4 }}>
@@ -34,13 +42,13 @@ export function Page({ title, right, children, footer, scroll = true, onBack, bg
         {right}
       </View>
       {scroll ? (
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 15, paddingBottom: (footer ? 24 : insets.bottom + 40) }}>
+        <ScrollView {...fs.props} ref={fs.ref} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 15, paddingBottom: (footer ? 24 : bottomRoom(cover, insets.bottom, 40)) }}>
           {children}
         </ScrollView>
       ) : (
         <View style={{ flex: 1 }}>{children}</View>
       )}
-      {footer ? <View style={[k.footer, { paddingBottom: insets.bottom + 12 }]}>{footer}</View> : null}
+      {footer ? <View style={[k.footer, { paddingBottom: bottomRoom(cover, insets.bottom, 12) }]}>{footer}</View> : null}
     </View>
   );
 }
@@ -212,9 +220,10 @@ export const k = StyleSheet.create({
   badgeTxt: { fontFamily: F.semi, fontSize: 12 },
   notice: { borderRadius: 12, padding: 12, marginBottom: 12 },
   noticeTxt: { fontFamily: F.semi, fontSize: 13.5, lineHeight: 19 },
-  btn: { height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 },
-  btnSmall: { height: 40, borderRadius: 20, paddingHorizontal: 16 },
-  btnTxt: { fontFamily: F.semi, fontSize: 15.5 },
+  // minHeight, not height: at a large system font the label wraps to two lines instead of being clipped
+  btn: { minHeight: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 8 },
+  btnSmall: { minHeight: 40, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 5 },
+  btnTxt: { fontFamily: F.semi, fontSize: 15.5, textAlign: 'center' },
   input: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 12, borderWidth: 1.2, borderColor: '#DCDCE0', backgroundColor: '#fff', paddingHorizontal: 12, gap: 8 },
   inputTxt: { flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink, paddingVertical: 0 },
   prefix: { fontFamily: F.semi, fontSize: 15, color: C.ink },

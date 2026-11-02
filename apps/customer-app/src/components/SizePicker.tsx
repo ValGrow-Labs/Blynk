@@ -14,6 +14,7 @@ import { offerSavingsOn } from '@/blynk/lib/storeText';
 import { useStore } from '@/blynk/store/StoreContext';
 import { cartActions, useCartSelect } from '@/lib/cart';
 import { C, F } from '@/lib/theme';
+import { useBackPress } from '@/lib/useBackPress';
 import { ProductImage } from './ProductImage';
 import { StruckPrice } from './StruckPrice';
 import { PressScale, Skeleton } from './ui';
@@ -36,6 +37,8 @@ function SizePickerSheet({ product }: { product: Product }) {
   const [detail, setDetail] = useState<Product | null>(() => recallDetail(product.id));
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
+  // Android back closes the picker first, not the screen behind it
+  useBackPress(() => { closeSizePicker(); });
 
   useEffect(() => {
     let alive = true;
@@ -167,6 +170,6 @@ const styles = StyleSheet.create({
   failRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   muted: { fontFamily: F.regular, fontSize: 13, color: C.sub },
   link: { fontFamily: F.semi, fontSize: 13, color: C.brandText },
-  done: { height: 50, borderRadius: 14, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
+  done: { minHeight: 50, borderRadius: 14, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
   doneTxt: { fontFamily: F.bold, fontSize: 15, color: C.brandInk },
 });

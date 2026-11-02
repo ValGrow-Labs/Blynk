@@ -32,6 +32,46 @@ test('maps a network failure to NETWORK_ERROR', async () => {
   expect(err.code).toBe('NETWORK_ERROR');
 });
 
+test('a connection that drops while the answer is coming in is a NETWORK_ERROR, not a raw exception', async () => {
+  const res = new Response('{}', { status: 200 });
+  vi.spyOn(res, 'text').mockRejectedValue(new TypeError('Network request failed'));
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(res);
+  const err = (await apiRequest('/x').catch((e) => e)) as ApiError;
+  expect(err).toBeInstanceOf(ApiError);
+  expect(err.code).toBe('NETWORK_ERROR');
+});
+
+test('the 15 s timeout also covers an answer that stalls while its body is read', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      const res = new Response('{}', { status: 200 });
+      // a body that never arrives until the request is aborted
+      vi.spyOn(res, 'text').mockImplementation(() => new Promise((_ok, fail) => {
+        (init as RequestInit).signal?.addEventListener('abort', () => fail(new Error('aborted')));
+      }));
+      return Promise.resolve(res);
+    });
+    const pending = apiRequest('/x').catch((e) => e);
+    await vi.advanceTimersByTimeAsync(15_001);
+    const err = (await pending) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe('TIMEOUT');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('a request already cancelled by its screen is cancelled at once and reads as a network error', async () => {
+  const ctrl = new AbortController();
+  ctrl.abort();
+  vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => (
+    (init as RequestInit).signal?.aborted ? Promise.reject(new Error('aborted')) : Promise.resolve(new Response('{}'))
+  ));
+  const err = (await apiRequest('/x', { signal: ctrl.signal }).catch((e) => e)) as ApiError;
+  expect(err).toBeInstanceOf(ApiError);
+});
+
 test('a 5xx never leaks server text', async () => {
   mockFetch(500, { success: false, error: { code: 'INTERNAL', message: 'stack trace here' } });
   const err = (await apiRequest('/x').catch((e) => e)) as ApiError;

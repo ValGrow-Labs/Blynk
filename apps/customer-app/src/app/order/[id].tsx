@@ -36,8 +36,11 @@ import { PressScale, Skeleton } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
 import { collectEntries } from '@/blynk/cart/sellerGuard';
 import { withLeftOut } from '@/blynk/cart/sellerRule';
+import { bottomRoom } from '@/blynk/lib/keyboardMath';
 import { cartActions, getCartSnapshot } from '@/lib/cart';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { C, F } from '@/lib/theme';
+import { useBackLikeArrow, useBackPress } from '@/lib/useBackPress';
 
 /*
  * Order status: GET /orders/:id, polled every 12 s while the screen is visible and the order is
@@ -60,6 +63,13 @@ export default function OrderStatus() {
   const [error, setError] = useState<{ text: string; missing: boolean } | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  // Android back: the cancel confirmation closes first (not while it is cancelling); opened by a notification with
+  // nothing underneath, back goes to the orders list like the arrow does
+  useBackPress(() => { if (!cancelling) setConfirm(false); }, confirm);
+  useBackLikeArrow(() => router.replace('/orders'));
+  // the rating card's comment field: the list ends at the keyboard's top and scrolls the field into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
   const status = order?.order_status ?? null;
   const busy = useRef(false);
@@ -149,7 +159,7 @@ export default function OrderStatus() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 15, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView {...fs.props} ref={fs.ref} keyboardShouldPersistTaps="handled" style={cover > 0 ? { marginBottom: cover } : undefined} contentContainerStyle={{ padding: 15, paddingBottom: bottomRoom(cover, insets.bottom, 40) }}>
         {DEMO ? (
           <Note title={W.previewTitle} sub={W.previewSub} />
         ) : !signedIn ? (

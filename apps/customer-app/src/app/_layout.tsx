@@ -16,6 +16,8 @@ import { useLang } from '@/blynk/i18n/useLang';
 import { CatalogProvider } from '@/blynk/catalog/CatalogContext';
 import { configProblem } from '@/blynk/lib/config';
 import { installConnectivity } from '@/blynk/lib/connectivity';
+import { appHidden } from '@/blynk/lib/visibility';
+import { setClockPausedCheck } from '@/blynk/promo/clock';
 // reads ?ref= and #/p/<id> from the page address before the router moves it on
 import { ShareStartup } from '@/blynk/share/ShareStartup';
 import { StoreProvider } from '@/blynk/store/StoreContext';
@@ -29,9 +31,14 @@ import { ConfigProblemScreen } from '@/components/ConfigProblem';
 import { DEMO } from '@/demo/mode';
 import { CartProvider } from '@/lib/cart';
 
+// a screen that throws while drawing shows the friendly error screen (Try again -> Home), never a white screen
+export { RootError as ErrorBoundary } from '@/components/RootError';
+
 SplashScreen.preventAutoHideAsync();
 // the offline banner learns from every API call from the first one on
 installConnectivity();
+// the shared one-second countdown clock sleeps while the app is in the background
+setClockPausedCheck(appHidden);
 
 /** A release build with no usable API address shows the config problem screen (Flutter ConfigErrorApp). */
 const CONFIG_PROBLEM = configProblem({

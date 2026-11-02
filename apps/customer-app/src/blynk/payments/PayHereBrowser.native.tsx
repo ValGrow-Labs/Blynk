@@ -1,6 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import { useKeyboardCover } from '@/lib/keyboard';
 import { C, F } from '@/lib/theme';
 import { PAY } from './copy';
 import { formHtml, returnKind } from './form';
@@ -13,8 +14,11 @@ import type { PayHereBrowserProps } from './PayHereBrowser';
  */
 export function PayHereBrowser({ form, entries, onBack, onClose }: PayHereBrowserProps) {
   const insets = useSafeAreaInsets();
+  // edge-to-edge: the modal runs under the gesture / navigation bar and the card form's keyboard, so the page ends above both
+  const cover = useKeyboardCover();
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#fff', paddingBottom: cover > 0 ? cover : insets.bottom }}>
       <View style={[styles.bar, { paddingTop: insets.top + 6 }]}>
         <Text style={styles.title}>{PAY.payTitle}</Text>
         <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button"><Text style={styles.close}>{PAY.closeBrowser}</Text></Pressable>
@@ -31,6 +35,7 @@ export function PayHereBrowser({ form, entries, onBack, onClose }: PayHereBrowse
         }}
         style={{ flex: 1 }}
       />
+      </View>
     </Modal>
   );
 }

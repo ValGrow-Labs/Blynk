@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
-  cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming,
+  Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import type { PricedItem } from '@/blynk/lib/pricing';
 import { useClockValue } from '@/blynk/promo/clock';
 import { flashEndMs, flashPillText, flashSpeech, flashUrgent } from '@/blynk/promo/flashDeals';
 import { C, F } from '@/lib/theme';
+import { useLoop, useLoops } from '@/lib/useLoops';
 
 /*
  * Flash deals (wave 2, 2026-10-25): an offer that ends within 24 h counts down where the customer
@@ -40,16 +40,13 @@ type Size = 'tile' | 'head' | 'page';
 
 /** A beating bolt (the page pill); with reduced motion it just sits there. */
 function PulseBolt({ size, color, animate }: { size: number; color: string; animate: boolean }) {
-  const reduced = useReducedMotion();
   const beat = useSharedValue(0);
-  useEffect(() => {
-    if (!animate || reduced) { beat.value = 0; return; }
-    beat.value = withRepeat(withSequence(
-      withTiming(1, { duration: 800, easing: Easing.inOut(Easing.quad) }),
-      withTiming(0, { duration: 800, easing: Easing.inOut(Easing.quad) }),
-    ), -1);
-    return () => cancelAnimation(beat);
-  }, [animate, reduced, beat]);
+  // beats only while the product page is in front and the app in the foreground (and never under reduced motion)
+  const loops = useLoops();
+  useLoop(beat, () => withRepeat(withSequence(
+    withTiming(1, { duration: 800, easing: Easing.inOut(Easing.quad) }),
+    withTiming(0, { duration: 800, easing: Easing.inOut(Easing.quad) }),
+  ), -1), animate && loops);
   const a = useAnimatedStyle(() => ({ opacity: 0.75 + beat.value * 0.25, transform: [{ scale: 1 + beat.value * 0.18 }] }));
   return <Animated.View style={a}><BoltIcon size={size} color={color} /></Animated.View>;
 }

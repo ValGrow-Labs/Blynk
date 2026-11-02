@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 import { withSpring } from '@/lib/motion';
+import { useActive } from '@/lib/useActive';
 import { formatLkr } from '@/blynk/lib/money';
 import { CoverageCard } from '@/blynk/area/AreaSteps';
 import { coverageOf } from '@/blynk/area/coverage';
@@ -72,6 +73,8 @@ export default function Placed() {
   const [order, setOrder] = useState<Order | null>(fresh);
   const [burst, setBurst] = useState(0);
   const [focused, setFocused] = useState(true);
+  // the idle loops also stop while the app is in the background
+  const fg = useActive();
   // how late the order arrived (fetched after a reload): its cards start that much sooner
   const [late, setLate] = useState(0);
   /** A delay on the screen's timeline: what mounts late (the fetched order) starts at once. */
@@ -100,7 +103,7 @@ export default function Placed() {
     return () => { setFocused(false); sub.remove(); };
   }, []));
 
-  const live = focused && !reduced;
+  const live = focused && fg && !reduced;
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
@@ -120,7 +123,7 @@ export default function Placed() {
             <Basket live={live} />
           </Animated.View>
           <Animated.View entering={ENTER(reduced, T.stage)}>
-            <Stages lines={scheduled ? PLACED.stagesScheduled : PLACED.stagesNow} live={focused} reduced={reduced} />
+            <Stages lines={scheduled ? PLACED.stagesScheduled : PLACED.stagesNow} live={focused && fg} reduced={reduced} />
           </Animated.View>
           {!DEMO && order && (
             <Animated.View entering={ENTER(reduced, at(T.facts))} style={styles.facts}>
@@ -250,7 +253,8 @@ function Rider({ size, left, top, from, reduced, live }: { size: number; left: n
   }, []);
 
   useEffect(() => {
-    if (!parked || !live) { cancelAnimation(bob); bob.value = withTiming(0, { duration: 200 }); return; }
+    // no "settle back" animation here: the screen may be on its way out, and an animation on a view that is going away is a failed update per frame
+    if (!parked || !live) { cancelAnimation(bob); return; }
     bob.value = withRepeat(withTiming(1, { duration: T.bob, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(bob);
   }, [parked, live]);
@@ -281,7 +285,8 @@ function Rider({ size, left, top, from, reduced, live }: { size: number; left: n
 function Basket({ live }: { live: boolean }) {
   const y = useSharedValue(0);
   useEffect(() => {
-    if (!live) { cancelAnimation(y); y.value = withTiming(0, { duration: 150 }); return; }
+    if (!live) { cancelAnimation(y); return; }
+    y.value = 0;
     y.value = withDelay(T.basketAt, withRepeat(withSequence(
       withTiming(-6, { duration: 200, easing: Easing.out(Easing.quad) }),
       withTiming(0, { duration: 280, easing: Easing.bounce }),
@@ -310,7 +315,7 @@ function Stages({ lines, live, reduced }: { lines: readonly string[]; live: bool
       if (!reduced) y.value = withTiming(-8, { duration: 220, easing: Easing.in(Easing.quad) });
       o.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.quad) }, (done) => { if (done) scheduleOnRN(show); });
     }, T.stageHold);
-    return () => clearInterval(t);
+    return () => { clearInterval(t); cancelAnimation(y); cancelAnimation(o); y.value = 0; o.value = 1; };
   }, [live, reduced, lines]);
   const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: y.value }] }));
   return (
@@ -367,7 +372,8 @@ function Pulse({ live, children }: { live: boolean; children: ReactNode }) {
   const s = useSharedValue(0);
   const first = useRef(true);
   useEffect(() => {
-    if (!live) { cancelAnimation(s); s.value = withTiming(0, { duration: 150 }); return; }
+    if (!live) { cancelAnimation(s); return; }
+    s.value = 0;
     const wait = first.current ? T.pulseAt : 1200;
     first.current = false;
     const up = () => withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) });

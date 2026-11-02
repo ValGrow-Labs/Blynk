@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '@/blynk/api/client';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
+import { appHidden } from '@/blynk/lib/visibility';
 import { getOrder } from '@/blynk/orders/api';
 import { TRACK_SCREEN as W } from '@/blynk/orders/screenWords';
 import { statusLabel } from '@/blynk/orders/status';
@@ -16,6 +17,7 @@ import { BackIcon } from '@/components/icons';
 import { PressScale } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
 import { C, F } from '@/lib/theme';
+import { useBackLikeArrow } from '@/lib/useBackPress';
 
 /*
  * The full-screen tracking map (Flutter's "Full map"): the order's live rider, route and ETA over
@@ -29,6 +31,8 @@ type Tracked = Order & { delivery_latitude?: number | string | null; delivery_lo
 export default function TrackOrder() {
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  // opened by a notification with nothing underneath: Android back goes to the order like the arrow
+  useBackLikeArrow(() => router.replace({ pathname: '/order/[id]', params: { id } }));
   const session = useSession();
   const signedIn = !!session && !needsRegistration(session);
   const [order, setOrder] = useState<Tracked | null>(null);
@@ -47,7 +51,8 @@ export default function TrackOrder() {
   useEffect(load, [load]);
   useEffect(() => {
     if (!order || !isTrackable(order)) return;
-    const t = setInterval(load, POLL_MS);
+    // not while the app is in the background
+    const t = setInterval(() => { if (!appHidden()) load(); }, POLL_MS);
     return () => clearInterval(t);
   }, [order?.order_status, load]);
 

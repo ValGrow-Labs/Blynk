@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  Easing, SharedValue, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
+  Easing, SharedValue, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
   cancelAnimation,
 } from 'react-native-reanimated';
 import Svg, { Defs, Ellipse, LinearGradient as SvgGrad, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -12,8 +12,11 @@ import { graphemes, hasIndic } from '@/blynk/lib/graphemes';
 import { useStore } from '@/blynk/store/StoreContext';
 import { HERO_COPY, HERO_LAYOUT, heroSubSize, heroWaveSpan, heroWordSize, resolveHero } from '@/blynk/promo/heroBanner';
 import { openPromoDestination } from '@/lib/nav';
+import { LOW_END } from '@/lib/lowEnd';
 import { withSpring } from '@/lib/motion';
 import { F } from '@/lib/theme';
+import { useActive } from '@/lib/useActive';
+import { useLoop } from '@/lib/useLoops';
 import { ArrowRight } from './icons';
 import { PressScale } from './ui';
 
@@ -105,12 +108,10 @@ function WaveLetter({ ch, color, size, wave, at, clock }: {
 }
 
 /** Four-point star that blinks in, turns and goes out. */
-function Sparkle({ x, y, delay, size = 12, color = V.yellow, period = 2200 }: { x: number; y: number; delay: number; size?: number; color?: string; period?: number }) {
+function Sparkle({ x, y, delay, size = 12, color = V.yellow, period = 2200, animate }: { x: number; y: number; delay: number; size?: number; color?: string; period?: number; animate: boolean }) {
   const s = useSharedValue(0);
-  useEffect(() => {
-    s.value = withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 260 }), withTiming(0, { duration: 380 }), withTiming(0, { duration: period - 640 })), -1));
-    return () => cancelAnimation(s);
-  }, []);
+  // paused (screen covered, app in the background) or still (reduced motion, low-end phone): the star stays out
+  useLoop(s, () => withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 260 }), withTiming(0, { duration: 380 }), withTiming(0, { duration: period - 640 })), -1)), animate);
   const a = useAnimatedStyle(() => ({ opacity: s.value, transform: [{ scale: 0.3 + s.value * 0.7 }, { rotate: `${s.value * 45}deg` }] }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: x, top: y }, a]}>
@@ -147,12 +148,9 @@ function Saucer() {
 }
 
 /** Dark cloud silhouettes along the top edge, drifting slowly. */
-function Clouds() {
+function Clouds({ animate }: { animate: boolean }) {
   const d = useSharedValue(0);
-  useEffect(() => {
-    d.value = withRepeat(withTiming(1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => cancelAnimation(d);
-  }, []);
+  useLoop(d, () => withRepeat(withTiming(1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true), animate);
   const a = useAnimatedStyle(() => ({ transform: [{ translateX: -d.value * 14 }] }));
   const cloud = 'M0 18 C2 10 10 8 15 11 C17 4 27 2 31 8 C36 4 44 7 44 13 C50 13 52 18 50 20 L2 20 C0 20 0 19 0 18 Z';
   return (
@@ -184,13 +182,14 @@ function Dash({ f, angle, color }: { f: SharedValue<number>; angle: number; colo
 }
 
 /** Rolls between the facts the single sub-line has room for (live mode). */
-function useRoll(lines: string[]) {
+function useRoll(lines: string[], active: boolean) {
   const [i, setI] = useState(0);
   useEffect(() => {
-    if (lines.length < 2) return;
+    // no timer while Home is covered or the app is in the background
+    if (lines.length < 2 || !active) return;
     const t = setInterval(() => setI((n) => n + 1), 3200);
     return () => clearInterval(t);
-  }, [lines.length]);
+  }, [lines.length, active]);
   return lines.length ? lines[i % lines.length] : null;
 }
 
@@ -231,7 +230,12 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
   const nudge = useSharedValue(0);
 
   const lines = useMemo(() => (demo ? [demo.line] : model!.lines), [demo, model]);
-  const rolled = useRoll(lines);
+  // idle motion runs only while Home is in front and the app is in the foreground, and never under reduced
+  // motion or on a low-end phone (the dish stays put and the underline is drawn; slides still turn over)
+  const active = useActive();
+  const reduced = useReducedMotion();
+  const animate = active && !reduced && !LOW_END;
+  const rolled = useRoll(lines, active);
   // more slides (owner, 2026-10-23: "Fresh Groceries, then Fresh Juices, Snacks"): the main banner, then each
   // extra slide, one per cycle; a slide's own line replaces the rolling lines while it shows
   const extra = demo ? [] : model!.slides;
@@ -241,16 +245,24 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
   const [w1, w2] = slide ? slide.title : demo ? demo.title : model!.title;
   const span = demo ? 1 : heroWaveSpan([w1, w2]);
 
-  useEffect(() => {
-    bob.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true);
-    nudge.value = withRepeat(withSequence(withTiming(4, { duration: 280 }), withTiming(0, { duration: 280 }), withTiming(0, { duration: 1000 })), -1);
-    return () => { cancelAnimation(bob); cancelAnimation(nudge); };
-  }, []);
+  useLoop(bob, () => withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true), animate);
+  useLoop(nudge, () => withRepeat(withSequence(withTiming(4, { duration: 280 }), withTiming(0, { duration: 280 }), withTiming(0, { duration: 1000 })), -1), animate);
+
+  useEffect(() => () => cancelAnimation(swing), [swing]);
 
   // One choreographed cycle per dish.
   useEffect(() => {
+    if (!active) return; // covered or in the background: nothing runs
+    if (!animate) {
+      // still: the dish rests in the beam, the underline is drawn, no fireworks or moon
+      item.set(1); sweep.set(1); fire.set(0); moon.set(0); wave.set(0); swing.set(0);
+      if (items.length < 2 && slideCount < 2) return;
+      const turn = setInterval(() => setIdx((i) => i + 1), P);
+      return () => clearInterval(turn);
+    }
     const first = idx === 0;
-    if (!first) {
+    if (first) item.set(1); // (a pause may have caught the dish half way up the beam)
+    else {
       item.value = 0;
       item.value = withSpring(1, { damping: 12, stiffness: 150 });
     }
@@ -263,9 +275,11 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
     if (idx % 2 === 1) moon.value = withDelay(1100, withSequence(withSpring(1, { damping: 9, stiffness: 220 }), withDelay(420, withTiming(0, { duration: 260, easing: Easing.in(Easing.quad) }))));
     wave.value = 0;
     wave.value = withDelay(1100, withTiming(span, { duration: 1000 * span, easing: Easing.linear }));
+    // (not the saucer's swing: it finishes by itself as the next dish drops)
+    const stop = () => { [item, fire, moon, wave, sweep].forEach((v) => cancelAnimation(v)); };
     if (items.length < 2 && slideCount < 2) {
       const t = setTimeout(() => setIdx((i) => i + 1), P);
-      return () => clearTimeout(t);
+      return () => { clearTimeout(t); stop(); };
     }
     const exit = setTimeout(() => {
       // sucked back up the beam while the saucer swings
@@ -273,8 +287,8 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
       swing.value = withSequence(withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 340, easing: Easing.inOut(Easing.quad) }));
     }, P - 380);
     const nextT = setTimeout(() => setIdx((i) => i + 1), P - 120);
-    return () => { clearTimeout(exit); clearTimeout(nextT); };
-  }, [idx, items.length, slideCount, span]);
+    return () => { clearTimeout(exit); clearTimeout(nextT); stop(); };
+  }, [idx, items.length, slideCount, span, active, animate]);
 
   const ufoA = useAnimatedStyle(() => ({
     transform: [
@@ -320,11 +334,11 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#bGlow)" />
       </Svg>
-      <Clouds />
+      <Clouds animate={animate} />
 
       <Animated.View pointerEvents="none" style={[styles.moon, moonA]} />
-      <Sparkle x={168} y={150} delay={300} size={7} color="#fff" />
-      <Sparkle x={214} y={30} delay={1200} size={6} color="#fff" />
+      <Sparkle x={168} y={150} delay={300} size={7} color="#fff" animate={animate} />
+      <Sparkle x={214} y={30} delay={1200} size={6} color="#fff" animate={animate} />
 
       <View style={styles.copy}>
         <WaveWord key={`a${w1}`} word={w1} color={V.white} wave={wave} offset={0} />
@@ -381,9 +395,9 @@ export function Banner({ minPrice, freeCount, freeKind, pointsRule, onOrderNow, 
         <Animated.View style={[styles.saucer, ufoA]}>
           <Saucer />
         </Animated.View>
-        <Sparkle x={150} y={104} delay={1500} size={12} />
-        <Sparkle x={22} y={62} delay={800} size={9} />
-        <Sparkle x={150} y={40} delay={2000} size={8} />
+        <Sparkle x={150} y={104} delay={1500} size={12} animate={animate} />
+        <Sparkle x={22} y={62} delay={800} size={9} animate={animate} />
+        <Sparkle x={150} y={40} delay={2000} size={8} animate={animate} />
       </View>
     </View>
   );

@@ -40,8 +40,12 @@ interface Options {
 
 export async function apiRequest<T>(path: string, opts: Options = {}): Promise<T> {
   const ctrl = new AbortController();
+  // the 15 s covers the whole call, reading the body included: a connection that stalls half way
+  // through an answer must end in an error too, never a spinner for ever
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  opts.signal?.addEventListener('abort', () => ctrl.abort());
+  const onCallerAbort = () => ctrl.abort();
+  if (opts.signal?.aborted) ctrl.abort();
+  else opts.signal?.addEventListener('abort', onCallerAbort, { once: true });
   const method = opts.method ?? 'GET';
   const init: RequestInit = { method, signal: ctrl.signal };
   const headers: Record<string, string> = {};
@@ -51,10 +55,7 @@ export async function apiRequest<T>(path: string, opts: Options = {}): Promise<T
     init.body = JSON.stringify(opts.body);
   }
   if (Object.keys(headers).length) init.headers = headers;
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE_URL}${path}`, init);
-  } catch {
+  const failure = (): ApiError => {
     const timedOut = ctrl.signal.aborted && !opts.signal?.aborted;
     const cancelled = !!opts.signal?.aborted;
     const error = new ApiError(
@@ -64,12 +65,27 @@ export async function apiRequest<T>(path: string, opts: Options = {}): Promise<T
     );
     // a request the screen cancelled itself says nothing about the connection
     if (!cancelled) observe(error);
-    throw error;
+    return error;
+  };
+  let res: Response;
+  let text: string;
+  try {
+    try {
+      res = await fetch(`${API_BASE_URL}${path}`, init);
+    } catch {
+      throw failure();
+    }
+    observe(null);
+    try {
+      text = await res.text();
+    } catch {
+      // the connection dropped (or stalled to the timeout) while the answer was coming in
+      throw failure();
+    }
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener('abort', onCallerAbort);
   }
-  observe(null);
-  const text = await res.text();
   let payload: { success?: boolean; data?: unknown; error?: { code?: string; message?: string; details?: unknown } } = {};
   try { payload = text ? JSON.parse(text) : {}; } catch { /* non-JSON body */ }
   if (res.ok && payload.success !== false) return rewriteMediaUrls(payload.data, MEDIA_ORIGIN) as T;

@@ -44,6 +44,7 @@ import { DEMO } from '@/demo/mode';
 import { cartActions, useCartSelect } from '@/lib/cart';
 import { goBack } from '@/lib/nav';
 import { C, F } from '@/lib/theme';
+import { useBackLikeArrow } from '@/lib/useBackPress';
 
 /*
  * The product page (Flutter ProductDetailsScreen), opened from any product card and from a shared
@@ -55,6 +56,8 @@ import { C, F } from '@/lib/theme';
 export default function ProductPage() {
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  // opened from a shared link with nothing underneath: Android back goes Home like the arrow, not out of the app
+  useBackLikeArrow(goBack);
   const { width, height } = useWindowDimensions();
   const { data } = useCatalog();
   const store = useStore();

@@ -10,6 +10,7 @@ import { LOGIN } from '@/blynk/ui/strings';
 import { appLines } from '@/blynk/lib/appTexts';
 import { useStore } from '@/blynk/store/StoreContext';
 import { withSpring } from '@/lib/motion';
+import { LOW_END } from '@/lib/lowEnd';
 import { splashHandover } from '@/lib/splash';
 import { useActive } from '@/lib/useActive';
 import { C, F } from '@/lib/theme';
@@ -181,9 +182,10 @@ function Scene({ layout, go, reduced, played, onPlayed, bg }: {
     settle.value = withDelay(1050, withTiming(1, { duration: 450 }));
   }, [go, imgReady, reduced]);
 
-  // the idle loop: runs only while showing (paused otherwise), never with reduced motion
+  // the idle loop: runs only while showing (paused otherwise), never with reduced motion or on a low-end phone
+  // (the rider and items then stay where the entrance leaves them)
   useEffect(() => {
-    if (!go || reduced) { cancelAnimation(clock); return; }
+    if (!go || reduced || LOW_END) { cancelAnimation(clock); return; }
     clock.value = 0;
     clock.value = withRepeat(withTiming(1, { duration: HERO.idleMs, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(clock);

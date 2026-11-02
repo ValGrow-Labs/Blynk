@@ -1,8 +1,11 @@
-/** The old Blynk intro's logo (Flutter's splash_logo.png: mark stacked over the wordmark). */
-export const SPLASH_LOGO = require('../../assets/splash-logo.png');
-/** Drawn height in the original: 180 tall, centred on the whole window. */
+/**
+ * The intro's logo: the big B mark on its own, full colour (owner's brother, 2026-11-02: "I need the intro to be this big B", as in the
+ * Ops and Rider apps), not the stacked mark over the "blynk" wordmark the Flutter intro used. Centred on the whole window.
+ */
+export const SPLASH_LOGO = require('../../assets/logo-mark.png');
+/** Drawn height; the mark's own shape (429 x 512) sets the width. */
 export const SPLASH_LOGO_H = 180;
-export const SPLASH_LOGO_W = SPLASH_LOGO_H * (490 / 660);
+export const SPLASH_LOGO_W = SPLASH_LOGO_H * (429 / 512);
 
 /*
  * The intro's hand-over (owner, 2026-10-14: no colour may show through the launch). When the

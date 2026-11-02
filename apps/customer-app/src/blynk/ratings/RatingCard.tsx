@@ -395,7 +395,7 @@ const s = StyleSheet.create({
   },
   err: { fontFamily: F.medium, fontSize: 12.5, color: C.problem, marginTop: 8 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 16, marginTop: 14 },
-  send: { height: 46, borderRadius: 23, paddingHorizontal: 26, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
+  send: { minHeight: 46, borderRadius: 23, paddingHorizontal: 26, paddingVertical: 6, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
   sendTxt: { fontFamily: F.semi, fontSize: 15, color: C.brandInk },
   link: { fontFamily: F.semi, fontSize: 13.5, color: C.brandText },
   quiet: { fontFamily: F.medium, fontSize: 13.5, color: C.sub },

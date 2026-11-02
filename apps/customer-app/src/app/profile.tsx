@@ -12,7 +12,9 @@ import { parseBirthday, validName } from '@/blynk/auth/forms';
 import { formatPhone } from '@/blynk/auth/phone';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
 import { AUTH_ERRORS } from '@/blynk/auth/words';
+import { bottomRoom } from '@/blynk/lib/keyboardMath';
 import { DEMO } from '@/demo/mode';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { C, F } from '@/lib/theme';
 
 /*
@@ -23,6 +25,9 @@ import { C, F } from '@/lib/theme';
  */
 export default function AboutYou() {
   const insets = useSafeAreaInsets();
+  // the keyboard covers the window's bottom: the form ends at its top and scrolls the focused field into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
   const session = useSession();
   const signedIn = !!session && !needsRegistration(session);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
@@ -79,7 +84,7 @@ export default function AboutYou() {
   };
 
   return (
-    <View style={A.screen}>
+    <View style={[A.screen, { paddingBottom: cover }]}>
       <StatusBar style="dark" />
       <ScreenHeader title={W.title} top={insets.top} />
       {DEMO ? (
@@ -94,7 +99,7 @@ export default function AboutYou() {
           ) : <ActivityIndicator color={C.brandInk} />}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 15, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView {...fs.props} ref={fs.ref} contentContainerStyle={{ padding: 15, paddingBottom: bottomRoom(cover, insets.bottom, 40) }} keyboardShouldPersistTaps="handled">
           <Text style={[A.body, { marginBottom: 14 }]}>{W.intro}</Text>
           <Card style={{ padding: 15 }}>
             <Text style={A.label}>{W.nameLabel}</Text>

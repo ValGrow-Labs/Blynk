@@ -19,7 +19,7 @@ import { LoginHero } from '@/components/LoginHero';
 import { PressScale } from '@/components/ui';
 import { LIVE } from '@/demo/cartLive';
 import { DEMO } from '@/demo/mode';
-import { useKeyboardInset } from '@/lib/keyboard';
+import { useKeyboardCover } from '@/lib/keyboard';
 import { goBack } from '@/lib/nav';
 import { splashHandover } from '@/lib/splash';
 import { C, F } from '@/lib/theme';
@@ -51,7 +51,8 @@ export default function Login() {
   const e164 = toE164(num);
   const ready = num.length === LIVE.phoneDigits && !!e164;
   const win = useWindowDimensions();
-  const kb = useKeyboardInset();
+  // what the keyboard really covers (Android: its height plus the gesture / navigation bar under it)
+  const kb = useKeyboardCover();
   // the form's own height (one line taller with an error); a first guess until it is measured
   const [formH, setFormH] = useState(310);
   // web: the window height is already the visual viewport (keyboard off); iOS: take it off here
@@ -175,7 +176,8 @@ const styles = StyleSheet.create({
   cc: { fontFamily: F.semi, fontSize: 15, color: C.ink },
   input: { flex: 1, fontFamily: F.semi, fontSize: 17, color: C.ink, paddingVertical: 6, letterSpacing: 1, outlineStyle: 'none' } as object,
   err: { fontFamily: F.medium, fontSize: 12.5, color: C.problem, marginTop: 10, lineHeight: 17 },
-  cta: { marginTop: 22, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 14.5 },
+  // minHeight: a large system font wraps the label instead of clipping it
+  cta: { marginTop: 22, minHeight: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
+  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 14.5, textAlign: 'center' },
   note: { fontFamily: F.regular, fontSize: 12, color: C.sub, textAlign: 'center', marginTop: 14 },
 });

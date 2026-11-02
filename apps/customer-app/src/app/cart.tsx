@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing, FadeIn, FadeOut, interpolate, interpolateColor, LinearTransition, useAnimatedStyle, useSharedValue,
   withTiming,
@@ -85,8 +85,10 @@ import { LIVE, liveBill, liveOfferRows, type LiveBill } from '@/demo/cartLive';
 import { DEMO } from '@/demo/mode';
 import { withSpring } from '@/lib/motion';
 import { cartActions, getCartSnapshot, useCart, useCartSelect } from '@/lib/cart';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { goBack } from '@/lib/nav';
 import { C, F } from '@/lib/theme';
+import { useBackLikeArrow, useBackPress } from '@/lib/useBackPress';
 
 /*
  * Cart, read frame by frame off the reference (video 0:41–1:20). All copy and fees are the
@@ -123,6 +125,14 @@ const SK = '#E3E3E8';
 
 export default function Cart() {
   const insets = useSafeAreaInsets();
+  // a field in the basket (coupon, someone else's details, a custom tip) opens the keyboard over the window's bottom:
+  // the list ends at its top and scrolls the focused field into view; the bottom panel waits behind the keyboard
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover, insets.top + FEE.contentTop);
+  // nothing underneath (opened cold): Android back goes Home like the arrow
+  useBackLikeArrow(goBack);
+  // the bottom panel's measured height (taller at a large system font): the list keeps its end clear of it
+  const [panelH, setPanelH] = useState(0);
   const cart = useCart();
   const { lines, total, mrpTotal, count, address } = cart;
   // signed in: design mock keeps the local number; live is a registered Blynk session
@@ -435,9 +445,14 @@ export default function Cart() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="dark" />
       <Animated.ScrollView
+        {...fs.props}
+        ref={fs.ref as never}
         entering={FadeIn.duration(100)}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + FEE.contentTop, paddingBottom: 200 + bottomPad }}
+        // "handled": a tap on Apply / a chip with the keyboard up is delivered, not swallowed to close the keyboard
+        keyboardShouldPersistTaps="handled"
+        style={cover > 0 ? { marginBottom: cover } : undefined}
+        contentContainerStyle={{ paddingTop: insets.top + FEE.contentTop, paddingBottom: Math.max(200 + bottomPad, panelH + 24) }}
       >
         {!DEMO && <OfflineBanner onRetry={() => void refresh()} style={{ marginHorizontal: 15, marginBottom: 15 }} />}
         {!DEMO && <ClosedBanner style={{ marginHorizontal: 15, marginBottom: 15 }} />}
@@ -665,7 +680,10 @@ export default function Cart() {
       />
 
       {/* bottom action panel: login → address → (local) place order */}
-      <View style={[styles.bottom, { paddingBottom: bottomPad }]}>
+      <View
+        style={[styles.bottom, { paddingBottom: bottomPad }, cover > 0 && { display: 'none' }]}
+        onLayout={(e) => { const h = Math.ceil(e.nativeEvent.layout.height); if (h > 0 && h !== panelH) setPanelH(h); }}
+      >
         {!phone ? (
           <Animated.View key="login" exiting={FadeOut.duration(150)}>
             <Text style={styles.bottomTitle}>{CART.almost}</Text>
@@ -1326,6 +1344,13 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
   const en = useSharedValue(0);
   const rise = useSharedValue(0);
   const input = useRef<TextInput>(null);
+  // the sheet lifts above the keyboard (its field is focused at once) and shortens on a small phone
+  const cover = useKeyboardCover();
+  const insets = useSafeAreaInsets();
+  const winH = useWindowDimensions().height;
+  const sheetH = Math.max(280, Math.min(547, winH - cover - insets.top - 8));
+  // Android back closes the sheet, not the cart behind it
+  useBackPress(() => { onClose(); });
   useEffect(() => {
     rise.value = withTiming(1, { duration: 340, easing: Easing.out(Easing.cubic) });
   }, []);
@@ -1359,9 +1384,9 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
       .finally(() => setSending(false));
   };
   return (
-    <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(150)} style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' }]}>
+    <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(150)} style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end', paddingBottom: cover }]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      <Animated.View style={[styles.sheet, sheet]}>
+      <Animated.View style={[styles.sheet, { height: sheetH }, sheet]}>
         <Text style={styles.sheetTitle}>{CART.login}</Text>
         <Text style={styles.sheetSub}>{CART.loginSub}</Text>
         <Pressable onPress={() => input.current?.focus()} style={styles.phoneRow}>
@@ -1517,8 +1542,9 @@ const styles = StyleSheet.create({
   whereRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 2 },
   whereTxt: { flex: 1, fontFamily: F.semi, fontSize: 16.8, color: TEXT, lineHeight: 21 },
   change: { fontFamily: F.bold, color: C.brandText, fontSize: 13 },
-  cta: { height: 50, borderRadius: 25, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
-  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 16 },
+  // minHeight: a large system font wraps "Place order | LKR ..." instead of clipping it
+  cta: { minHeight: 50, borderRadius: 25, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, paddingHorizontal: 12 },
+  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 16, textAlign: 'center' },
   veil: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.4)', zIndex: 40 },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 50 },
   modal: { width: 290, backgroundColor: '#fff', borderRadius: 16, paddingTop: 19, paddingBottom: 29, alignItems: 'center', overflow: 'hidden' },

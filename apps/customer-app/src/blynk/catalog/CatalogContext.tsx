@@ -55,11 +55,13 @@ function assemble({ products, groups, promotions, categories: all }: RawCatalog)
   };
 }
 
-/** The catalogue plus a signature of what the server sent: an unchanged shelf must not re-render the whole app. */
-async function loadAll(): Promise<{ data: CatalogData; sig: string }> {
+/**
+ * What the server sent plus a signature of it: an unchanged shelf must not re-render the whole app, and
+ * must not be rebuilt (category tree, lookups) or written to the phone's storage again either.
+ */
+async function loadAll(): Promise<{ raw: RawCatalog; sig: string }> {
   const raw = await loadRaw();
-  writeCatalogCache(raw, Platform.OS !== 'web');
-  return { data: assemble(raw), sig: JSON.stringify(raw) };
+  return { raw, sig: JSON.stringify(raw) };
 }
 
 interface CatalogApi {
@@ -73,26 +75,35 @@ const Ctx = createContext<CatalogApi>({ data: null, error: null, refresh: async 
 
 /** One shared catalogue for every screen: loaded once, refreshed live (SSE / 30 s poll), and the cart reconciled each time. */
 export function CatalogProvider({ children }: { children: ReactNode }) {
-  // the phone shows the last catalogue it saved at once; the fresh one replaces it as soon as it arrives
-  const [data, setData] = useState<CatalogData | null>(() => {
-    if (DEMO) return null;
-    const cached = readCatalogCache(Platform.OS !== 'web');
-    return cached ? assemble(cached) : null;
-  });
+  // the phone shows the last catalogue it saved at once; the fresh one replaces it as soon as it arrives.
+  // The saved copy is read right after the first frame (below), not while it is being drawn: the launch intro
+  // paints first and Home (which mounts ~0.7 s later) finds the shelf already there
+  const [data, setData] = useState<CatalogData | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const seq = useRef(0);
   // what the shown catalogue was built from (the phone's saved copy counts: a live reload equal to it changes nothing)
   const lastSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (DEMO) return;
+    const t = setTimeout(() => {
+      if (lastSig.current !== null) return; // the live answer is already in: it is newer than the saved copy
+      const cached = readCatalogCache(Platform.OS !== 'web');
+      if (cached) setData((cur) => cur ?? assemble(cached));
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
   const refresh = useCallback(async () => {
     if (DEMO) return true;
     const n = ++seq.current;
     try {
-      const { data: d, sig } = await loadAll();
+      const { raw, sig } = await loadAll();
       if (n !== seq.current) return true; // a newer request is in flight; drop the stale answer
       setError(null);
-      // the 30 s safety poll finds the same shelf almost every time: do not re-render every screen for nothing
+      // the safety poll finds the same shelf almost every time: do not rebuild, save or re-render every screen for nothing
       if (sig === lastSig.current) return true;
       lastSig.current = sig;
+      writeCatalogCache(raw, Platform.OS !== 'web');
+      const d = assemble(raw);
       setData(d);
       cartActions.reconcileWith(d.products);
       return true;

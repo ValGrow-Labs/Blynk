@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
-  cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming,
+  Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { useTrackList } from '@/blynk/analytics/AnalyticsHost';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
@@ -14,6 +14,7 @@ import { useStore } from '@/blynk/store/StoreContext';
 import { DEMO } from '@/demo/mode';
 import { openAisle } from '@/lib/nav';
 import { C, F, SPACE, T } from '@/lib/theme';
+import { useLoop, useLoops } from '@/lib/useLoops';
 import { ChevronIcon } from './icons';
 import { ProductCard } from './ProductCard';
 
@@ -31,20 +32,16 @@ const CARD_W = 155; // the same card width as the "Under LKR 300" rail
 /** "Ends in 02:14:09" on the header; red under an hour. Draws nothing once the time is up. */
 function EndsInPill({ endsAtMs }: { endsAtMs: number }) {
   const now = useSecondClock();
-  const reduced = useReducedMotion();
   const text = endsInText(endsAtMs, now);
   const urgent = countdownUrgent(endsAtMs, now);
 
   // a small dot beats once a second beside the time; with reduced motion it just sits there
   const beat = useSharedValue(1);
-  useEffect(() => {
-    if (reduced) { beat.value = 1; return; }
-    beat.value = withRepeat(withSequence(
-      withTiming(0.25, { duration: 500, easing: Easing.inOut(Easing.quad) }),
-      withTiming(1, { duration: 500, easing: Easing.inOut(Easing.quad) }),
-    ), -1);
-    return () => cancelAnimation(beat);
-  }, [reduced, beat]);
+  // beats only while Home is in front and the app in the foreground (and never under reduced motion)
+  useLoop(beat, () => withRepeat(withSequence(
+    withTiming(0.25, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+    withTiming(1, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+  ), -1), useLoops());
   const dotA = useAnimatedStyle(() => ({ opacity: beat.value }));
 
   if (text === null) return null;

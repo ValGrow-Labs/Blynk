@@ -1,46 +1,57 @@
-import { cancelAnimation, Easing, makeMutable, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { AppState } from 'react-native';
+import { cancelAnimation, Easing, makeMutable, withRepeat, withTiming } from 'react-native-reanimated';
+import { createSharedClock, type SharedClock } from '@/blynk/lib/sharedClock';
 
 /*
- * App-wide motion clocks. Instead of every card owning its own JS timer / infinite
- * animation, a handful of shared values loop once on the UI thread and every
- * component just reads them inside useAnimatedStyle. Zero React re-renders.
+ * App-wide motion clocks. Instead of every card owning its own JS timer / infinite animation, a
+ * handful of shared values loop once on the UI thread and every component just reads them inside
+ * useAnimatedStyle. Zero React re-renders.
+ *
+ * Every clock is ref-counted and runs ONLY while at least one consumer holds it (a mounted, focused
+ * screen that is showing something driven by it) AND the app is in the foreground. An infinite
+ * Reanimated loop makes the UI thread render every frame, and every animated view that is already
+ * gone (a screen just removed) makes Reanimated log a failed update on each of those frames (the
+ * "Blynk isn't responding" storm of 2026-11-02), so a clock nobody needs must not exist.
+ * Consumers: `useEffect(() => holdX(), [])`, or behind useActive() / useFocusEffect, and not under
+ * reduced motion or on a low-end phone (src/lib/lowEnd.ts).
  */
-export const flip = makeMutable(0); // 0 = "Offer price", 1 = "You save LKR n" (eases between)
-export const pulse = makeMutable(1); // heartbeat scale for the green hearts
-export const sway = makeMutable(0); // slow 0↔1 for rubber stamps
-
-let started = false;
-export function startClocks() {
-  if (started) return;
-  started = true;
-  flip.value = withRepeat(
-    withSequence(
-      withDelay(2350, withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) })),
-      withDelay(2350, withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) })),
-    ),
-    -1,
-  );
-  pulse.value = withRepeat(
-    withSequence(withTiming(1.25, { duration: 180 }), withTiming(1, { duration: 220 }), withDelay(900, withTiming(1, { duration: 0 }))),
-    -1,
-  );
-  sway.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true);
+const all: SharedClock[] = [];
+let watching = false;
+function watchAppState() {
+  if (watching) return;
+  watching = true;
+  // one listener for every clock: they all pause while the app is in the background
+  AppState.addEventListener('change', (s) => all.forEach((c) => c.setForeground(s === 'active')));
+  const now = AppState.currentState;
+  if (now === 'background' || now === 'inactive') all.forEach((c) => c.setForeground(false));
+}
+function register(c: SharedClock): () => () => void {
+  all.push(c);
+  return () => {
+    watchAppState();
+    return c.hold();
+  };
 }
 
-/*
- * Home's aisle-card corner animation: one linear 0→1 clock every aisle card reads with its own
- * phase (src/components/AisleStamp.tsx). Home runs it only while it is the focused screen.
- */
+/** Home's aisle-card corner animation: one linear 0→1 clock every aisle card reads with its own phase (src/components/AisleStamp.tsx). */
 export const AISLE_BEAT_MS = 7800; // three items × 2.6 s
 export const aisleBeat = makeMutable(0);
-let aisleRunning = false;
-export function runAisleBeat(on: boolean) {
-  if (on === aisleRunning) return;
-  aisleRunning = on;
-  if (!on) { cancelAnimation(aisleBeat); return; }
-  aisleBeat.value = 0;
-  aisleBeat.value = withRepeat(withTiming(1, { duration: AISLE_BEAT_MS, easing: Easing.linear }), -1);
-}
+/** Keeps the aisle clock running until the returned release is called. */
+export const holdAisleBeat = register(createSharedClock(
+  () => {
+    aisleBeat.value = 0;
+    aisleBeat.value = withRepeat(withTiming(1, { duration: AISLE_BEAT_MS, easing: Easing.linear }), -1);
+  },
+  () => cancelAnimation(aisleBeat),
+));
+
+/** The rubber stamps' slow 0↔1 sway (StampBadge). */
+export const sway = makeMutable(0);
+/** Keeps the sway clock running until the returned release is called. */
+export const holdSway = register(createSharedClock(
+  () => { sway.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true); },
+  () => cancelAnimation(sway),
+));
 
 /*
  * The rolling line under product tiles' prices (src/components/PriceRoll.tsx): one linear 0→1
@@ -50,7 +61,6 @@ export function runAisleBeat(on: boolean) {
  */
 export const ROLL_MS = 5600; // ~2.5 s on each line, 0.3 s slides
 export const rollBeat = makeMutable(0);
-let rollHolders = 0;
 const ROLL_TIMING = { duration: ROLL_MS, easing: Easing.linear };
 function startRoll() {
   const from = rollBeat.value % 1;
@@ -62,17 +72,7 @@ function startRoll() {
   });
 }
 /** Keeps the roll clock running until the returned release is called (ref-counted). */
-export function holdPriceRoll(): () => void {
-  rollHolders += 1;
-  if (rollHolders === 1) startRoll();
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    rollHolders = Math.max(0, rollHolders - 1);
-    if (rollHolders === 0) cancelAnimation(rollBeat);
-  };
-}
+export const holdPriceRoll = register(createSharedClock(startRoll, () => cancelAnimation(rollBeat)));
 
 /*
  * Home's end-of-list footer (src/components/HomeFooter.tsx): one linear 0→1 clock over 4 s. The
@@ -81,11 +81,11 @@ export function holdPriceRoll(): () => void {
  */
 export const FOOTER_BEAT_MS = 4000;
 export const footerBeat = makeMutable(0);
-let footerRunning = false;
-export function runFooterBeat(on: boolean) {
-  if (on === footerRunning) return;
-  footerRunning = on;
-  if (!on) { cancelAnimation(footerBeat); return; }
-  footerBeat.value = 0;
-  footerBeat.value = withRepeat(withTiming(1, { duration: FOOTER_BEAT_MS, easing: Easing.linear }), -1);
-}
+/** Keeps the footer clock running until the returned release is called. */
+export const holdFooterBeat = register(createSharedClock(
+  () => {
+    footerBeat.value = 0;
+    footerBeat.value = withRepeat(withTiming(1, { duration: FOOTER_BEAT_MS, easing: Easing.linear }), -1);
+  },
+  () => cancelAnimation(footerBeat),
+));

@@ -25,6 +25,7 @@ import { PressScale, RollingText, Skeleton, useTicker } from '@/components/ui';
 import { DEMO } from '@/demo/mode';
 import { goBack, openAisle } from '@/lib/nav';
 import { C, F } from '@/lib/theme';
+import { useBackLikeArrow } from '@/lib/useBackPress';
 
 const PAGE = 40;
 type Answer = { key: string; results: Product[] | null; total: number; page: number; pages: number; error: string | null };
@@ -44,6 +45,8 @@ const EMPTY: Answer = { key: '', results: null, total: 0, page: 0, pages: 0, err
 export default function Search() {
   const { c, name } = useLocalSearchParams<{ c?: string; name?: string }>();
   const insets = useSafeAreaInsets();
+  // nothing underneath: Android back goes Home like the arrow
+  useBackLikeArrow(goBack);
   const { width } = useWindowDimensions();
   const { data } = useCatalog();
   const [q, setQ] = useState('');

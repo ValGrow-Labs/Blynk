@@ -42,6 +42,22 @@ describe('the shared one-second clock', () => {
     off3();
   });
 
+  it('does not notify while paused (app in the background) and catches up at the next tick', () => {
+    let hidden = true;
+    let t = 1000;
+    const c = createClock({ now: () => t, paused: () => hidden });
+    const a = vi.fn();
+    const off = c.subscribe(a);
+    vi.advanceTimersByTime(3000);
+    expect(a).not.toHaveBeenCalled();
+    hidden = false;
+    t = 5000;
+    vi.advanceTimersByTime(1000);
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(a).toHaveBeenCalledWith(5000);
+    off();
+  });
+
   it('a listener that unsubscribes while being notified does not break the others', () => {
     const c = createClock();
     const b = vi.fn();

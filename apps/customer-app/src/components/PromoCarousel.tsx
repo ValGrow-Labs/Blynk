@@ -11,6 +11,7 @@ import { PROMO } from '@/blynk/ui/strings';
 import { imageUri } from '@/lib/imageUri';
 import { openPromoDestination } from '@/lib/nav';
 import { F } from '@/lib/theme';
+import { useActive } from '@/lib/useActive';
 import { RemoteImage } from './RemoteImage';
 
 /*
@@ -54,6 +55,8 @@ export function PromoCarousel({ promotions, onOpen = openPromoDestination, style
   const slides = useMemo(() => carouselSlides(promotions).map((p) => ({ id: p.id, look: slideLook(p) })), [promotions]);
   const n = slides.length;
   const reduced = useReducedMotion();
+  // no auto-advance timer while Home is covered or the app is in the background
+  const active = useActive();
   const [at, setIdx] = useState(0);
   const [prevAt, setPrev] = useState<number | null>(null);
   // when the list shrinks under the shown slide, start again from the first
@@ -77,12 +80,12 @@ export function PromoCarousel({ promotions, onOpen = openPromoDestination, style
 
   // auto-advance: a slide holds K.hold; after a touch it waits K.resumeAfterTouch from that touch
   useEffect(() => {
-    if (!autoAdvances(n, reduced)) return;
+    if (!autoAdvances(n, reduced) || !active) return;
     const afterTouch = touches !== seenTouches.current;
     seenTouches.current = touches;
     const t = setTimeout(() => change(nextSlide(idx, n), 1), afterTouch ? Math.max(K.hold, K.resumeAfterTouch) : K.hold);
     return () => clearTimeout(t);
-  }, [idx, n, reduced, touches]);
+  }, [idx, n, reduced, touches, active]);
 
   const touched = () => setTouches((c) => c + 1);
 

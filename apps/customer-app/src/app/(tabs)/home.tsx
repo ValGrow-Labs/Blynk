@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing, FadeIn, interpolate, interpolateColor, SlideOutDown,
-  useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withDelay, withRepeat,
+  useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat,
   withSequence, withTiming, type SharedValue,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -25,7 +25,9 @@ import { aisleArt, aislePhase, aisleTint } from '@/blynk/lib/aisleArt';
 import { HOME } from '@/blynk/ui/homeWords';
 import { useFreeClaim } from '@/blynk/store/useFreeClaim';
 import { AisleStamp } from '@/components/AisleStamp';
-import { runAisleBeat } from '@/lib/clock';
+import { holdAisleBeat } from '@/lib/clock';
+import { LOW_END } from '@/lib/lowEnd';
+import { useActive } from '@/lib/useActive';
 import { useStore } from '@/blynk/store/StoreContext';
 import { storage } from '@/blynk/lib/storage';
 import { Banner, useBannerTop } from '@/components/Banner';
@@ -266,12 +268,15 @@ export default function Home() {
 
   // what this customer may be told about free deliveries (guest: new customers; signed in: their own left)
   const claim = useFreeClaim();
-  // the aisle cards' corner animation runs only while Home is the screen in front
+  // the aisle cards' corner animation runs only while Home is the screen in front (and the app in the
+  // foreground: the clock itself pauses in the background), and not at all under reduced motion or on a
+  // low-end phone, where the stamps are drawn still (AisleStamp)
+  const stillStamps = useReducedMotion() || LOW_END;
   useFocusEffect(useCallback(() => {
-    runAisleBeat(true);
+    const release = stillStamps ? undefined : holdAisleBeat();
     setFocused(true);
-    return () => { runAisleBeat(false); setFocused(false); };
-  }, []));
+    return () => { release?.(); setFocused(false); };
+  }, [stillStamps]));
   const live = useMemo(() => {
     if (DEMO) return null;
     const on = filters as FilterId[];
@@ -611,12 +616,14 @@ const HINT_LH = 20;
  * the repeated first line it snaps back to the top; both lines read the same, so the loop is seamless.
  */
 function SlideUpHints({ hints }: { hints: string[] }) {
+  // the slide stops while Home is covered or the app is in the background (no timer, no animation)
+  const active = useActive();
   const y = useSharedValue(0);
   const step = useSharedValue(0);
   const list = hints.length ? [...hints, hints[0]] : [''];
   const n = hints.length;
   useEffect(() => {
-    if (n < 2) return;
+    if (n < 2 || !active) return;
     step.value = 0;
     y.value = 0;
     const t = setInterval(() => {
@@ -629,8 +636,8 @@ function SlideUpHints({ hints }: { hints: string[] }) {
         }
       });
     }, 2000);
-    return () => clearInterval(t);
-  }, [n, hints.join('|')]);
+    return () => { clearInterval(t); cancelAnimation(y); };
+  }, [n, hints.join('|'), active]);
   const a = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return (
     <View style={{ height: HINT_LH, overflow: 'hidden', flexShrink: 1 }}>

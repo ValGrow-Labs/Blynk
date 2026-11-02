@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { type RefObject, useEffect, useRef, useState } from 'react';
-import { BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '@/blynk/api/client';
@@ -11,7 +11,9 @@ import { isFromGate } from '@/blynk/auth/gate';
 import { authErrorText, parseBirthday } from '@/blynk/auth/forms';
 import { BIRTHDAY_WORDS as B, DATE_PARTS } from '@/blynk/auth/words';
 import { PressScale } from '@/components/ui';
+import { bottomRoom, compactForKeyboard } from '@/blynk/lib/keyboardMath';
 import { DEMO } from '@/demo/mode';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { C, F } from '@/lib/theme';
 
 /*
@@ -23,6 +25,11 @@ import { C, F } from '@/lib/theme';
  */
 export default function Birthday() {
   const insets = useSafeAreaInsets();
+  // the keyboard covers the window's bottom: the form ends at its top, folds the header on a short phone
+  // and scrolls the focused field into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
+  const folded = compactForKeyboard(useWindowDimensions().height, cover);
   const gate = isFromGate(useLocalSearchParams<{ gate?: string }>().gate);
   const returnToCart = () => finishSignIn(gate);
   const [d, setD] = useState('');
@@ -75,14 +82,14 @@ export default function Birthday() {
   const digits = (t: string, n: number) => t.replace(/\D/g, '').slice(0, n);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ flex: 1, backgroundColor: '#fff', paddingBottom: cover }}>
       <StatusBar style="dark" />
-      <View style={[styles.head, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>{B.title}</Text>
-        <GiftArt />
+      <View style={[styles.head, { paddingTop: insets.top }, folded && { minHeight: 0, paddingBottom: 10 }]}>
+        <Text style={[styles.title, folded && { marginTop: 10, maxWidth: undefined }]}>{B.title}</Text>
+        {!folded && <GiftArt />}
       </View>
 
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: insets.bottom + 30 }}>
+      <ScrollView {...fs.props} ref={fs.ref} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: bottomRoom(cover, insets.bottom, 30) }}>
         <Text style={styles.body}>{B.body}</Text>
 
         <View style={styles.row}>
@@ -186,8 +193,9 @@ const styles = StyleSheet.create({
   slash: { fontFamily: F.regular, fontSize: 15, color: '#B4B4BC', paddingBottom: 8 },
   errorBox: { minHeight: 52, justifyContent: 'center', paddingVertical: 8 },
   error: { fontFamily: F.medium, fontSize: 11.6, color: C.problem, lineHeight: 15 },
-  cta: { height: 45, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 14 },
+  // minHeight: a large system font wraps the label instead of clipping it
+  cta: { minHeight: 45, borderRadius: 23, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
+  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 14, textAlign: 'center' },
   skip: { alignSelf: 'center', marginTop: 18, paddingVertical: 6, paddingHorizontal: 16 },
   skipTxt: { fontFamily: F.semi, fontSize: 13, color: C.brandText },
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchRiderRoute, openLocationStream } from '@/blynk/api/tracking';
 import { useSession } from '@/blynk/auth/session';
+import { appHidden } from '@/blynk/lib/visibility';
 import { createLocationWatcher, type LocationState } from './locationStream';
 import { trackingView, type RiderRoute, type TrackingView } from './model';
 import { createRouteWatcher, type RouteWatcher } from './routeWatcher';
@@ -44,7 +45,8 @@ export function useLiveTracking(orderId: string | null): TrackingView & { closed
     trackers.add(stop);
     rw.watch(orderId);
     lw.watch(orderId);
-    const tick = setInterval(() => setNow(Date.now()), AGE_TICK_MS);
+    // no re-render every 5 s while the app is in the background (the next tick after it returns catches up)
+    const tick = setInterval(() => { if (!appHidden()) setNow(Date.now()); }, AGE_TICK_MS);
     return () => {
       clearInterval(tick);
       stop();

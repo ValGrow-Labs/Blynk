@@ -14,8 +14,11 @@ import {
 import { useStore } from '@/blynk/store/StoreContext';
 import { PROMO } from '@/demo/home';
 import { DEMO } from '@/demo/mode';
+import { LOW_END } from '@/lib/lowEnd';
 import { openPromoDestination } from '@/lib/nav';
 import { F } from '@/lib/theme';
+import { useActive } from '@/lib/useActive';
+import { useDecorLoops, useLoop } from '@/lib/useLoops';
 import { CheckBoxIcon } from './icons';
 import { RemoteImage } from './RemoteImage';
 import { PressScale } from './ui';
@@ -85,6 +88,8 @@ export function PromoBandView({ model }: { model: PromoBandModel }) {
 /** The headlines, one at a time: each holds, slides up and out, and the next rises in. */
 function SlidingLines({ lines, color, rows }: { lines: string[]; color: string; rows: 1 | 2 }) {
   const reduced = useReducedMotion();
+  // no timer while Home is covered or the app is in the background
+  const active = useActive();
   const [i, setI] = useState(0);
   const y = useSharedValue(0);
   const o = useSharedValue(1);
@@ -93,7 +98,7 @@ function SlidingLines({ lines, color, rows }: { lines: string[]; color: string; 
   useEffect(() => {
     y.value = 0;
     o.value = 1;
-    if (lines.length < 2) return;
+    if (lines.length < 2 || !active) return;
     const advance = () => {
       setI((n) => n + 1);
       if (reduced) return;
@@ -109,8 +114,8 @@ function SlidingLines({ lines, color, rows }: { lines: string[]; color: string; 
         if (done) scheduleOnRN(advance);
       });
     }, T.lineHold);
-    return () => clearInterval(t);
-  }, [key, reduced]);
+    return () => { clearInterval(t); cancelAnimation(y); cancelAnimation(o); };
+  }, [key, reduced, active]);
 
   const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: y.value }] }));
   return (
@@ -125,21 +130,23 @@ function SlidingLines({ lines, color, rows }: { lines: string[]; color: string; 
 /** The rider: waves (today's band) or rides in and bobs on the spot. */
 function Mascot({ kind }: { kind: 'WAVE' | 'RIDE' }) {
   const reduced = useReducedMotion();
+  // the mascot's waving / bobbing is a heavy decorative loop: still under reduced motion and on a low-end phone,
+  // paused while Home is covered or the app is in the background
+  const loops = useDecorLoops();
+  const still = reduced || LOW_END;
   const w = useSharedValue(0);
-  const x = useSharedValue(kind === 'RIDE' && !reduced ? 120 : 0);
+  const x = useSharedValue(kind === 'RIDE' && !still ? 120 : 0);
   useEffect(() => {
-    if (reduced) return;
-    if (kind === 'WAVE') {
-      w.value = withRepeat(withSequence(
-        withTiming(1, { duration: T.waveStep }), withTiming(-1, { duration: T.waveStep }), withTiming(1, { duration: T.waveStep }),
-        withTiming(0, { duration: T.waveStep }), withTiming(0, { duration: T.waveRest }),
-      ), -1);
-    } else {
-      x.value = withTiming(0, { duration: T.rideIn, easing: Easing.out(Easing.cubic) });
-      w.value = withRepeat(withTiming(1, { duration: T.rideBob, easing: Easing.inOut(Easing.sin) }), -1, true);
-    }
-    return () => { cancelAnimation(w); cancelAnimation(x); };
-  }, [kind, reduced]);
+    if (still || kind !== 'RIDE') return;
+    x.value = withTiming(0, { duration: T.rideIn, easing: Easing.out(Easing.cubic) });
+    return () => cancelAnimation(x);
+  }, [kind, still]);
+  useLoop(w, () => (kind === 'WAVE'
+    ? withRepeat(withSequence(
+      withTiming(1, { duration: T.waveStep }), withTiming(-1, { duration: T.waveStep }), withTiming(1, { duration: T.waveStep }),
+      withTiming(0, { duration: T.waveStep }), withTiming(0, { duration: T.waveRest }),
+    ), -1)
+    : withRepeat(withTiming(1, { duration: T.rideBob, easing: Easing.inOut(Easing.sin) }), -1, true)), loops, kind);
   const a = useAnimatedStyle(() => (kind === 'WAVE'
     ? { transform: [{ rotate: `${w.value * 10}deg` }] }
     : { transform: [{ translateX: x.value }, { translateY: -3 * w.value }, { rotate: `${-2 * w.value}deg` }] }));
@@ -149,15 +156,18 @@ function Mascot({ kind }: { kind: 'WAVE' | 'RIDE' }) {
 /** A soft light cone with the item floating in its middle. */
 function Beam({ item, right }: { item: Exclude<BandItem, { kind: 'NONE' }>; right: number }) {
   const reduced = useReducedMotion();
+  const loops = useDecorLoops();
   const drop = useSharedValue(reduced ? 1 : 0);
   const bob = useSharedValue(0);
+  const itemKey = item.kind === 'IMAGE' ? item.uri : item.emoji;
   useEffect(() => {
     if (reduced) { drop.value = 1; return; }
     drop.value = 0;
     drop.value = withSpring(1, { damping: 12, stiffness: 150 });
-    bob.value = withRepeat(withTiming(1, { duration: T.itemBob, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => { cancelAnimation(bob); cancelAnimation(drop); };
-  }, [reduced, item.kind === 'IMAGE' ? item.uri : item.emoji]);
+    return () => cancelAnimation(drop);
+  }, [reduced, itemKey]);
+  // the float: still on a low-end phone, paused while covered or in the background
+  useLoop(bob, () => withRepeat(withTiming(1, { duration: T.itemBob, easing: Easing.inOut(Easing.sin) }), -1, true), loops);
   const beamA = useAnimatedStyle(() => ({ opacity: 0.85 + bob.value * 0.15 }));
   const itemA = useAnimatedStyle(() => ({
     opacity: drop.value < 0.05 ? 0 : 1,

@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeIn, interpolateColor, useAnimatedStyle, useSharedValue, withTiming,
 } from 'react-native-reanimated';
@@ -20,7 +20,11 @@ import { COPY } from '@/demo/cart';
 import { LIVE } from '@/demo/cartLive';
 import { DEMO } from '@/demo/mode';
 import { cartActions } from '@/lib/cart';
+import { otpBackAction } from '@/blynk/auth/backActions';
+import { bottomRoom, compactForKeyboard, otpSlotWidth } from '@/blynk/lib/keyboardMath';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
 import { C, F } from '@/lib/theme';
+import { useScreenBackPress } from '@/lib/useBackPress';
 
 /** Live: "Resend OTP" waits this long after each code (as in the Flutter app). */
 const RESEND_SECS = 30;
@@ -41,6 +45,14 @@ export default function Otp() {
   // opened by the start gate's login: a finished sign-in goes on to the shop (finishSignIn)
   const gate = isFromGate(gateParam);
   const insets = useSafeAreaInsets();
+  // the keyboard (up from the first moment: the code field is focused) covers the window's bottom: the screen
+  // ends at its top, folds the header on a short phone and scrolls the focused field into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
+  const { width, height } = useWindowDimensions();
+  const folded = compactForKeyboard(height, cover);
+  // six cells + five gaps inside the 15 dp side padding: narrower cells on a 320 dp phone
+  const slotW = otpSlotWidth(width - 30);
   const [otp, setOtp] = useState('');
   const [secs, setSecs] = useState(DEMO ? 25 : RESEND_SECS);
   const [busy, setBusy] = useState(false);
@@ -117,27 +129,30 @@ export default function Otp() {
   };
 
   const back = () => {
-    if (busy) return;
-    if (gate) router.replace({ pathname: '/login', params: GATE_PARAMS });
-    else if (router.canGoBack()) router.back();
-    else router.replace('/cart');
+    const to = otpBackAction({ busy, gate, canGoBack: router.canGoBack() });
+    if (to === 'gate-login') router.replace({ pathname: '/login', params: GATE_PARAMS });
+    else if (to === 'back') router.back();
+    else if (to === 'cart') router.replace('/cart');
   };
+  // Android back is the arrow's rule (the start gate has nothing useful underneath; a running request is not abandoned)
+  useScreenBackPress(() => { back(); });
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ flex: 1, backgroundColor: '#fff', paddingBottom: cover }}>
       <StatusBar style="dark" />
-      <View style={[styles.head, { paddingTop: insets.top }]}>
-        <PressScale onPress={back} style={styles.back}><BackIcon size={20} color={C.brandInk} stroke={1.6} /></PressScale>
+      <View style={[styles.head, { paddingTop: insets.top }, folded && { paddingBottom: 14 }]}>
+        <PressScale onPress={back} style={[styles.back, folded && { marginTop: 8 }]}><BackIcon size={20} color={C.brandInk} stroke={1.6} /></PressScale>
         <Text style={styles.title}>{OTP_WORDS.title}</Text>
         <Text style={styles.sub}>{DEMO ? COPY.otpSentTo(phone) : OTP_WORDS.sentTo(formatPhone(phone))}</Text>
-        <PhoneArt />
+        {!folded && <PhoneArt />}
       </View>
 
+      <ScrollView {...fs.props} ref={fs.ref} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: bottomRoom(cover, insets.bottom, 24) }}>
       <Pressable onPress={() => input.current?.focus()} style={{ paddingHorizontal: 15 }}>
-        <Text style={styles.label}>{OTP_WORDS.enter}</Text>
+        <Text style={[styles.label, folded && { marginTop: 14 }]}>{OTP_WORDS.enter}</Text>
         <View style={styles.slots}>
           {Array.from({ length: 6 }, (_, i) => (
-            <Slot key={i} ch={otp[i]} active={i === otp.length} />
+            <Slot key={i} ch={otp[i]} active={i === otp.length} w={slotW} />
           ))}
         </View>
         <TextInput
@@ -181,12 +196,13 @@ export default function Otp() {
           </PressScale>
         )}
       </Pressable>
+      </ScrollView>
     </View>
   );
 }
 
 /** One OTP cell: digit above a 45 px underline; the cell waiting for input is dark and thicker. */
-function Slot({ ch, active }: { ch?: string; active: boolean }) {
+function Slot({ ch, active, w: cellW }: { ch?: string; active: boolean; w: number }) {
   const w = useSharedValue(active ? 1 : 0);
   useEffect(() => {
     w.value = withTiming(active ? 1 : 0, { duration: 150 });
@@ -196,7 +212,7 @@ function Slot({ ch, active }: { ch?: string; active: boolean }) {
     backgroundColor: interpolateColor(w.value, [0, 1], ['#DCDCE0', C.brandInk]),
   }));
   return (
-    <View style={styles.slot}>
+    <View style={[styles.slot, { width: cellW }]}>
       <View style={{ height: 22, justifyContent: 'flex-end', alignItems: 'center' }}>
         {!!ch && <Animated.Text entering={FadeIn.duration(120)} style={styles.digit}>{ch}</Animated.Text>}
       </View>
@@ -234,8 +250,8 @@ const styles = StyleSheet.create({
   hidden: { position: 'absolute', opacity: 0, height: 1, width: 1 },
   retryBox: { height: 72, justifyContent: 'center' },
   retry: { fontFamily: F.regular, fontSize: 11.6, color: '#55555C' },
-  cta: { height: 45, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: C.brandSoft },
-  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 14 },
+  cta: { minHeight: 45, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: C.brandSoft, paddingVertical: 6 },
+  ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 14, textAlign: 'center' },
   resend: { color: C.brandText, fontFamily: F.bold },
   error: { fontFamily: F.medium, fontSize: 11.6, color: C.problem, lineHeight: 15 },
   devChip: {

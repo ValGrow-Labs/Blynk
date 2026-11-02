@@ -10,6 +10,9 @@ import Animated, {
   withTiming, ZoomOut,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFieldScroll, useKeyboardCover } from '@/lib/keyboard';
+import { bottomRoom } from '@/blynk/lib/keyboardMath';
+import { useScreenBackPress } from '@/lib/useBackPress';
 import { useTrackOnce } from '@/blynk/analytics/AnalyticsHost';
 import { trackOutOfZone } from '@/blynk/analytics/track';
 import { AreaIntro } from '@/blynk/area/AreaSteps';
@@ -260,6 +263,8 @@ export function LiveAddressScreen() {
 
   const leave = () => (ret ? router.dismissTo(ret as never) : goBack());
   const back = () => (leavesScreen(flow) ? leave() : dispatch({ type: 'back' }));
+  // Android back steps back through the form / map / area steps like the arrow does (not out of the whole screen)
+  useScreenBackPress(() => { back(); });
 
   return (
     <Animated.View entering={FadeIn.duration(110)} style={{ flex: 1, backgroundColor: '#EFEBE3' }}>
@@ -421,6 +426,9 @@ function AddressForm({ pin, area: autoArea, choices, editing, signedIn, prefill,
   onBack: () => void; onOutOfArea: () => void; onDone: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  // the keyboard covers the window's bottom: the form scrolls above it and brings the focused field into view
+  const cover = useKeyboardCover();
+  const fs = useFieldScroll(cover);
   const guest = getLocationState().guest;
   const startTag = editing
     ? tagFromLabel(editing.label)
@@ -499,7 +507,8 @@ function AddressForm({ pin, area: autoArea, choices, editing, signedIn, prefill,
         <PressScale onPress={onBack} style={styles.backBtn}><BackIcon size={19} color="#111" stroke={2} /></PressScale>
         <Text style={styles.formTitle}>{editing ? T.editTitle : T.addTitle}</Text>
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: insets.bottom + 30 }}>
+      {/* flex: 1 so the form scrolls inside the window; the keyboard overlays the screen on Android 11+, so the list ends at its top (marginBottom) */}
+      <ScrollView {...fs.props} ref={fs.ref} style={{ flex: 1, marginBottom: cover }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: bottomRoom(cover, insets.bottom, 30) }}>
         <View style={styles.pinRow}>
           <SmallPin />
           <View style={{ flex: 1 }}>
@@ -642,7 +651,7 @@ const styles = StyleSheet.create({
   cardHint: { fontFamily: F.regular, fontSize: 12.5, color: '#55555C' },
   placeName: { flex: 1, fontFamily: F.semi, fontSize: 16.5, color: '#111' },
   placeLine: { fontFamily: F.regular, fontSize: 13, color: '#55555C', marginTop: 7, lineHeight: 17, paddingRight: 6 },
-  cta: { height: 50, borderRadius: 25, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', marginTop: 13 },
+  cta: { minHeight: 50, borderRadius: 25, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', marginTop: 13, paddingVertical: 6, paddingHorizontal: 12 },
   ctaTxt: { color: C.brandInk, fontFamily: F.semi, fontSize: 16 },
   form: { backgroundColor: '#fff' },
   formHead: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingHorizontal: 17, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.line },

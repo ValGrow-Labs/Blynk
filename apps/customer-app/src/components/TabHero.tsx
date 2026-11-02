@@ -9,6 +9,7 @@ import { BEAM_ITEMS } from '@/blynk/lib/aisleArt';
 import { formatLkr } from '@/blynk/lib/money';
 import { HELP_HERO, PROFILE_HERO } from '@/blynk/ui/strings';
 import { PressScale } from '@/components/ui';
+import { LOW_END } from '@/lib/lowEnd';
 import { withSpring } from '@/lib/motion';
 import { C, F } from '@/lib/theme';
 import { useActive } from '@/lib/useActive';
@@ -22,7 +23,7 @@ import { useActive } from '@/lib/useActive';
  *
  * One idle clock per hero (HERO_IDLE_MS, linear 0 -> 1) drives every loop through cheap style
  * worklets: transform / opacity only. It runs only while the tab is focused, the page visible and
- * the app in front (useActive), and never under reduced motion (everything drawn in place).
+ * the app in front (useActive), and never under reduced motion or on a low-end phone (everything drawn in place).
  */
 
 const RIDER = require('../../assets/rider.png');
@@ -88,7 +89,7 @@ export function ProfileHero({ top, bleed, signedIn, name, lines, points, chips, 
 }) {
   const reduced = useReducedMotion();
   const active = useActive();
-  const clock = useIdleClock(active && !reduced);
+  const clock = useIdleClock(active && !reduced && !LOW_END);
   const text = useEntrance(reduced, 60, 380);
   const textA = useAnimatedStyle(() => ({ opacity: text.value, transform: [{ translateY: (1 - text.value) * 10 }] }));
   const first = firstName(name);
@@ -263,7 +264,7 @@ function Floating({ emoji, size, left, top, phase, clock, reduced, delay }: {
 export function HelpHero({ top, bleed, status }: { top: number; bleed?: number; status: OpenStatus | null }) {
   const reduced = useReducedMotion();
   const active = useActive();
-  const clock = useIdleClock(active && !reduced);
+  const clock = useIdleClock(active && !reduced && !LOW_END);
   const text = useEntrance(reduced, 60, 380);
   const textA = useAnimatedStyle(() => ({ opacity: text.value, transform: [{ translateY: (1 - text.value) * 10 }] }));
   const chip = useEntrance(reduced, 240, 360);

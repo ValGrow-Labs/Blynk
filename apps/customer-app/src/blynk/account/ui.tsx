@@ -1,5 +1,5 @@
 import { Children, createContext, isValidElement, useContext, useEffect, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   cancelAnimation, Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useReducedMotion, useSharedValue,
   withDelay, withRepeat, withSequence, withTiming,
@@ -9,10 +9,13 @@ import { ENTER, enterDelay } from '@/blynk/account/tabHeroes';
 import { BackIcon, ChevronIcon } from '@/components/icons';
 import { ACCOUNT_COMMON } from './screenWords';
 import { PressScale } from '@/components/ui';
+import { sheetRoom } from '@/blynk/lib/keyboardMath';
+import { useKeyboardCover } from '@/lib/keyboard';
 import { withSpring } from '@/lib/motion';
 import { goBack } from '@/lib/nav';
 import { C, F } from '@/lib/theme';
 import { useActive } from '@/lib/useActive';
+import { useBackLikeArrow, useBackPress } from '@/lib/useBackPress';
 
 /* Small shared pieces of the account screens, in the app's look (white cards on the pale grey). */
 
@@ -21,6 +24,8 @@ const ToneContext = createContext<string>(C.bg);
 
 /** `onBack={null}`: no back button (a tab of the shell has nowhere to go back to). */
 export function ScreenHeader({ title, top, onBack = goBack }: { title: string; top: number; onBack?: (() => void) | null }) {
+  // the hardware back button follows the arrow where the navigator's own back would differ (a tab has no arrow: nothing to do)
+  useBackLikeArrow(onBack ?? goBack, !!onBack && onBack !== goBack, !!onBack);
   return (
     <View style={[s.head, { paddingTop: top + 8 }, !onBack && { paddingLeft: 17 }]}>
       {onBack && <PressScale onPress={onBack} style={{ padding: 4 }}><BackIcon size={20} color={C.text} stroke={1.8} /></PressScale>}
@@ -141,13 +146,30 @@ export function Button({
   );
 }
 
-/** A bottom sheet over a dimmed screen (the app's login sheet look). */
+/**
+ * How tall a sheet's scrolling body may be (`max` with the keyboard down; shorter with it up, so the
+ * title and the field above the keyboard stay on screen). Use it as the ScrollView's maxHeight.
+ */
+export function useSheetRoom(max: number): number {
+  const cover = useKeyboardCover();
+  const { height } = useWindowDimensions();
+  const { top } = useSafeAreaInsets();
+  return sheetRoom({ windowHeight: height, cover, topInset: top, max });
+}
+
+/**
+ * A bottom sheet over a dimmed screen (the app's login sheet look). The Android back button closes
+ * it (a sheet with no `onClose` is a step that cannot be left: back does nothing). It lifts above
+ * the keyboard by itself, so a sheet with a field in it needs nothing extra.
+ */
 export function Sheet({ children, onClose, label }: { children: ReactNode; onClose?: () => void; label: string }) {
   const insets = useSafeAreaInsets();
+  const cover = useKeyboardCover();
+  useBackPress(() => { onClose?.(); });
   return (
-    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={s.backdrop} accessibilityViewIsModal accessibilityLabel={label}>
+    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={[s.backdrop, cover > 0 && { paddingBottom: cover }]} accessibilityViewIsModal accessibilityLabel={label}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={ACCOUNT_COMMON.close} />
-      <Animated.View entering={SlideInDown.duration(260)} exiting={SlideOutDown.duration(180)} style={[s.sheet, { paddingBottom: insets.bottom + 20 }]}>
+      <Animated.View entering={SlideInDown.duration(260)} exiting={SlideOutDown.duration(180)} style={[s.sheet, { paddingBottom: cover > 0 ? 20 : insets.bottom + 20 }]}>
         {children}
       </Animated.View>
     </Animated.View>
@@ -183,9 +205,10 @@ const s = StyleSheet.create({
   rowTitle: { fontFamily: F.semi, fontSize: 14.5, color: C.ink },
   rowSub: { fontFamily: F.regular, fontSize: 12, color: C.sub, marginTop: 2 },
   section: { fontFamily: F.semi, fontSize: 12, color: C.sub, letterSpacing: 0.4, textTransform: 'uppercase', marginTop: 8, marginBottom: 8, marginLeft: 4 },
-  btn: { height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  // minHeight, not height: at a large system font the label wraps instead of being clipped
+  btn: { minHeight: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 8 },
   btnSecondary: { borderWidth: 1, borderColor: C.line },
-  btnTxt: { fontFamily: F.semi, fontSize: 15 },
+  btnTxt: { fontFamily: F.semi, fontSize: 15, textAlign: 'center' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end', zIndex: 50 },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 20, paddingTop: 20 },
   err: { fontFamily: F.medium, fontSize: 13, color: C.problem, lineHeight: 18, marginTop: 8 },

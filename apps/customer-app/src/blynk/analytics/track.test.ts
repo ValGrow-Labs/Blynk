@@ -3,7 +3,7 @@ import type { Product } from '../api/types';
 import {
   cartItems, identify, isPiiKey, listNameFor, productItem, purchaseSent, redact, resetForTests, sanitize, setCatalogIndex, track,
   trackBeginCheckout, trackCartChange, trackEcommerce, trackLogin, trackOutOfZone, trackOutOfZoneError, trackPageView, trackPurchase,
-  trackSearch, trackSelectItem, trackShare, trackShippingInfo, trackSignUp, trackViewCart, trackViewItem, trackViewItemList, PURCHASES_KEY,
+  trackSearch, trackSelectItem, trackShare, trackShippingInfo, trackSignUp, trackViewCart, trackViewItem, trackViewItemList, trackingActive, PURCHASES_KEY,
 } from './track';
 import { storage } from '../lib/storage';
 
@@ -45,6 +45,15 @@ describe('the dataLayer', () => {
     delete g.document;
     expect(track('search', { search_term: 'milk' })).toBe(false);
     expect(g.dataLayer).toEqual([]);
+  });
+
+  test('trackingActive: true only on the web with a GTM dataLayer (the phone skips building events nobody receives)', () => {
+    expect(trackingActive()).toBe(true);
+    delete g.dataLayer;
+    expect(trackingActive()).toBe(false);
+    g.dataLayer = [];
+    delete g.document;
+    expect(trackingActive()).toBe(false);
   });
 
   test('a dataLayer whose push throws never breaks the caller', () => {

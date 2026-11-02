@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 import Animated, { useAnimatedStyle, useReducedMotion, type SharedValue } from 'react-native-reanimated';
 import type { PriceRoll as Roll } from '@/blynk/lib/priceRoll';
 import { holdPriceRoll, rollBeat } from '@/lib/clock';
+import { LOW_END } from '@/lib/lowEnd';
 import { C, F } from '@/lib/theme';
 import { TagIcon } from './icons';
 import { StruckPrice } from './StruckPrice';
@@ -15,7 +16,7 @@ import { StruckPrice } from './StruckPrice';
  * in src/blynk/lib/priceRoll.ts. Every tile reads the one shared clock (rollBeat) with its own
  * phase, so ~20 tiles never move in step and nothing re-renders; the clock runs only while a
  * focused screen holds it. Fixed height (the tile never jumps); line A alone, still, under reduced
- * motion or when there is no clean saving. A screen reader gets both facts as one label.
+ * motion, on a low-end phone (src/lib/lowEnd.ts) or when there is no clean saving. A screen reader gets both facts as one label.
  */
 export const ROLL_LH = 17;
 const HOLD = 0.446; // share of the loop each line rests (2 × 0.446 + 2 × 0.054 slides = 1)
@@ -29,7 +30,8 @@ export const PriceRoll = memo(function PriceRoll({ roll, phase, money, style }: 
   style?: StyleProp<ViewStyle>;
 }) {
   const reduced = useReducedMotion();
-  const moving = !!roll.saving && !reduced;
+  // line A alone on a low-end phone: twenty tiles of sliding lines are too much for it
+  const moving = !!roll.saving && !reduced && !LOW_END;
   // only while this screen is the one in front (Home stays mounted under a product page)
   useFocusEffect(useCallback(() => (moving ? holdPriceRoll() : undefined), [moving]));
   const lineA = <StruckPrice struck={roll.struck} money={money} style={styles.struck} />;

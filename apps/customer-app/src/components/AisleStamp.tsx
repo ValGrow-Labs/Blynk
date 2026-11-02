@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 import Animated, { useAnimatedStyle, useReducedMotion, type SharedValue } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { aisleBeat } from '@/lib/clock';
+import { LOW_END } from '@/lib/lowEnd';
 import { C } from '@/lib/theme';
 
 /*
@@ -11,7 +12,7 @@ import { C } from '@/lib/theme';
  * with no claim text - the ring holds the aisle's own illustrated grocery items, which pop in
  * one after another, bob, and pop out (2.6 s each). Every card reads the one shared clock
  * (aisleBeat) with its own phase, so cards never move in step and nothing re-renders.
- * Transform / opacity only. Static under reduced motion.
+ * Transform / opacity only. Static under reduced motion and on a low-end phone (src/lib/lowEnd.ts).
  */
 const TWO_PI = Math.PI * 2;
 
@@ -22,7 +23,8 @@ export const AisleStamp = memo(function AisleStamp({ items, phase, size = 60, st
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const reduced = useReducedMotion();
+  // still under reduced motion and on a low-end phone (twenty stamps = eighty animated views)
+  const reduced = useReducedMotion() || LOW_END;
   return (
     <View pointerEvents="none" style={[{ width: size, height: size }, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {reduced ? <StillStamp items={items} size={size} /> : <MovingStamp items={items} phase={phase} size={size} beat={aisleBeat} />}

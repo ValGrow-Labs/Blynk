@@ -2,7 +2,7 @@ import { useGlobalSearchParams, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useSession } from '@/blynk/auth/session';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
-import { identify, setCatalogIndex, trackPageView, trackSearch, trackViewItemList } from './track';
+import { identify, setCatalogIndex, trackingActive, trackPageView, trackSearch, trackViewItemList } from './track';
 
 /*
  * The React side of the GTM events (src/blynk/analytics/track.ts holds the events themselves).
@@ -36,7 +36,8 @@ export function AnalyticsHost() {
   }, [path, query]);
 
   useEffect(() => {
-    if (data) setCatalogIndex({ categories: data.categories, topOf: data.topOf, products: data.products });
+    // nobody listens on the phone: do not index the whole catalogue for events that are never sent
+    if (data && trackingActive()) setCatalogIndex({ categories: data.categories, topOf: data.topOf, products: data.products });
   }, [data]);
 
   return null;
@@ -48,7 +49,7 @@ export function AnalyticsHost() {
  */
 export function useTrackList(name: string | null | undefined, products: Parameters<typeof trackViewItemList>[1]) {
   const sent = useRef(new Set<string>());
-  const ready = !!name && products.length > 0;
+  const ready = !!name && products.length > 0 && trackingActive();
   useEffect(() => {
     if (!ready || !name || sent.current.has(name)) return;
     // after this commit, so the screen's page_view is already out
@@ -67,7 +68,7 @@ export function useTrackList(name: string | null | undefined, products: Paramete
 export function useTrackOnce(when: boolean, key: string, fire: () => void) {
   const sent = useRef(new Set<string>());
   useEffect(() => {
-    if (!when || sent.current.has(key)) return;
+    if (!when || sent.current.has(key) || !trackingActive()) return;
     // after this commit, so the screen's page_view is already out
     const t = setTimeout(() => {
       if (sent.current.has(key)) return;
