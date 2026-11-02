@@ -2,7 +2,7 @@
   "expo": {
     "name": "Blynk",
     "slug": "blynk",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,14 +11,13 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0C831F",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "lk.blynk.customer",
-      "versionCode": 1,
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "INTERNET",

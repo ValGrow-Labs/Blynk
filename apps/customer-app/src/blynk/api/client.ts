@@ -1,8 +1,11 @@
 import { API_WORDS } from './words';
+import { mediaOrigin, rewriteMediaUrls } from '../lib/mediaUrl';
 
 /** Blynk API base. Expo inlines EXPO_PUBLIC_* at build time, so read it as a plain property. */
 export const API_BASE_URL: string = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:4000/api/v1';
 export const REQUEST_TIMEOUT_MS = 15_000;
+/** Uploaded pictures are read through the API host (Cloudflare-cached), see lib/mediaUrl.ts. */
+const MEDIA_ORIGIN = mediaOrigin(API_BASE_URL);
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string, readonly details?: unknown) {
@@ -69,7 +72,7 @@ export async function apiRequest<T>(path: string, opts: Options = {}): Promise<T
   const text = await res.text();
   let payload: { success?: boolean; data?: unknown; error?: { code?: string; message?: string; details?: unknown } } = {};
   try { payload = text ? JSON.parse(text) : {}; } catch { /* non-JSON body */ }
-  if (res.ok && payload.success !== false) return payload.data as T;
+  if (res.ok && payload.success !== false) return rewriteMediaUrls(payload.data, MEDIA_ORIGIN) as T;
   // 502 OTP_DELIVERY_FAILED is a 5xx the customer must understand; keep its code, not the server text
   if (res.status >= 500) throw new ApiError(API_WORDS.server, res.status, payload.error?.code, payload.error?.details);
   throw new ApiError(payload.error?.message ?? API_WORDS.failed, res.status, payload.error?.code, payload.error?.details);

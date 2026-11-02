@@ -1,4 +1,4 @@
-import { POSITION_TIMEOUT_MS, validFix, type PositionResult } from './position';
+import { POSITION_TIMEOUT_MS, validFix, type PositionResult } from './positionShared';
 
 /*
  * The phone's GPS fix on top of expo-location (SDK 57): foreground permission, then

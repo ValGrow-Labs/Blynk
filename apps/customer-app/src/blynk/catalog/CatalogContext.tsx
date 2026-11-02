@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { cartActions } from '@/lib/cart';
 import { getCategories, getHomeGroups, getPromotions } from '../api/catalog';
 import { ApiError } from '../api/client';
@@ -9,6 +10,7 @@ import { startCatalogLive } from '../lib/catalogLive';
 import { loadAllProducts } from '../lib/loadAllProducts';
 import { effectivePrice } from '../lib/pricing';
 import { buildCategoryTree, type MainNode } from './tree';
+import { readCatalogCache, writeCatalogCache, type RawCatalog } from './catalogCache';
 import { productsInCategory } from './membership';
 import { appHidden } from '../lib/visibility';
 import { DEMO } from '@/demo/mode';
@@ -30,13 +32,20 @@ export interface CatalogData {
   chainOf: (id: string) => string[];
 }
 
-async function loadAll(): Promise<CatalogData> {
-  const products = await loadAllProducts();
-  const [{ groups }, { promotions }, all] = await Promise.all([
+/** Everything the shelf needs, requested at once: the small lists do not wait for the (paged) products. */
+async function loadRaw(): Promise<RawCatalog> {
+  const rest = Promise.all([
     getHomeGroups(),
     getPromotions().catch(() => ({ promotions: [] as Promotion[] })),
     getCategories().then((r) => r.categories).catch(() => [] as Category[]),
   ]);
+  rest.catch(() => undefined); // if the products fail first, this must not become an unhandled rejection
+  const products = await loadAllProducts();
+  const [{ groups }, { promotions }, categories] = await rest;
+  return { products, groups, promotions, categories };
+}
+
+function assemble({ products, groups, promotions, categories: all }: RawCatalog): CatalogData {
   const aisles: Category[] = groups.flatMap((g) => g.categories);
   // Home groups list top-level categories only; products can sit in a child category, so roll them up.
   const categories = all.length ? all : aisles;
@@ -44,6 +53,12 @@ async function loadAll(): Promise<CatalogData> {
     products, aisles, categories, promotions, groups, tree: buildCategoryTree(groups, categories),
     topOf: topLevelOf(categories), chainOf: ancestorsOf(categories),
   };
+}
+
+async function loadAll(): Promise<CatalogData> {
+  const raw = await loadRaw();
+  writeCatalogCache(raw, Platform.OS !== 'web');
+  return assemble(raw);
 }
 
 interface CatalogApi {
@@ -57,7 +72,12 @@ const Ctx = createContext<CatalogApi>({ data: null, error: null, refresh: async 
 
 /** One shared catalogue for every screen: loaded once, refreshed live (SSE / 30 s poll), and the cart reconciled each time. */
 export function CatalogProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<CatalogData | null>(null);
+  // the phone shows the last catalogue it saved at once; the fresh one replaces it as soon as it arrives
+  const [data, setData] = useState<CatalogData | null>(() => {
+    if (DEMO) return null;
+    const cached = readCatalogCache(Platform.OS !== 'web');
+    return cached ? assemble(cached) : null;
+  });
   const [error, setError] = useState<ApiError | null>(null);
   const seq = useRef(0);
   const refresh = useCallback(async () => {

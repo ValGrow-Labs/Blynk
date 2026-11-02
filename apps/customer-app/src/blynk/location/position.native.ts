@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
 import { createNativePosition } from './nativePosition';
-import { locateWith } from './position';
+import { locateWith } from './positionShared';
 
-export * from './position';
+export * from './positionShared';
 export const getCurrentPosition = createNativePosition(Location);
 
 /** Resolves a fix, rejects with { code } like the browser (so area/flow.ts gpsFailureOf keeps working). */
