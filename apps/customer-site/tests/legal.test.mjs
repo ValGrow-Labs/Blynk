@@ -135,6 +135,38 @@ test('the owner\'s choices are filled in', () => {
   for (const s of ['credited within 24 hours', 'contact us by phone or WhatsApp , or through the app']) assert.ok(r.includes(s), `refunds: "${s}"`);
 });
 
+test('the privacy policy has an "Advertising and measurement" section (2026-11-03)', () => {
+  const html = pages.privacy;
+  const ids = [...html.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(ids.slice(4, 7), ['cookies-and-tracking', 'advertising-and-measurement', 'how-long-we-keep-it']);
+  assert.match(html, /<li><a href="#advertising-and-measurement">6\. Advertising and measurement<\/a><\/li>/);
+  const m = html.match(/<section id="advertising-and-measurement"[\s\S]*?<\/section>/);
+  assert.ok(m, 'the section is there');
+  const s = visible(m[0]);
+  for (const x of [
+    'Google Tag Manager, Google Analytics, Google Ads and the Meta (Facebook and Instagram) Pixel',
+    'to show our products to people who looked at them',
+    'The pages and products you view and the words you search for',
+    'add something to your cart, start checkout or place an order',
+    'Cookies and identifiers from your browser or device',
+    'payment card details (we never see them), and your name, phone number, email address or delivery address',
+    'These tools only run fully if you have not opted out.',
+    'Do Not Track',
+    'Global Privacy Control',
+    'adssettings.google.com',
+    'tools.google.com/dlpage/gaoptout',
+    'facebook.com/adpreferences',
+    'The Android app uses Google Analytics for Firebase and Firebase Crashlytics to understand how the app is used and to find crashes.',
+    'anonymous usage and crash data',
+  ]) assert.ok(s.includes(x), `advertising section: "${x}"`);
+  // Said honestly: no promise of a cookie banner, and no personal details sent.
+  assert.doesNotMatch(s, /banner/i);
+  // The rest of the policy points to it.
+  const all = visible(html);
+  assert.ok(all.includes('see section 6, Advertising and measurement'));
+  assert.ok(all.includes('Section 6 explains what these tools receive and how to opt out.'));
+});
+
 test('details the owner has not given are left out cleanly', () => {
   const c = readConfig();
   for (const k of ['businessRegistrationNo', 'registeredAddress', 'supportEmail', 'privacyEmail', 'dataProtectionContact']) {
@@ -174,12 +206,12 @@ test('once the owner fills in the details they appear on the pages', () => {
 
 test('each page: owner title, Last updated date, a contents list that matches its sections, no tracking', () => {
   const c = readConfig();
-  assert.equal(c.lastUpdated, '2026-11-01');
+  assert.equal(c.lastUpdated, '2026-11-03');
   const titles = { terms: 'Terms and Conditions', privacy: 'Privacy Policy', refunds: 'Return, Refund and Cancellation Policy' };
   for (const n of NAMES) {
     const html = pages[n];
     assert.match(html, new RegExp(`<h1>${titles[n].replace(/[,]/g, '\\$&')}</h1>`), n);
-    assert.match(html, /<p class="legal-meta">Last updated: <time datetime="2026-11-01">1 November 2026<\/time><\/p>/, n);
+    assert.match(html, /<p class="legal-meta">Last updated: <time datetime="2026-11-03">3 November 2026<\/time><\/p>/, n);
     const toc = [...html.match(/<nav class="legal-toc"[\s\S]*?<\/nav>/)[0].matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
     const sections = [...html.matchAll(/<section id="([^"]+)"/g)].map((m) => m[1]);
     assert.ok(toc.length >= 7, `${n}: ${toc.length} contents entries`);

@@ -591,6 +591,21 @@ export class CatalogService {
     };
   }
 
+  /**
+   * Every product the customer catalogue lists right now (the same read and the same customer
+   * payload as listProducts, in one go), with the active variants of those that have any. Used
+   * by the Meta catalogue feed (modules/feeds). Capped so a runaway table cannot exhaust memory.
+   */
+  async listAllForFeed(cap = 5000): Promise<{ products: CustomerProductDto[]; variants: Map<string, CustomerVariantDto[]> }> {
+    const rawProducts = await catalogRepository.findActiveProducts({ limit: cap, offset: 0 });
+    const variants = await customerVariantsFor(
+      db,
+      rawProducts.filter((p) => p.has_variants).map((p) => p.id)
+    );
+    const avail = await loadAvailability();
+    return { products: rawProducts.map((p) => toCustomerProduct(p, variants.get(p.id), false, avail)), variants };
+  }
+
   async getProductById(idOrSlug: string): Promise<CustomerProductDto> {
     const rawProduct = await catalogRepository.findActiveProductById(idOrSlug);
 

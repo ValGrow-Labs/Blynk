@@ -28,7 +28,7 @@ This policy explains how **{{business}}**, operating Blynk.lk, collects and uses
 5. To prevent fraud and keep the Platform secure.
 6. To improve our product range, app and service using usage data.
 7. To send offers and updates by SMS, WhatsApp, email or app notification, **only if you agree**. You can opt out at any time.
-8. To show you Blynk ads on other websites and social media (remarketing), through cookies, where you allow it.
+8. To show you Blynk ads on other websites and social media (remarketing), through cookies, unless you opt out (see section 6, Advertising and measurement).
 9. To meet legal, tax and accounting duties.
 
 ### 3. Legal basis
@@ -52,9 +52,29 @@ Some providers may store data outside Sri Lanka. Where this happens, we take ste
 
 ### 5. Cookies and tracking
 
-We use cookies and Google Tag Manager to keep you logged in, remember your cart, measure how the Platform is used and run remarketing ads. You can block or delete cookies in your browser. Essential features such as login and cart may stop working if you do.
+We use cookies and Google Tag Manager to keep you logged in, remember your cart, measure how the Platform is used and run remarketing ads. Section 6 explains what these tools receive and how to opt out. You can block or delete cookies in your browser. Essential features such as login and cart may stop working if you do.
 
-### 6. How long we keep it
+### 6. Advertising and measurement
+
+On our website and web app (blynk.lk) we use Google Tag Manager, Google Analytics, Google Ads and the Meta (Facebook and Instagram) Pixel. We use them to count visits, to see which products people look at, and to show our products to people who looked at them, for example in their Facebook or Instagram feed.
+
+What these tools receive:
+
+- The pages and products you view and the words you search for
+- When you add something to your cart, start checkout or place an order: the products, quantities and the order total
+- Cookies and identifiers from your browser or device, such as your browser and device type, your IP address and the ad you clicked to reach us
+
+What they do not receive: payment card details (we never see them), and your name, phone number, email address or delivery address. If you are signed in, they get only a scrambled code that cannot be turned back into your details.
+
+These tools only run fully if you have not opted out. If your browser sends a "Do Not Track" or "Global Privacy Control" signal, we switch advertising cookies and the Meta Pixel off, and Google's tools receive only anonymous counts without cookies. You can also opt out yourself:
+
+- In your browser settings: block or delete cookies, or turn on Do Not Track or Global Privacy Control
+- Google: manage or turn off personalised ads at adssettings.google.com, and turn off Google Analytics for your browser at tools.google.com/dlpage/gaoptout
+- Meta (Facebook and Instagram): choose how your activity is used for ads at facebook.com/adpreferences
+
+The Android app uses Google Analytics for Firebase and Firebase Crashlytics to understand how the app is used and to find crashes. They collect anonymous usage and crash data, such as the screens opened, the app version, your phone model and Android version, and a random installation ID. They do not receive your name, phone number or address.
+
+### 7. How long we keep it
 
 - Account data — while your account is active, and up to **12 months** after you close it
 - Order and payment records — up to **6 years** for tax and accounting
@@ -63,11 +83,11 @@ We use cookies and Google Tag Manager to keep you logged in, remember your cart,
 - Seller applications — we use what you send at blynk.lk/seller only to call you about selling with Blynk, keep it for up to **12 months**, and delete it when you ask us to
 - Marketing data — until you opt out
 
-### 7. Security
+### 8. Security
 
 We protect your data with access controls, encrypted connections (HTTPS) and limited staff access. Riders see only the details needed for their delivery. No system is fully secure. If a breach is likely to harm you, we will notify you and the Data Protection Authority as the law requires.
 
-### 8. Your rights
+### 9. Your rights
 
 Under the PDPA you can ask us to:
 
@@ -79,15 +99,15 @@ Under the PDPA you can ask us to:
 
 Send requests to {{privacyRequestsTo}}. We will respond within **21** working days. If you are not satisfied, you may complain to the Data Protection Authority of Sri Lanka.
 
-### 9. Children
+### 10. Children
 
 The Platform is not intended for children under 18 without a parent or guardian. We do not knowingly collect data from children without that consent.
 
-### 10. Changes
+### 11. Changes
 
 We may update this policy. The new version will be posted here with a new date, and important changes will be announced in the app.
 
-### 11. Contact
+### 12. Contact
 
 Data protection contact: {{?dataProtectionContact}}
 

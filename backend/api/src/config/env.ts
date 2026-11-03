@@ -56,6 +56,10 @@ const envSchema = z.object({
   // origin clients use to fetch what's stored there.
   MEDIA_ROOT: z.string().default('uploads'),
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+  // The API's public address behind Cloudflare (no path). The Meta catalogue feed
+  // (modules/feeds) points product pictures at it, because pictures stored under the
+  // raw server address are slow and not cached (same reason as the apps' mediaUrl.ts).
+  PUBLIC_API_ORIGIN: z.string().url().default('https://blynk-api.valgrowlabs.com'),
   // Rider documents (migration 039; owner, 2026-10-10): identity and vehicle
   // documents are PRIVATE. This directory is never served statically - only
   // through authenticated endpoints - and must not sit inside MEDIA_ROOT.

@@ -16,6 +16,7 @@ import { checkDatabaseConnection, pool } from './database/connection.js';
 // Module routers
 import { authRouter } from './modules/auth/index.js';
 import { usersRouter, meRouter } from './modules/users/index.js';
+import { feedsRouter } from './modules/feeds/index.js';
 import { catalogRouter, categoriesRouter, combosRouter, productsRouter } from './modules/catalog/index.js';
 import { pricingRouter } from './modules/pricing/index.js';
 import { inventoryRouter } from './modules/inventory/index.js';
@@ -183,6 +184,8 @@ export function createApp(): Express {
   apiRouter.use('/audit', auditRouter);
   apiRouter.use('/configuration', configurationRouter);
   apiRouter.use('/store', storeRouter);
+  // Public: the Meta (Facebook / Instagram) product catalogue feed, XML and CSV (2026-11-03).
+  apiRouter.use('/feeds', feedsRouter);
   // Public: where a printed QR code leads (owner, 2026-10-22).
   apiRouter.use('/go', goRouter);
   // Public: the staff apps' update policy (in-app updates, owner 2026-10-12).
