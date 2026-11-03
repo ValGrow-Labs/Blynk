@@ -95,6 +95,22 @@ import type {
   SalesRange,
   SalesReport,
   SmsLanguage,
+  SmsArea,
+  SmsCampaign,
+  SmsCampaignDetail,
+  SmsCampaignInput,
+  SmsCampaignKind,
+  SmsCampaignPatch,
+  SmsCampaignPreviewInput,
+  SmsCampaignStatus,
+  SmsHistoryItem,
+  SmsLimitsInput,
+  SmsLimitsSetting,
+  SmsMessages,
+  SmsPlaceholder,
+  SmsSendingInput,
+  SmsSendingSetting,
+  SmsTemplate,
   SmsOffer,
   SmsOfferEstimate,
   SmsOfferInput,
@@ -958,9 +974,19 @@ export const smsOffers = {
       (d) => d.estimate
     ),
 
-  /** Opening hours only (422 OUTSIDE_SENDING_HOURS; owner, 2026-10-10). */
+  /**
+   * Sends now (422 QUIET_HOURS / OUTSIDE_SENDING_HOURS / SMS_BUDGET_EXCEEDED when the SMS sending rules
+   * say no), or, with `send_at`, schedules it: the answer is then the ONCE campaign.
+   */
   send: (input: SmsOfferInput) =>
-    apiRequest<{ offer: SmsOfferSent }>('/admin/sms-offers', { method: 'POST', body: { ...input } }).then((d) => d.offer),
+    apiRequest<{ offer?: SmsOfferSent; campaign?: SmsCampaign }>('/admin/sms-offers', { method: 'POST', body: { ...input } }),
+
+  /** Placeholders the texts may use ({name} {points} {wallet} {app_link}). */
+  placeholders: () =>
+    apiRequest<{ placeholders: SmsPlaceholder[]; max_chars: number }>('/admin/sms-placeholders').then((d) => d.placeholders ?? []),
+
+  /** Towns customers have addresses in, most customers first (the CUSTOM audience's `areas`). */
+  areas: () => apiRequest<{ areas: SmsArea[] }>('/admin/sms-offers/areas').then((d) => d.areas ?? []),
 
   /**
    * To `phone` when given (Sri Lankan mobile), else the signed-in staff
@@ -974,6 +1000,53 @@ export const smsOffers = {
 
   /** Newest first. */
   list: () => apiRequest<{ offers: SmsOffer[] }>('/admin/sms-offers').then((d) => d.offers),
+};
+
+/** Scheduled and automatic SMS (backend migration 066, 2026-11-03). ADMIN and OPERATIONS. */
+export const smsCampaigns = {
+  list: (filter: { status?: SmsCampaignStatus; kind?: SmsCampaignKind } = {}) => {
+    const q = new URLSearchParams();
+    if (filter.status) q.set('status', filter.status);
+    if (filter.kind) q.set('kind', filter.kind);
+    const qs = q.toString();
+    return apiRequest<{ campaigns: SmsCampaign[] }>(`/admin/sms-campaigns${qs ? `?${qs}` : ''}`).then((d) => d.campaigns);
+  },
+  get: (id: string) => apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}`).then((d) => d.campaign),
+  create: (input: SmsCampaignInput) =>
+    apiRequest<{ campaign: SmsCampaign }>('/admin/sms-campaigns', { method: 'POST', body: { ...input } }).then((d) => d.campaign),
+  /** Edits future runs only; `messages` is the whole set. */
+  update: (id: string, patch: SmsCampaignPatch) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}`, { method: 'PATCH', body: { ...patch } }).then((d) => d.campaign),
+  pause: (id: string) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}/pause`, { method: 'POST' }).then((d) => d.campaign),
+  resume: (id: string) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}/resume`, { method: 'POST' }).then((d) => d.campaign),
+  cancel: (id: string) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}/cancel`, { method: 'POST' }).then((d) => d.campaign),
+  /** Same numbers as the offer estimate; a TRIGGER previews who it would text today. */
+  preview: (input: SmsCampaignPreviewInput) =>
+    apiRequest<{ preview: SmsOfferEstimate }>('/admin/sms-campaigns/preview', { method: 'POST', body: { ...input } }).then((d) => d.preview),
+  /** Offers sent now and campaign runs, newest first. */
+  history: (limit?: number) =>
+    apiRequest<{ items: SmsHistoryItem[] }>(`/admin/sms-campaigns/history${limit ? `?limit=${limit}` : ''}`).then((d) => d.items),
+};
+
+/** Saved SMS texts (name + Sinhala / Tamil / English). */
+export const smsTemplates = {
+  list: () => apiRequest<{ templates: SmsTemplate[] }>('/admin/sms-templates').then((d) => d.templates ?? []),
+  create: (name: string, messages: SmsMessages) =>
+    apiRequest<{ template: SmsTemplate }>('/admin/sms-templates', { method: 'POST', body: { name, messages } }).then((d) => d.template),
+  update: (id: string, name: string, messages: SmsMessages) =>
+    apiRequest<{ template: SmsTemplate }>(`/admin/sms-templates/${id}`, { method: 'PUT', body: { name, messages } }).then((d) => d.template),
+  remove: (id: string) => apiRequest<{ deleted: boolean }>(`/admin/sms-templates/${id}`, { method: 'DELETE' }),
+};
+
+/** SMS sending rules: send at any time / quiet hours, per-customer cap and monthly budget. */
+export const smsRules = {
+  getSending: () => apiRequest<SmsSendingSetting>('/admin/settings/sms-sending'),
+  setSending: (body: SmsSendingInput) => apiRequest<SmsSendingSetting>('/admin/settings/sms-sending', { method: 'PUT', body: { ...body } }),
+  getLimits: () => apiRequest<SmsLimitsSetting>('/admin/settings/sms-limits'),
+  setLimits: (body: SmsLimitsInput) => apiRequest<SmsLimitsSetting>('/admin/settings/sms-limits', { method: 'PUT', body: { ...body } }),
 };
 
 /** Rider applications from the Rider app, reviewed by Admin or Operations. */

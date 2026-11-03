@@ -404,6 +404,8 @@ describe('Settings - texts on closed days (owner, 2026-10-10)', () => {
     const toggle = within(panel).getByRole('checkbox', { name: /^Send offer\/birthday texts on closed days/ });
     expect(toggle).toBeChecked();
     expect(panel).toHaveTextContent('still go out on a closed weekday');
+    // 2026-11-03: the SMS sending rules decide first; this switch only matters with "Send at any time" off.
+    expect(within(panel).getByTestId('closed-day-sms-note')).toHaveTextContent('Only used when "Send at any time" is off in SMS sending rules.');
     await user.click(toggle);
     expect(panel).toHaveTextContent("A birthday text then goes out on the next open day, if it is still the customer's birthday week.");
     await user.click(within(panel).getByRole('button', { name: 'Save' }));

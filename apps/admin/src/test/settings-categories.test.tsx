@@ -48,7 +48,7 @@ describe('Settings categories', () => {
     renderAt('/settings');
     expect(screen.getByRole('tablist', { name: 'Settings categories' })).toBeInTheDocument();
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Deliveries7', 'Riders2', 'Orders and payments4', 'Customers and rewards5', 'App1']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Deliveries7', 'Riders2', 'Orders and payments4', 'Customers and rewards6', 'App1']);
     expect(NAMES.every((n, i) => tabs[i].textContent?.startsWith(n))).toBe(true);
   });
 
@@ -96,7 +96,7 @@ describe('Settings categories', () => {
 
     await user.click(tab('Customers and rewards'));
     expect(screen.getByTestId('where')).toHaveTextContent('/settings#customers');
-    for (const name of ['Birthday offer', 'Refer a friend', 'Blynk Points', 'Blynk Wallet', 'Customer SMS language']) {
+    for (const name of ['Birthday offer', 'Refer a friend', 'Blynk Points', 'Blynk Wallet', 'Customer SMS language', 'SMS sending rules']) {
       expect(await regionNow(name)).toBeInTheDocument();
     }
 
@@ -145,12 +145,16 @@ describe('Settings categories', () => {
     expect(region('Delivery fee')).toBeNull();
   });
 
-  it('other card links open the category that holds the card (default markup, automatic assignment)', async () => {
+  it('other card links open the category that holds the card (default markup, SMS sending rules, automatic assignment)', async () => {
     mockApi(() => undefined);
     const first = renderAt('/settings#default-markup');
     expect(selectedTab()).toBe(tab('Orders and payments'));
     expect(await regionNow('Global default markup')).toHaveAttribute('id', 'default-markup');
     first.unmount();
+    const rules = renderAt('/settings#sms-sending-rules');
+    expect(selectedTab()).toBe(tab('Customers and rewards'));
+    expect(await regionNow('SMS sending rules')).toHaveAttribute('id', 'sms-sending-rules');
+    rules.unmount();
     renderAt('/settings#rider-auto-assign');
     expect(selectedTab()).toBe(tab('Deliveries'));
     expect(await regionNow('Automatic rider assignment')).toHaveAttribute('id', 'rider-auto-assign');
@@ -187,6 +191,8 @@ describe('Settings categories', () => {
       '/admin/settings/birthday-offer',
       '/admin/settings/customer-sms-language',
       '/admin/settings/wallet',
+      '/admin/settings/sms-sending',
+      '/admin/settings/sms-limits',
     ]) {
       expect(paths()).not.toContain(hidden);
     }
@@ -196,6 +202,8 @@ describe('Settings categories', () => {
     await regionNow('Birthday offer');
     await waitFor(() => expect(paths()).toContain('/admin/settings/birthday-offer'));
     expect(paths()).toContain('/admin/settings/wallet');
+    await waitFor(() => expect(paths()).toContain('/admin/settings/sms-sending'));
+    expect(paths()).toContain('/admin/settings/sms-limits');
     expect(paths()).not.toContain('/admin/settings/delivery-fee');
     expect(paths()).not.toContain('/admin/settings/rider-pay');
   });

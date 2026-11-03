@@ -30,6 +30,7 @@ import { WalletSettingsCard } from '../components/WalletSettingsCard';
 import { PaymentGatewayCard } from '../components/PaymentGatewayCard';
 import { RiderDocumentsSettingsCard } from '../components/RiderDocumentsSettingsCard';
 import { RiderAutoAssignCard } from '../components/RiderAutoAssignCard';
+import { SmsSendingRulesCard } from '../components/SmsSendingRulesCard';
 import { RiderPaySettings } from '../components/RiderPaySettings';
 import { AppUpdatesPanel } from '../components/AppUpdatesPanel';
 import { ConfirmDialog, Field, Spinner, useToast } from '../components/ui';
@@ -236,8 +237,8 @@ const SETTINGS_CATEGORIES: SettingsCategory[] = [
   {
     slug: 'customers',
     label: 'Customers and rewards',
-    description: 'Offers, rewards and messages for customers: birthdays, referrals, points, wallet and SMS language.',
-    anchors: ['wallet'],
+    description: 'Offers, rewards and messages for customers: birthdays, referrals, points, wallet, SMS language and SMS sending rules.',
+    anchors: ['wallet', 'sms-sending-rules'],
     cards: [
       { key: 'birthday-offer', render: () => <BirthdayOfferPanel /> },
       // Refer a friend and Blynk Points (owner, 2026-10-10).
@@ -247,6 +248,8 @@ const SETTINGS_CATEGORIES: SettingsCategory[] = [
       { key: 'wallet', render: () => <WalletSettingsCard /> },
       // Customer SMS language (owner, 2026-10-12).
       { key: 'sms-language', render: () => <CustomerSmsLanguagePanel /> },
+      // SMS sending rules (owner's brother, 2026-11-03): any time or quiet hours, a cap per customer, a monthly budget.
+      { key: 'sms-sending-rules', render: () => <SmsSendingRulesCard /> },
     ],
   },
   {

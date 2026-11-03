@@ -180,8 +180,7 @@ describe('Send to on SMS offers', () => {
     });
 
     expect(await screen.findByTestId('sms-group-count')).toHaveTextContent('35 customers can get offers by SMS.');
-    const table = await screen.findByRole('table', { name: 'Sent offers' });
-    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('New customers (last 7 days)');
+    // The sent list moved to the History tab (2026-11-03); see sms-offers.test.tsx.
 
     await user.selectOptions(screen.getByLabelText('Send to'), 'BIG_SPENDERS');
     const min = screen.getByLabelText('Minimum spend (LKR)');

@@ -1,60 +1,148 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { smsOffers as smsOffersApi } from '../api/resources';
-import type { SmsLanguage, SmsOffer, SmsOfferEstimate } from '../api/types';
+import type { SmsLanguage } from '../api/types';
 import { CustomerGroupPicker } from '../components/CustomerGroupPicker';
 import { PageHeader } from '../components/Layout';
-import { ConfirmDialog, EmptyState, Field, Spinner, useToast } from '../components/ui';
+import { SmsCampaignsTab } from '../components/SmsCampaignsTab';
+import { EstimateBody } from '../components/SmsEstimateFigures';
+import { SmsHistoryTab } from '../components/SmsHistoryTab';
+import { SmsTemplateBar } from '../components/SmsTemplateBar';
+import { SmsTemplatesTab } from '../components/SmsTemplatesTab';
+import { SmsTextEditor, useSmsPlaceholders } from '../components/SmsTextEditor';
+import { ConfirmDialog, Field, Spinner, useToast } from '../components/ui';
+import { useSmsEstimate } from '../components/useSmsEstimate';
 import { useSignedInUser } from '../auth/AuthContext';
-import { formatDay } from '../lib/coupons';
-import { audienceFromDraft, audienceLabel, blankAudienceDraft } from '../lib/customerGroups';
-import { formatClock } from '../lib/orders';
-import {
-  LANGUAGE_LABEL,
-  LAUNCH_LANGUAGES,
-  MAX_OFFER_TEXT,
-  SMS_LANGUAGES,
-  languageList,
-  offerInput,
-  offerParts,
-  partsLabel,
-  smsOfferErrorMessage,
-} from '../lib/smsOffers';
+import { SMS_AUDIENCE_GROUPS, audienceFromDraft, audienceLabel, blankAudienceDraft } from '../lib/customerGroups';
+import { EMPTY_TEXTS, colomboLocalToSendAt, formatWhen } from '../lib/smsCampaigns';
+import { LANGUAGE_LABEL, LAUNCH_LANGUAGES, SMS_LANGUAGES, languageList, offerInput, smsOfferErrorMessage } from '../lib/smsOffers';
 
 /**
- * Offer SMS to registered customers (backend migration 027). Each customer
- * gets the text in the language they picked in the app, or the fallback;
- * customers who turned "Offers by SMS" off get nothing. The API decides the
- * audience, appends the opt-out line and enforces the sending window (the opening hours set in Settings, owner 2026-10-10).
+ * SMS offers to registered customers. Four tabs (2026-11-03, owner's brother: "no time limits and
+ * fully customised, automatic SMS schedule things"):
  *
- * Which languages offers are written in is a backend setting
- * (SMS_OFFER_LANGUAGES, English only at launch) that each estimate reports;
- * the page shows text boxes for those languages only.
+ *   Send                      the offer form: audience (groups or custom filters), texts with
+ *                             {name} {points} {wallet} {app_link}, saved templates, live preview,
+ *                             Send now or Schedule for a date and time (Asia/Colombo)
+ *   Scheduled and automatic   campaigns that run later, repeat, or fire on a trigger
+ *   History                   offers sent now and every campaign run
+ *   Templates                 saved texts
+ *
+ * When texts may go out (any time, quiet hours) and the limits are the "SMS sending rules" in
+ * Settings. Each customer gets the text in the language they picked in the app, or the fallback;
+ * customers who turned "Offers by SMS" off get nothing.
+ *
+ * Which languages offers are written in is a backend setting (SMS_OFFER_LANGUAGES, English only at
+ * launch) that each estimate reports; the page shows text boxes for those languages only.
  */
 
-/** Wait this long after the last change before asking for a new estimate. */
-export const ESTIMATE_DELAY_MS = 400;
+export { ESTIMATE_DELAY_MS } from '../components/useSmsEstimate';
 
-const EMPTY_TEXTS: Record<SmsLanguage, string> = { si: '', ta: '', en: '' };
-
-/** A Sri Lankan mobile, as the API's normaliser accepts it. */
-const TEST_PHONE_PATTERN = /^(?:\+?94|0)?7[0124-8]\d{7}$/;
-
-type Estimate = { key: string; data: SmsOfferEstimate } | { key: string; error: string } | null;
+type TabId = 'send' | 'scheduled' | 'history' | 'templates';
+const TABS: ReadonlyArray<{ id: TabId; label: string }> = [
+  { id: 'send', label: 'Send' },
+  { id: 'scheduled', label: 'Scheduled and automatic' },
+  { id: 'history', label: 'History' },
+  { id: 'templates', label: 'Templates' },
+];
 
 export function SmsOffers() {
+  const [tab, setTab] = useState<TabId>('send');
+  const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
+
+  function select(id: TabId, focus = false) {
+    setTab(id);
+    if (focus) tabRefs.current[id]?.focus();
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const last = TABS.length - 1;
+    const at = TABS.findIndex((t) => t.id === tab);
+    let to: number;
+    if (event.key === 'ArrowRight') to = at === last ? 0 : at + 1;
+    else if (event.key === 'ArrowLeft') to = at === 0 ? last : at - 1;
+    else if (event.key === 'Home') to = 0;
+    else if (event.key === 'End') to = last;
+    else return;
+    event.preventDefault();
+    select(TABS[to]!.id, true);
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="SMS offers"
+        description="Send an offer now or at a set time, repeat it, or let it go out by itself. Texts go out at any time unless you set quiet hours in the SMS sending rules."
+        actions={
+          <Link className="button button--ghost" to="/settings#sms-sending-rules">
+            SMS sending rules
+          </Link>
+        }
+      />
+      <div className="settings-tabs" role="tablist" aria-label="SMS offers" onKeyDown={onKeyDown}>
+        {TABS.map((t) => {
+          const selected = t.id === tab;
+          return (
+            <button
+              key={t.id}
+              ref={(el) => {
+                tabRefs.current[t.id] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`sms-tab-${t.id}`}
+              aria-selected={selected}
+              aria-controls={`sms-panel-${t.id}`}
+              tabIndex={selected ? 0 : -1}
+              className={selected ? 'settings-tabs__tab is-selected' : 'settings-tabs__tab'}
+              onClick={() => select(t.id)}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Send stays mounted while another tab is open, so a half-written offer is not lost. */}
+      <div role="tabpanel" id="sms-panel-send" aria-labelledby="sms-tab-send" hidden={tab !== 'send'}>
+        <SendTab />
+      </div>
+      {tab === 'scheduled' ? (
+        <div role="tabpanel" id="sms-panel-scheduled" aria-labelledby="sms-tab-scheduled">
+          <SmsCampaignsTab />
+        </div>
+      ) : null}
+      {tab === 'history' ? (
+        <div role="tabpanel" id="sms-panel-history" aria-labelledby="sms-tab-history">
+          <SmsHistoryTab />
+        </div>
+      ) : null}
+      {tab === 'templates' ? (
+        <div role="tabpanel" id="sms-panel-templates" aria-labelledby="sms-tab-templates">
+          <SmsTemplatesTab />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** The Send tab: the offer form, the live numbers, and Send now / Schedule for. */
+function SendTab() {
   const toast = useToast();
-  // "Send to" (customer groups, 2026-10-24) replaces the old audience words.
+  const placeholders = useSmsPlaceholders();
+  // "Send to" (customer groups, 2026-10-24) replaces the old audience words; CUSTOM filters 2026-11-03.
   const [groupDraft, setGroupDraft] = useState(blankAudienceDraft);
   const built = useMemo(() => audienceFromDraft(groupDraft), [groupDraft]);
   const [fallback, setFallback] = useState<SmsLanguage>('en');
   const [texts, setTexts] = useState<Record<SmsLanguage, string>>(EMPTY_TEXTS);
-  const [estimate, setEstimate] = useState<Estimate>(null);
   const [languages, setLanguages] = useState<readonly SmsLanguage[]>(LAUNCH_LANGUAGES);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [history, setHistory] = useState<SmsOffer[] | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  // Now, or later: "Schedule for" a date and time in Sri Lanka time.
+  const [when, setWhen] = useState<'now' | 'later'>('now');
+  const [sendAtLocal, setSendAtLocal] = useState('');
+  const [scheduleName, setScheduleName] = useState('');
   // "Send test to": admins have no phone (backend migration 028), so they
   // enter one; prefilled with the account's own phone when it has one.
   const ownPhone = useSignedInUser()?.phone ?? '';
@@ -72,42 +160,23 @@ export function SmsOffers() {
   // A group with a bad number is not counted (the picker says why) and cannot be sent.
   const key = built.audience ? JSON.stringify(input) : '';
 
-  // Debounced estimate; only the answer for the latest inputs is kept.
-  const latest = useRef(key);
+  const estimate = useSmsEstimate(key, smsOffersApi.estimate, 'Could not count the customers.');
+  // Keep the same array when unchanged so the body (and key) stays put.
   useEffect(() => {
-    latest.current = key;
-    if (!key) return;
-    const timer = setTimeout(() => {
-      smsOffersApi
-        .estimate(JSON.parse(key))
-        .then((data) => {
-          if (latest.current !== key) return;
-          setEstimate({ key, data });
-          // Keep the same array when unchanged so the body (and key) stays put.
-          if (data.languages?.length) setLanguages((now) => (now.join() === data.languages.join() ? now : data.languages));
-        })
-        .catch((err) => latest.current === key && setEstimate({ key, error: smsOfferErrorMessage(err, 'Could not count the customers.') }));
-    }, ESTIMATE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [key]);
-
-  const loadHistory = useCallback(async () => {
-    try {
-      setHistory(await smsOffersApi.list());
-      setHistoryError(null);
-    } catch (err) {
-      setHistoryError(smsOfferErrorMessage(err, 'Could not load sent offers.'));
-      setHistory([]);
+    if (estimate && 'data' in estimate && estimate.data.languages?.length) {
+      const next = estimate.data.languages;
+      setLanguages((now) => (now.join() === next.join() ? now : next));
     }
-  }, []);
-
-  useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+  }, [estimate]);
 
   const current = key && estimate && estimate.key === key && 'data' in estimate ? estimate.data : null;
   const hasText = Object.keys(input.messages).length > 0;
-  const canSend = !!current && hasText && current.recipients > 0 && current.missing_languages.length === 0 && !sending;
+
+  const sendAt = when === 'later' ? colomboLocalToSendAt(sendAtLocal) : null;
+  const timeProblem =
+    when !== 'later' ? null : !sendAt ? 'Pick the date and time to send.' : Date.parse(sendAt) <= Date.now() ? 'Pick a time in the future.' : null;
+  const canSend =
+    !!current && hasText && current.recipients > 0 && current.missing_languages.length === 0 && !sending && !timeProblem;
 
   async function send() {
     if (!current) return;
@@ -115,33 +184,35 @@ export function SmsOffers() {
     setSending(true);
     setSendError(null);
     try {
-      const offer = await smsOffersApi.send(input);
-      toast.success(`Offer sent to ${offer.recipients} ${offer.recipients === 1 ? 'customer' : 'customers'}.`);
+      if (when === 'later' && sendAt) {
+        const name = scheduleName.trim();
+        await smsOffersApi.send({ ...input, send_at: sendAt, ...(name ? { name } : {}) });
+        toast.success(`Offer scheduled for ${formatWhen(sendAt)} (Sri Lanka time). Find it under Scheduled and automatic.`);
+        setSendAtLocal('');
+        setScheduleName('');
+      } else {
+        const result = await smsOffersApi.send(input);
+        const n = result.offer?.recipients ?? current.recipients;
+        toast.success(`Offer sent to ${n} ${n === 1 ? 'customer' : 'customers'}.`);
+      }
       setTexts(EMPTY_TEXTS);
-      void loadHistory();
     } catch (err) {
-      setSendError(smsOfferErrorMessage(err, 'Could not send the offer.'));
+      setSendError(smsOfferErrorMessage(err, when === 'later' ? 'Could not schedule the offer.' : 'Could not send the offer.'));
     } finally {
       setSending(false);
     }
   }
 
+  const who = `${current?.recipients ?? 0} ${current?.recipients === 1 ? 'customer' : 'customers'}`;
+
   return (
     <>
-      <PageHeader
-        title="SMS offers"
-        description={
-          multilingual
-            ? 'Each customer gets the offer in the language they picked in the app. Sent during opening hours only.'
-            : `Sent in ${LANGUAGE_LABEL[enabled[0] ?? 'en']} to every customer who gets offers. Sent during opening hours only.`
-        }
-      />
-
       <div className="sms-offers">
         <div className="form sms-offers__compose">
           <CustomerGroupPicker
             value={groupDraft}
             onChange={setGroupDraft}
+            groups={SMS_AUDIENCE_GROUPS}
             count={
               current ? (
                 <span data-testid="sms-group-count">
@@ -179,31 +250,69 @@ export function SmsOffers() {
             />
           </Field>
 
+          <SmsTemplateBar texts={texts} enabled={enabled} onPick={setTexts} />
+
           {enabled.map((lang) => (
-            <OfferText
+            <SmsTextEditor
               key={lang}
               language={lang}
               value={texts[lang]}
+              placeholders={placeholders}
               testPhone={testPhone}
               onChange={(value) => setTexts((t) => ({ ...t, [lang]: value }))}
             />
           ))}
+
+          <section className="form__section sms-offers__when" aria-label="When to send">
+            <span className="field__label" id="sms-when-label">
+              When
+            </span>
+            <div className="segmented" role="group" aria-labelledby="sms-when-label">
+              <button
+                type="button"
+                className={when === 'now' ? 'segmented__item is-selected' : 'segmented__item'}
+                aria-pressed={when === 'now'}
+                onClick={() => setWhen('now')}
+              >
+                Send now
+              </button>
+              <button
+                type="button"
+                className={when === 'later' ? 'segmented__item is-selected' : 'segmented__item'}
+                aria-pressed={when === 'later'}
+                onClick={() => setWhen('later')}
+              >
+                Schedule for
+              </button>
+            </div>
+            {when === 'later' ? (
+              <div className="form__row">
+                <Field label="Send at (Sri Lanka time)" hint="Up to a year ahead." error={sendAtLocal && timeProblem ? timeProblem : undefined}>
+                  <input
+                    className="input"
+                    type="datetime-local"
+                    aria-label="Send at"
+                    value={sendAtLocal}
+                    onChange={(e) => setSendAtLocal(e.target.value)}
+                  />
+                </Field>
+                <Field label="Name (optional)" hint="To find it in Scheduled and automatic.">
+                  <input
+                    className="input"
+                    aria-label="Name"
+                    maxLength={120}
+                    value={scheduleName}
+                    onChange={(e) => setScheduleName(e.target.value)}
+                  />
+                </Field>
+              </div>
+            ) : null}
+          </section>
         </div>
 
         <aside className="panel sms-offers__estimate" aria-label="Estimate">
           <h2 className="panel__title">Who gets it</h2>
-          {estimate === null ? (
-            <Spinner label="Counting customers" />
-          ) : 'error' in estimate ? (
-            <p className="field__error">{estimate.error}</p>
-          ) : (
-            <EstimateFigures
-              estimate={estimate.data}
-              fallback={input.fallback_language}
-              stale={estimate.key !== key}
-              multilingual={multilingual}
-            />
-          )}
+          <EstimateBody estimate={estimate} currentKey={key} fallback={input.fallback_language} multilingual={multilingual} />
 
           {current && current.missing_languages.length > 0 ? (
             <p className="sms-offers__warning" role="alert">
@@ -219,239 +328,26 @@ export function SmsOffers() {
           ) : null}
 
           <button type="button" className="button sms-offers__send" disabled={!canSend} onClick={() => setConfirming(true)}>
-            {sending ? <Spinner label="Sending offer" /> : 'Send offer'}
+            {sending ? <Spinner label={when === 'later' ? 'Scheduling offer' : 'Sending offer'} /> : when === 'later' ? 'Schedule offer' : 'Send offer'}
           </button>
         </aside>
       </div>
 
-      <h2 className="section-label sms-offers__history-title">Sent offers</h2>
-      {historyError ? <p className="field__error">{historyError}</p> : null}
-      {history === null ? (
-        <Spinner label="Loading sent offers" />
-      ) : history.length === 0 ? (
-        historyError ? null : <EmptyState title="No offers sent yet" />
-      ) : (
-        <OfferHistory offers={history} />
-      )}
-
       {confirming && current ? (
         <ConfirmDialog
-          title="Send offer"
-          message={`Send to ${current.recipients} ${current.recipients === 1 ? 'customer' : 'customers'}${
-            input.audience.group === 'ALL' ? '' : ` (${audienceLabel(input.audience)})`
-          }, about ${current.sms_parts_total} SMS parts?`}
-          confirmLabel="Send"
+          title={when === 'later' ? 'Schedule offer' : 'Send offer'}
+          message={
+            when === 'later' && sendAt
+              ? `Send on ${formatWhen(sendAt)} (Sri Lanka time) to ${
+                  input.audience.group === 'ALL' ? 'all customers' : audienceLabel(input.audience)
+                }? Who gets it is worked out again at that time. Right now that is ${who}, about ${current.sms_parts_total} SMS parts.`
+              : `Send to ${who}${input.audience.group === 'ALL' ? '' : ` (${audienceLabel(input.audience)})`}, about ${current.sms_parts_total} SMS parts?`
+          }
+          confirmLabel={when === 'later' ? 'Schedule' : 'Send'}
           onCancel={() => setConfirming(false)}
           onConfirm={() => void send()}
         />
       ) : null}
     </>
-  );
-}
-
-/** One language's text: counter, preview, and a test send. */
-function OfferText({
-  language,
-  value,
-  testPhone,
-  onChange,
-}: {
-  language: SmsLanguage;
-  value: string;
-  /** "Send test to"; blank means the account's own phone (the API refuses if it has none). */
-  testPhone: string;
-  onChange(value: string): void;
-}) {
-  const [testing, setTesting] = useState(false);
-  const [testNote, setTestNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const name = LANGUAGE_LABEL[language];
-  const parts = offerParts(value, language);
-
-  async function sendTest() {
-    const phone = testPhone.trim();
-    if (phone && !TEST_PHONE_PATTERN.test(phone.replace(/[\s\-()]/g, ''))) {
-      setTestNote({ ok: false, text: 'Enter a Sri Lankan mobile number, e.g. 077 123 4567.' });
-      return;
-    }
-    setTesting(true);
-    setTestNote(null);
-    try {
-      const result = await smsOffersApi.test(language, value.trim(), phone || undefined);
-      setTestNote({ ok: true, text: `Test sent to ${result.sent_to}` });
-    } catch (err) {
-      setTestNote({ ok: false, text: smsOfferErrorMessage(err, 'Could not send the test.') });
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  return (
-    <section className="form__section sms-offers__lang" aria-label={`${name} offer`}>
-      <Field label={name}>
-        <textarea
-          className="input"
-          rows={3}
-          aria-label={`${name} text`}
-          maxLength={MAX_OFFER_TEXT}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      </Field>
-      <p className="form__note" data-testid={`count-${language}`}>
-        {value.length} / {MAX_OFFER_TEXT} characters{parts ? ` · ${partsLabel(parts)} with the opt-out line` : ''}
-      </p>
-      {value.trim() ? (
-        <div className="preview">
-          <p className="preview__label">Customers receive</p>
-          <p className="sms-offers__preview" aria-label={`${name} preview`}>
-            {value.trim()}
-          </p>
-        </div>
-      ) : null}
-      <div className="row-actions sms-offers__test">
-        <button
-          type="button"
-          className="button button--ghost button--sm"
-          aria-label={`Send ${name} test`}
-          disabled={!value.trim() || testing}
-          onClick={() => void sendTest()}
-        >
-          {testing ? 'Sending…' : 'Send test'}
-        </button>
-        {testNote ? (
-          <span className={testNote.ok ? 'form__note' : 'field__error'} role="status">
-            {testNote.text}
-          </span>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function EstimateFigures({
-  estimate,
-  fallback,
-  stale,
-  multilingual,
-}: {
-  estimate: SmsOfferEstimate;
-  fallback: SmsLanguage;
-  stale: boolean;
-  /** With one language on, everyone gets it: no per-language breakdown. */
-  multilingual: boolean;
-}) {
-  return (
-    <dl className={stale ? 'sms-offers__figures is-stale' : 'sms-offers__figures'} aria-busy={stale}>
-      <div>
-        <dt>Recipients</dt>
-        <dd className="mono">{estimate.recipients}</dd>
-      </div>
-      {multilingual ? (
-        <>
-          {SMS_LANGUAGES.filter((l) => estimate.languages?.includes(l) ?? true).map((l) => (
-            <div key={l}>
-              <dt>{LANGUAGE_LABEL[l]}</dt>
-              <dd className="mono">{estimate.by_language[l]}</dd>
-            </div>
-          ))}
-          <div>
-            <dt>No language (get {LANGUAGE_LABEL[fallback]})</dt>
-            <dd className="mono">{estimate.without_language}</dd>
-          </div>
-        </>
-      ) : null}
-      <div>
-        <dt>Opted out</dt>
-        <dd className="mono">{estimate.opted_out}</dd>
-      </div>
-      <div>
-        <dt>SMS parts</dt>
-        <dd className="mono">{estimate.sms_parts_total}</dd>
-      </div>
-    </dl>
-  );
-}
-
-const MESSAGE_KEY: Record<SmsLanguage, 'message_si' | 'message_ta' | 'message_en'> = {
-  si: 'message_si',
-  ta: 'message_ta',
-  en: 'message_en',
-};
-
-function OfferHistory({ offers }: { offers: SmsOffer[] }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  return (
-    <div className="table-wrap">
-      <table className="table" aria-label="Sent offers">
-        <thead>
-          <tr>
-            <th scope="col">Sent</th>
-            <th scope="col">Sent by</th>
-            <th scope="col">Audience</th>
-            <th scope="col" className="num">
-              Recipients
-            </th>
-            <th scope="col" className="num">
-              SMS parts
-            </th>
-            <th scope="col">Text</th>
-            <th scope="col">
-              <span className="visually-hidden">Details</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {offers.map((o) => {
-            const open = openId === o.id;
-            const written = SMS_LANGUAGES.filter((l) => o[MESSAGE_KEY[l]]);
-            const first = written[0];
-            return (
-              <Fragment key={o.id}>
-                <tr>
-                  <td className="cell__secondary">
-                    {formatDay(o.created_at)} {formatClock(o.created_at)}
-                  </td>
-                  <td>{o.sent_by_name ?? '—'}</td>
-                  <td>{audienceLabel(o.audience_group ?? o.audience)}</td>
-                  <td className="num mono">{o.recipient_count}</td>
-                  <td className="num mono">{o.sms_parts_total}</td>
-                  <td className="cell__secondary sms-offers__snippet">
-                    {first ? `${LANGUAGE_LABEL[first]}: ${o[MESSAGE_KEY[first]]}` : '—'}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="button button--ghost button--sm"
-                      aria-expanded={open}
-                      aria-label={`${open ? 'Hide' : 'Show'} texts of the offer sent ${formatDay(o.created_at)} ${formatClock(o.created_at)}`}
-                      onClick={() => setOpenId(open ? null : o.id)}
-                    >
-                      {open ? 'Hide' : 'Texts'}
-                    </button>
-                  </td>
-                </tr>
-                {open ? (
-                  <tr className="order-expand">
-                    <td colSpan={7}>
-                      <dl className="sms-offers__texts">
-                        {written.map((l) => (
-                          <div key={l}>
-                            <dt>
-                              {LANGUAGE_LABEL[l]}
-                              {l === o.fallback_language ? ' (fallback)' : ''}
-                            </dt>
-                            <dd>{o[MESSAGE_KEY[l]]}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </td>
-                  </tr>
-                ) : null}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
   );
 }

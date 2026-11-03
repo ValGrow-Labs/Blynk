@@ -7,6 +7,7 @@ import {
   type AudienceDraft,
   type CustomerGroup,
 } from '../lib/customerGroups';
+import { CustomAudienceFields } from './CustomAudienceFields';
 import { Field } from './ui';
 
 const DAYS_LABEL: Record<'LAPSED' | 'NEW' | 'BIG_SPENDERS', string> = {
@@ -19,16 +20,21 @@ const DAYS_LABEL: Record<'LAPSED' | 'NEW' | 'BIG_SPENDERS', string> = {
  * "Send to" (owner, 2026-10-24): every customer, or one group - haven't ordered in N days, new
  * customers, big spenders, or signed up but never ordered. The page fetches the live count for the
  * chosen group and passes it in as `count`. Used on Notifications and SMS offers.
+ * SMS offers and campaigns pass `groups` with CUSTOM added (2026-11-03): custom filters for
+ * areas, orders, spend, language, points and days since the last order.
  */
 export function CustomerGroupPicker({
   value,
   onChange,
   count,
+  groups = CUSTOMER_GROUPS,
 }: {
   value: AudienceDraft;
   onChange(next: AudienceDraft): void;
   /** The live count for the chosen group (or a spinner / error while counting). */
   count?: ReactNode;
+  /** Which groups the "Send to" list offers (push broadcasts keep the five without CUSTOM). */
+  groups?: readonly CustomerGroup[];
 }) {
   const g = value.group;
   const problem = audienceFromDraft(value).problem;
@@ -37,7 +43,7 @@ export function CustomerGroupPicker({
       <div className="form__row">
         <Field label="Send to">
           <select className="input" aria-label="Send to" value={g} onChange={(e) => onChange({ ...value, group: e.target.value as CustomerGroup })}>
-            {CUSTOMER_GROUPS.map((group) => (
+            {groups.map((group) => (
               <option key={group} value={group}>
                 {GROUP_LABEL[group]}
               </option>
@@ -72,6 +78,7 @@ export function CustomerGroupPicker({
           </Field>
         ) : null}
       </div>
+      {g === 'CUSTOM' ? <CustomAudienceFields value={value.custom} onChange={(custom) => onChange({ ...value, custom })} /> : null}
       {problem ? (
         <p className="field__error" role="alert">
           {problem}

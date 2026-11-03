@@ -1721,6 +1721,10 @@ export interface SmsOfferInput {
   audience: CustomerAudience;
   fallback_language: SmsLanguage;
   messages: Partial<Record<SmsLanguage, string>>;
+  /** Scheduled send (2026-11-03): an ISO instant with its offset; the API makes a ONCE campaign. */
+  send_at?: string;
+  /** Name of the scheduled campaign (optional; the API names it by date). */
+  name?: string;
 }
 
 /** POST /admin/sms-offers/estimate. */
@@ -1739,6 +1743,16 @@ export interface SmsOfferEstimate {
   missing_languages: SmsLanguage[];
   /** Languages offers are written in right now (backend SMS_OFFER_LANGUAGES); ['en'] at launch. */
   languages: SmsLanguage[];
+  /** Customers left out because they already got their share (per-customer cap); 2026-11-03. */
+  skipped_capped?: number;
+  /** Customers left out because no SMS can reach their number. */
+  skipped_no_phone?: number;
+  /** Up to 3 recipients' real texts, placeholders filled in. */
+  samples?: Array<{ language: SmsLanguage; text: string; parts: number }>;
+  /** This month's SMS budget after the sends so far; null when no budget is set. */
+  budget?: { monthly_parts: number; used_parts: number; remaining_parts: number; would_exceed: boolean } | null;
+  /** Whether a send right now is allowed by the SMS sending rules. */
+  sending?: { allowed: boolean; code: string | null; message: string | null; resume_at: string | null };
 }
 
 export interface SmsOfferSent {
@@ -1768,6 +1782,180 @@ export interface SmsOffer {
   created_at: string;
   sent_by_name: string | null;
   sent_by_role: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// SMS campaigns, templates and sending rules (backend migration 066, 2026-11-03;
+// docs/superpowers/plans/2026-11-03-sms-campaigns.md). ADMIN and OPERATIONS.
+export type SmsMessages = Partial<Record<SmsLanguage, string>>;
+
+export type SmsCampaignKind = 'ONCE' | 'RECURRING' | 'TRIGGER';
+export type SmsCampaignStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'COMPLETED';
+export type SmsWeekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+export type SmsFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+export type SmsTriggerKind = 'DAYS_AFTER_LAST_ORDER' | 'DAYS_AFTER_SIGNUP' | 'NO_ORDER_FOR_DAYS';
+
+export interface SmsOnceSchedule {
+  send_at: string;
+}
+
+export interface SmsRecurringSchedule {
+  frequency: SmsFrequency;
+  /** HH:mm, Asia/Colombo. */
+  time: string;
+  weekdays?: SmsWeekday[];
+  month_day?: number;
+  starts_on?: string | null;
+  ends_on?: string | null;
+}
+
+export interface SmsTriggerSchedule {
+  trigger: SmsTriggerKind;
+  days: number;
+  time: string;
+  only_if_never_ordered?: boolean;
+  cooldown_days?: number;
+}
+
+export type SmsCampaignSchedule = SmsOnceSchedule | SmsRecurringSchedule | SmsTriggerSchedule;
+
+export interface SmsPlaceholder {
+  token: string;
+  description: string;
+  example: string;
+}
+
+export interface SmsCampaignRun {
+  id: string;
+  campaign_id: string;
+  scheduled_for: string;
+  ran_at: string;
+  status: string;
+  recipients: number;
+  sms_parts: number;
+  skipped_opted_out: number;
+  skipped_capped: number;
+  skipped_no_phone: number;
+  reason: string | null;
+}
+
+export interface SmsCampaign {
+  id: string;
+  name: string;
+  kind: SmsCampaignKind;
+  status: SmsCampaignStatus;
+  audience: SmsOfferAudience | CustomerAudience;
+  /** null for a TRIGGER (it picks its own customers). */
+  audience_label: string | null;
+  fallback_language: SmsLanguage;
+  messages: Record<SmsLanguage, string | null>;
+  schedule: SmsCampaignSchedule;
+  schedule_label: string;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  run_count: number;
+  recipients_total: number;
+  sms_parts_total: number;
+  last_run: SmsCampaignRun | null;
+  created_by_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  cancelled_at: string | null;
+}
+
+/** GET /admin/sms-campaigns/:id and the pause / resume / cancel / edit answers: the campaign with its runs. */
+export interface SmsCampaignDetail extends SmsCampaign {
+  runs: SmsCampaignRun[];
+}
+
+/** POST /admin/sms-campaigns. A TRIGGER has no audience. */
+export type SmsCampaignInput =
+  | { kind: 'ONCE'; name: string; audience: CustomerAudience; fallback_language: SmsLanguage; messages: SmsMessages; schedule: SmsOnceSchedule }
+  | { kind: 'RECURRING'; name: string; audience: CustomerAudience; fallback_language: SmsLanguage; messages: SmsMessages; schedule: SmsRecurringSchedule }
+  | { kind: 'TRIGGER'; name: string; fallback_language: SmsLanguage; messages: SmsMessages; schedule: SmsTriggerSchedule };
+
+/** PATCH /admin/sms-campaigns/:id: any of these (messages is the whole set). */
+export interface SmsCampaignPatch {
+  name?: string;
+  fallback_language?: SmsLanguage;
+  messages?: SmsMessages;
+  audience?: CustomerAudience;
+  schedule?: SmsCampaignSchedule;
+}
+
+/** POST /admin/sms-campaigns/preview. */
+export interface SmsCampaignPreviewInput {
+  kind?: SmsCampaignKind;
+  audience?: CustomerAudience;
+  fallback_language: SmsLanguage;
+  messages: SmsMessages;
+  /** Only used by a TRIGGER: who it would text today. */
+  schedule?: SmsTriggerSchedule;
+}
+
+export interface SmsHistoryItem {
+  type: 'OFFER' | 'CAMPAIGN_RUN';
+  id: string;
+  at: string;
+  name: string;
+  campaign_id: string | null;
+  campaign_kind: SmsCampaignKind | null;
+  status: string;
+  recipients: number;
+  sms_parts: number;
+  skipped_opted_out: number | null;
+  skipped_capped: number | null;
+  skipped_no_phone: number | null;
+  reason: string | null;
+  audience: unknown;
+  audience_label: string | null;
+  sent_by_name: string | null;
+  messages: Partial<Record<SmsLanguage, string | null>> | null;
+}
+
+export interface SmsTemplate {
+  id: string;
+  name: string;
+  messages: Record<SmsLanguage, string | null>;
+  created_by_name: string | null;
+}
+
+export interface SmsArea {
+  name: string;
+  customers: number;
+}
+
+export interface SmsSendingNow {
+  allowed: boolean;
+  code: string | null;
+  message: string | null;
+  resume_at: string | null;
+}
+
+/** GET|PUT /admin/settings/sms-sending. */
+export interface SmsSendingSetting {
+  any_time: boolean;
+  quiet_hours: { enabled: boolean; start: string; end: string };
+  updated_at: string | null;
+  sending_now: SmsSendingNow;
+}
+
+export interface SmsSendingInput {
+  any_time?: boolean;
+  quiet_hours?: { enabled?: boolean; start?: string; end?: string };
+}
+
+/** GET|PUT /admin/settings/sms-limits. */
+export interface SmsLimitsSetting {
+  per_customer: { enabled: boolean; max: number; days: number };
+  monthly_budget: { enabled: boolean; parts: number };
+  updated_at: string | null;
+  usage: { month: string; month_starts_at: string; parts_used: number; remaining_parts: number | null };
+}
+
+export interface SmsLimitsInput {
+  per_customer?: { enabled?: boolean; max?: number; days?: number };
+  monthly_budget?: { enabled?: boolean; parts?: number };
 }
 
 // ---------------------------------------------------------------------------

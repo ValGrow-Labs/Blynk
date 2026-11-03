@@ -3503,3 +3503,224 @@ td .mrp-capped {
   border: 1px solid var(--border, #e3e5ea);
   border-radius: 8px;
 }
+
+/* SMS campaigns (2026-11-03): placeholder chips, custom audience filters, campaign cards, rules card. */
+.sms-offers__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+
+.sms-offers__chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.sms-offers__day {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 48px;
+  min-height: 36px;
+}
+
+.sms-offers__when {
+  display: grid;
+  gap: 10px;
+}
+
+.sms-offers__notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.sms-offers__sample {
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+}
+
+.sms-offers__sample-meta {
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sms-offers__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+}
+
+.sms-offers__toolbar .form__note {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.sms-form {
+  margin-bottom: 24px;
+}
+
+.sms-template-bar {
+  display: grid;
+  gap: 8px;
+}
+
+.sms-template-bar__save {
+  align-self: end;
+}
+
+.sms-template-bar__name {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.custom-audience {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.chip__remove {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip__remove:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.chip__remove:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.sms-cards {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sms-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sms-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.sms-card__title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.sms-card__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.sms-card__kind {
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sms-card__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 20px;
+  margin: 0;
+}
+
+.sms-card__facts dt {
+  font-size: var(--text-label);
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sms-card__facts dd {
+  margin: 2px 0 0;
+  font-size: var(--text-meta);
+  overflow-wrap: anywhere;
+}
+
+.sms-card__text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sms-rules__heading {
+  margin: 8px 0 0;
+  font-size: var(--text-body);
+  font-weight: 800;
+}
+
+@media (max-width: 600px) {
+  .sms-offers__toolbar .row-actions {
+    width: 100%;
+  }
+}

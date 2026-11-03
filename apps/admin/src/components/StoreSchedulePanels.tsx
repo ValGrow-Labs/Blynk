@@ -818,6 +818,10 @@ function ClosedDaySmsPanel({ schedule, onSaved }: PanelProps) {
   return (
     <section className="panel" id="closed-day-sms" aria-label="Texts on closed days">
       <h2 className="panel__title">Texts on closed days</h2>
+      {/* 2026-11-03: SMS sending rules (Settings > Customers and rewards) now decide when texts go out. */}
+      <p className="form__note" data-testid="closed-day-sms-note">
+        Only used when &quot;Send at any time&quot; is off in SMS sending rules.
+      </p>
       <form className="form" onSubmit={save} noValidate>
         <label className="toggle">
           <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />

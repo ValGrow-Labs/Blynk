@@ -1,7 +1,8 @@
-import { errorMessage } from './apiErrors';
+import { errorMessage, validationIssues } from './apiErrors';
 import { ApiError } from '../api/client';
 import type { SmsLanguage, SmsOfferAudience, SmsOfferInput } from '../api/types';
 import type { CustomerAudience } from './customerGroups';
+import { formatClock } from './orders';
 
 /**
  * SMS offers (backend migration 027). The counting rules mirror
@@ -26,6 +27,9 @@ export const AUDIENCE_LABEL: Record<SmsOfferAudience, string> = {
 };
 
 export const MAX_OFFER_TEXT = 480;
+
+/** The words a text may use (2026-11-03); the API's list is the truth, GET /admin/sms-placeholders. */
+export const PLACEHOLDER_TOKENS: readonly string[] = ['{name}', '{points}', '{wallet}', '{app_link}'];
 
 /** A customer's SMS language for tables: "Sinhala" or "—" when never picked. */
 export const smsLanguageLabel = (language: SmsLanguage | null | undefined) => (language ? LANGUAGE_LABEL[language] : '—');
@@ -68,7 +72,36 @@ export function smsParts(text: string): number {
 }
 
 /** Parts one recipient costs for this text, opt-out line included; 0 when empty. */
-export const offerParts = (text: string, language: SmsLanguage) => (text.trim() ? smsParts(withOptOut(text, language)) : 0);
+export const offerParts = (text: string, language: SmsLanguage) =>
+  text.trim() ? smsParts(longestRendering(withOptOut(text, language))) : 0;
+
+/** What a placeholder becomes in the longest plausible rendering (the API counts parts on this). */
+const LONGEST_VALUE: Record<string, string> = {
+  '{name}': 'W'.repeat(20),
+  '{points}': '9999999',
+  '{wallet}': 'LKR 9,999,999.99',
+  '{app_link}': 'https://blynk.lk/app',
+};
+
+/** What a made-up customer sees: a friend called Nimal with 120 points and LKR 1,250. */
+const EXAMPLE_VALUE: Record<string, string> = {
+  '{name}': 'Nimal',
+  '{points}': '120',
+  '{wallet}': 'LKR 1,250',
+  '{app_link}': 'https://blynk.lk/app',
+};
+
+const fillPlaceholders = (text: string, values: Record<string, string>) =>
+  text.replace(/\{[^{}]*\}/g, (token) => values[token] ?? token);
+
+/** The text with every placeholder at its longest, to count characters and parts safely. */
+export const longestRendering = (text: string) => fillPlaceholders(text, LONGEST_VALUE);
+
+/** The text as an example customer would get it. */
+export const exampleRendering = (text: string) => fillPlaceholders(text, EXAMPLE_VALUE);
+
+/** Whether the text uses at least one placeholder. */
+export const hasPlaceholder = (text: string) => /\{[^{}]*\}/.test(text);
 
 /** Languages assumed before the first estimate says which are switched on. */
 export const LAUNCH_LANGUAGES: readonly SmsLanguage[] = ['en'];
@@ -112,15 +145,47 @@ export function smsOfferErrorMessage(err: unknown, fallback: string): string {
         const missing = (err.details as { missing_languages?: SmsLanguage[] } | undefined)?.missing_languages ?? [];
         return missing.length ? `Write the ${languageList(missing)} text too.` : err.message;
       }
-      case 'OFFER_NO_RECIPIENTS':
-        return 'No customer in this audience can receive offers.';
+      case 'OFFER_NO_RECIPIENTS': {
+        const capped = (err.details as { skipped_capped?: number } | undefined)?.skipped_capped ?? 0;
+        return capped > 0
+          ? `No customer in this audience can receive offers. ${capped} ${capped === 1 ? 'customer was' : 'customers were'} left out because they already got their share of SMS (the per-customer limit in SMS sending rules).`
+          : 'No customer in this audience can receive offers.';
+      }
       case 'NO_TEST_PHONE':
         return 'Enter the number to send the test to.';
-      case 'VALIDATION_ERROR':
+      case 'UNKNOWN_PLACEHOLDER': {
+        // The API names the unknown words and lists the allowed ones; say it the same way.
+        const d = err.details as { unknown?: string[]; allowed?: string[] } | undefined;
+        if (!d?.unknown?.length) return err.message;
+        const allowed = d.allowed?.length ? d.allowed : PLACEHOLDER_TOKENS;
+        return `${d.unknown.join(', ')} ${d.unknown.length === 1 ? 'is' : 'are'} not a placeholder. You can use ${allowed.join(', ')}.`;
+      }
+      case 'TEXT_TOO_LONG': {
+        const d = err.details as { language?: SmsLanguage; longest?: number; max?: number } | undefined;
+        if (!d?.longest) return err.message;
+        const name = d.language ? LANGUAGE_LABEL[d.language] : 'The';
+        return `The ${name} text can be up to ${d.longest} characters once the name, points and wallet are filled in. Keep it under ${d.max ?? MAX_OFFER_TEXT}.`;
+      }
+      case 'SMS_BUDGET_EXCEEDED': {
+        const d = err.details as { needed_parts?: number; remaining_parts?: number; monthly_parts?: number } | undefined;
+        if (d?.needed_parts === undefined || d.remaining_parts === undefined) return err.message;
+        return `This needs ${d.needed_parts} SMS parts but only ${d.remaining_parts} are left in this month's budget${
+          d.monthly_parts === undefined ? '' : ` of ${d.monthly_parts}`
+        }. Raise the budget in SMS sending rules, or send to fewer customers.`;
+      }
+      case 'QUIET_HOURS': {
+        const resume = (err.details as { resume_at?: string | null } | undefined)?.resume_at;
+        return resume ? `${err.message} Sending is allowed again from ${formatClock(resume)}.` : err.message;
+      }
+      case 'VALIDATION_ERROR': {
         if ((err.details as Array<{ field?: string }> | null | undefined)?.some?.((d) => d.field === 'phone')) {
           return 'Enter a Sri Lankan mobile number, e.g. 077 123 4567.';
         }
+        // Problems with the schedule, name or audience carry their own words; text problems keep the old line.
+        const issues = validationIssues(err).filter((i) => !i.field.startsWith('messages'));
+        if (issues.length) return issues.map((i) => i.message).join(' ');
         return `Check the texts: each can be up to ${MAX_OFFER_TEXT} characters.`;
+      }
       default:
         return err.message;
     }
