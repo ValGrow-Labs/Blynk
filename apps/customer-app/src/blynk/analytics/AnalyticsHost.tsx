@@ -2,10 +2,13 @@ import { useGlobalSearchParams, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useSession } from '@/blynk/auth/session';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
-import { identify, setCatalogIndex, trackingActive, trackPageView, trackSearch, trackViewItemList } from './track';
+import { useLang } from '@/blynk/i18n/useLang';
+import { initFirebase } from './firebaseSink';
+import { identify, setAppLanguage, setCatalogIndex, trackingActive, trackPageView, trackSearch, trackViewItemList } from './track';
 
 /*
- * The React side of the GTM events (src/blynk/analytics/track.ts holds the events themselves).
+ * The React side of the GTM events and the phone's Firebase reporting (src/blynk/analytics/track.ts
+ * holds the events themselves, firebaseSink.ts the phone's Analytics + Crashlytics).
  * AnalyticsHost is mounted once in the root layout; the hooks are one-liners at the screens.
  */
 
@@ -15,7 +18,9 @@ import { identify, setCatalogIndex, trackingActive, trackPageView, trackSearch, 
  *   session, on sign-in, and cleared on sign-out;
  * - a page_view for every route change (the launch intro at `/` is skipped: its redirect's
  *   page view carries the ad-click parameters instead);
- * - the catalogue's category names and SKUs for the items in every event.
+ * - the catalogue's category names and SKUs for the items in every event;
+ * - on the phone: Firebase collection on/off by the consent switch at start, the app's language as
+ *   a user property, and (through trackPageView) a `screen_view` + Crashlytics breadcrumb per route.
  */
 export function AnalyticsHost() {
   const session = useSession();
@@ -23,7 +28,13 @@ export function AnalyticsHost() {
   const path = usePathname();
   const params = useGlobalSearchParams();
   const { data } = useCatalog();
+  const lang = useLang();
   const query = JSON.stringify(params);
+
+  // Firebase (phone only, a no-op elsewhere): collection follows the consent switch, Crashlytics also
+  // installs its JS error handler here; before the identity so the user id lands on a ready SDK
+  useEffect(() => { initFirebase(); }, []);
+  useEffect(() => { setAppLanguage(lang); }, [lang]);
 
   // identity first, so the first page view already carries user_id
   useEffect(() => { identify(userId); }, [userId]);

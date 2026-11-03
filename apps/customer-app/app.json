@@ -103,7 +103,8 @@
               "arm64-v8a",
               "armeabi-v7a"
             ],
-            "networkInspector": false
+            "networkInspector": false,
+            "extraProguardRules": "-keepattributes SourceFile,LineNumberTable\n-keep public class * extends java.lang.Exception"
           }
         }
       ],
@@ -121,8 +122,11 @@
           "locationWhenInUsePermission": "Blynk uses your location to place the delivery pin on your door."
         }
       ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
       "./plugins/withBlynkRelease",
       "./plugins/withBlynkPlayHardening",
+      "./plugins/withBlynkFirebase",
       "expo-image"
     ],
     "scheme": "blynk",

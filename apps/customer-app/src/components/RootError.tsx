@@ -1,5 +1,7 @@
 import { router, type ErrorBoundaryProps } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { reportError } from '@/blynk/analytics/reportError';
 import { restartToHome } from '@/blynk/lib/restart';
 import { ERROR_SCREEN } from '@/blynk/ui/errorWords';
 import { C, F } from '@/lib/theme';
@@ -8,9 +10,11 @@ import { C, F } from '@/lib/theme';
  * The app's error screen (exported as `ErrorBoundary` from the root layout, so expo-router wraps
  * every screen in it): a friendly "Something went wrong" in the customer's language with one
  * "Try again" that redraws the app and goes Home, instead of a white screen. It sits above the
- * providers (no safe-area, store or cart here): plain padding, plain colours.
+ * providers (no safe-area, store or cart here): plain padding, plain colours. The error is also
+ * sent to Crashlytics as a non-fatal (a no-op on the web; phone and email text redacted).
  */
-export function RootError({ retry }: ErrorBoundaryProps) {
+export function RootError({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => { reportError(error); }, [error]);
   return (
     <View style={styles.root} accessibilityRole="alert">
       <Text style={styles.mark}>!</Text>

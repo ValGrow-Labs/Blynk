@@ -1,6 +1,11 @@
 import type { Combo, Product } from '../api/types';
 import { effectivePrice, type PricedItem } from '../lib/pricing';
 import { storage } from '../lib/storage';
+import { firebaseActive, firebaseIdentify, firebaseSetLanguage, sendFirebase, sendScreen } from './firebaseSink';
+import { isPiiKey, redact, sanitize } from './privacy';
+
+// the privacy helpers live in privacy.ts (shared with the phone's Firebase events); same names as ever
+export { isPiiKey, redact, sanitize };
 
 /*
  * Google Tag Manager events for the web shop (owner's "Tracking & SEO brief", 2026-10-15).
@@ -9,7 +14,9 @@ import { storage } from '../lib/storage';
  * the Meta Pixel and TikTok are set up inside GTM (docs/06-deployment/
  * google-tag-manager-and-ads-setup.md, section 14, lists every event and where it fires).
  *
- * - Web only. On Android/iOS, in tests, and on a build without a GTM container
+ * - The dataLayer is the web's. On the phone the same events also go to Google Analytics for
+ *   Firebase (firebaseSink.ts: same GA4 names and parameters, `page_view` becomes `screen_view`,
+ *   no personal data, consent switch). In tests, and on a web build without a GTM container
  *   (public/index.html then has no snippet, so there is no window.dataLayer) nothing is pushed.
  * - Never throws: a tracking problem must never break a tap.
  * - No personal data, ever: no names, phone numbers, addresses, map points or emails. Items are
@@ -39,8 +46,11 @@ function layer(): Layer | null {
   }
 }
 
-/** Is anything listening (web with a GTM container)? On the phone it is not: callers skip building events nobody receives. */
-export const trackingActive = (): boolean => layer() !== null;
+/**
+ * Is anything listening: the web with a GTM container, or the phone with Firebase (native module
+ * present and reporting not switched off)? Callers skip building events nobody receives.
+ */
+export const trackingActive = (): boolean => layer() !== null || firebaseActive();
 
 function push(entry: Record<string, unknown>): boolean {
   const dl = layer();
@@ -53,40 +63,19 @@ function push(entry: Record<string, unknown>): boolean {
   }
 }
 
-/* ------------------------------------------------------------------ privacy */
-
-/** Keys that are personal data whatever their value. `item_name` / `item_list_name` are product and list names, allowed. */
-const PII_KEY = /(^|_)(full_?name|first_?name|last_?name|name|phone|mobile|msisdn|email|e_?mail|address|address_line\d?|street|recipient|lat|lng|lon|latitude|longitude|coords?|geo|otp|token|password|birthday|dob|referral_code)($|_)/i;
-const ALLOWED_NAME_KEYS = new Set(['item_name', 'item_list_name', 'promotion_name', 'page_title']);
-export const isPiiKey = (k: string) => !ALLOWED_NAME_KEYS.has(k) && PII_KEY.test(k);
-
-/** Phone- or email-looking text in free text (a search term) becomes [redacted]. */
-export function redact(text: string): string {
-  return text
-    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '[redacted]')
-    .replace(/\+?\d[\d\s-]{6,}\d/g, '[redacted]');
-}
-
-/** Drops personal keys (top level and inside `ecommerce`); undefined values are kept (they clear a key in GTM). */
-export function sanitize(entry: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(entry)) {
-    if (isPiiKey(k)) continue;
-    if (k === 'ecommerce' && v && typeof v === 'object') {
-      const e: Record<string, unknown> = {};
-      for (const [ek, ev] of Object.entries(v as Record<string, unknown>)) if (!isPiiKey(ek)) e[ek] = ev;
-      out[k] = e;
-    } else out[k] = v;
-  }
-  return out;
-}
-
 /* ------------------------------------------------------------------ public API */
 
-/** A plain event: `{event, ...params}`. Web only; a no-op without a dataLayer; never throws. */
+/** One event to every listener: the web's dataLayer and the phone's Firebase. True when either took it. */
+function emit(entry: Record<string, unknown>): boolean {
+  const web = push(entry);
+  const phone = sendFirebase(entry);
+  return web || phone;
+}
+
+/** A plain event: `{event, ...params}`. A no-op when nobody listens; never throws. */
 export function track(event: string, params: Record<string, unknown> = {}): boolean {
   try {
-    return push(sanitize({ event, ...params }));
+    return emit(sanitize({ event, ...params }));
   } catch {
     return false;
   }
@@ -98,9 +87,9 @@ export function track(event: string, params: Record<string, unknown> = {}): bool
  */
 export function trackEcommerce(event: string, ecommerce: Record<string, unknown>, extra: Record<string, unknown> = {}): boolean {
   try {
-    if (!layer()) return false;
-    push({ ecommerce: null });
-    return push(sanitize({ event, ecommerce: { currency: 'LKR', ...ecommerce }, ...extra }));
+    if (!trackingActive()) return false;
+    push({ ecommerce: null }); // web only: clears GTM's previous ecommerce object
+    return emit(sanitize({ event, ecommerce: { currency: 'LKR', ...ecommerce }, ...extra }));
   } catch {
     return false;
   }
@@ -248,7 +237,7 @@ export function cartItems(c: CartLike): GaItem[] {
 export function trackCartChange(before: CartLike, after: CartLike, variantHint?: VariantLike | null): void {
   try {
     if (variantHint) learnSkus([variantHint]);
-    if (!layer()) return;
+    if (!trackingActive()) return;
     const added: GaItem[] = [];
     const removed: GaItem[] = [];
     const was = new Map(before.lines.map((l) => [keyOf(l), l]));
@@ -407,16 +396,26 @@ let identified: string | null | undefined;
 /**
  * Who is shopping: the internal customer id (never the phone), the app's language and whether
  * it runs installed (Home Screen) or in the browser. Null = signed out: user_id is cleared.
- * Pushed once per change (app start with a session, sign-in, sign-out).
+ * Pushed once per change (app start with a session, sign-in, sign-out). On the phone the id is
+ * Firebase's user id (Analytics and Crashlytics); a signed-out start clears one left from a
+ * session that ended while the app was closed.
  */
 export function identify(userId: string | null | undefined): void {
   const id = str(userId) ?? null;
   if (id === identified) return;
-  if (id === null && identified === undefined) { identified = null; return; } // signed out at start: nothing to clear
+  if (id === null && identified === undefined) { identified = null; firebaseIdentify(null); return; } // web: nothing to clear
   identified = id;
-  // the app's screens are in English today (the SMS language setting is for SMS only)
+  // the web's app_language stays 'en' (the web shop is English); the phone's real language is setAppLanguage
   if (id) setData({ user_id: id, app_language: 'en', app_mode: appMode() });
   else setData({ user_id: undefined });
+  firebaseIdentify(id);
+}
+
+let language: string | undefined;
+/** The phone's language (en / si / ta) as a Firebase user property, once per change. Web: nothing. */
+export function setAppLanguage(lang: string): void {
+  if (!lang || lang === language) return;
+  if (firebaseSetLanguage(lang)) language = lang; // not remembered while nothing listens: it goes out once something does
 }
 
 /** A returning customer signed in with the SMS code. */
@@ -489,7 +488,7 @@ export function trackPurchase(o: OrderLike, opts: { cart?: CartLike | null; poin
     if (o.order_status === 'AWAITING_PAYMENT') return false;
     if (o.payment_method === 'ONLINE' && o.payment_status !== 'PAID') return false;
     if (purchaseSent(o.order_number)) return false;
-    if (!layer()) return false;
+    if (!trackingActive()) return false;
     markSent(o.order_number);
     const items = orderItems(o, opts.cart);
     const shipping = round2(num(o.delivery_fee));
@@ -584,7 +583,7 @@ export function trackPageView(route: string, params: Record<string, unknown> = {
     const ownKey = q.filter(([k]) => !AD_PARAMS.includes(k)).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('&');
     const key = ownKey ? `${page_path}?${ownKey}` : page_path;
     if (key === lastPageKey) return false;
-    if (!layer()) return false;
+    if (!trackingActive()) return false;
     lastPageKey = key;
     if (firstPageView) {
       firstPageView = false;
@@ -592,7 +591,9 @@ export function trackPageView(route: string, params: Record<string, unknown> = {
     }
     const origin = env().location?.origin ?? 'https://blynk.lk';
     const search = q.length ? `?${q.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}` : '';
-    return track('page_view', { page_path, page_location: `${origin}${page_path}${search}`, page_title: pageTitleFor(route) });
+    // the web's page_view (the phone's mapping skips it) and the phone's screen_view + Crashlytics breadcrumb
+    const sent = track('page_view', { page_path, page_location: `${origin}${page_path}${search}`, page_title: pageTitleFor(route) });
+    return sendScreen(route, pageTitleFor(route)) || sent;
   } catch {
     return false;
   }
@@ -607,6 +608,7 @@ export function resetForTests(o: { landingSearch?: string } = {}) {
   lastPageKey = '';
   firstPageView = true;
   identified = undefined;
+  language = undefined;
   skuMemo = null;
   cats = null;
   productsById = new Map();
