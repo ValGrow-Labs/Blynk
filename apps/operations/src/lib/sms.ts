@@ -59,6 +59,43 @@ export function smsParts(text: string): number {
 /** "1 SMS" / "3 SMS parts" - one wording everywhere on the screen. */
 export const partsText = (parts: number) => (parts === 1 ? '1 SMS' : `${parts} SMS parts`);
 
+// ----------------------------------------------------------------- placeholders
+// 2026-11-03: {name} {points} {wallet} {app_link} in any text, filled in per customer when the SMS
+// is queued (backend modules/sms-offers/placeholders.ts). The screen asks the API for the list
+// (GET /admin/sms-placeholders) and falls back to this one.
+export const FALLBACK_PLACEHOLDERS: ReadonlyArray<{ token: string; description: string; example: string }> = [
+  { token: '{name}', description: "The customer's first name", example: 'Nimal' },
+  { token: '{points}', description: 'Blynk Points the customer holds', example: '120' },
+  { token: '{wallet}', description: 'Blynk Wallet balance', example: 'LKR 1,250' },
+  { token: '{app_link}', description: 'Link to the Blynk app', example: 'https://blynk.lk/app' },
+];
+
+const PLACEHOLDER_TOKEN = /\{([^{}]*)\}/g;
+const APP_LINK = 'https://blynk.lk/app';
+
+/** The braces in `text` that are not one of `allowed` (tokens like "{name}"), as written, without repeats. */
+export function unknownPlaceholders(text: string, allowed: readonly string[] = FALLBACK_PLACEHOLDERS.map((p) => p.token)): string[] {
+  const bad = new Set<string>();
+  for (const m of text.matchAll(PLACEHOLDER_TOKEN)) if (!allowed.includes(m[0])) bad.add(m[0]);
+  return [...bad];
+}
+
+const fill = (text: string, values: { name: string; points: string; wallet: string }) =>
+  text
+    .replace(PLACEHOLDER_TOKEN, (whole, key: string) =>
+      key === 'name' ? values.name : key === 'points' ? values.points : key === 'wallet' ? values.wallet : key === 'app_link' ? APP_LINK : whole
+    )
+    .trim();
+
+/** The text for a made-up customer (the example under a text box). */
+export const renderSample = (text: string) => fill(text, { name: 'Nimal', points: '120', wallet: 'LKR 1,250' });
+
+/** The longest the text plausibly gets: a 20-letter name, 7-digit points, LKR 9,999,999.99. */
+export const renderLongest = (text: string) => fill(text, { name: 'W'.repeat(20), points: '9999999', wallet: 'LKR 9,999,999.99' });
+
+/** Characters, counting each letter once (as the backend does). */
+export const textLength = (text: string) => [...text].length;
+
 /** A list of language names: "Tamil", "Sinhala and Tamil". */
 export const languageNames = (languages: readonly SmsLanguage[]) =>
   languages.map((l) => LANGUAGE_LABEL[l]).join(' and ').replace(/ and (?=.* and )/g, ', ');

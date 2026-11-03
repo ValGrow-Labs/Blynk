@@ -297,6 +297,8 @@ describe('Opening hours page', () => {
     const toggle = within(box).getByRole('switch', { name: 'Send offer/birthday texts on closed days' });
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(box).toHaveTextContent('still go out on a closed weekday');
+    // 2026-11-03: the new SMS sending rules replace this rule unless "Send at any time" is switched off
+    expect(within(box).getByTestId('closed-sms-note')).toHaveTextContent(/Only used when .Send at any time. is off in SMS sending rules/);
     await user.click(toggle);
     expect(box).toHaveTextContent('A birthday text then goes out on the next open day');
     await user.click(within(box).getByRole('button', { name: 'Save' }));

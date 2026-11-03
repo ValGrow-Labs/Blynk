@@ -113,6 +113,22 @@ import type {
   SmsOfferEstimate,
   SmsOfferInput,
   SmsOfferTestResult,
+  SmsArea,
+  SmsCampaign,
+  SmsCampaignDetail,
+  SmsCampaignInput,
+  SmsCampaignKind,
+  SmsCampaignPatch,
+  SmsCampaignPreviewInput,
+  SmsCampaignStatus,
+  SmsHistoryItem,
+  SmsLimitRules,
+  SmsLimitsInput,
+  SmsPlaceholderList,
+  SmsSendingInput,
+  SmsSendingRules,
+  SmsTemplate,
+  SmsTemplateInput,
   CategoryProductOrder,
   SetStockInput,
   SetStockResult,
@@ -1409,6 +1425,79 @@ export const smsOffers = {
       method: 'POST',
       body: { language, message, ...(phone ? { phone } : {}) },
     }),
+
+  /** 2026-11-03: the same body with `send_at` schedules it (a ONCE campaign) instead of sending now. */
+  schedule: (input: SmsOfferInput & { send_at: string }) =>
+    apiRequest<{ campaign: SmsCampaign }>('/admin/sms-offers', { method: 'POST', body: { ...input } }).then(
+      (d) => d.campaign
+    ),
+
+  /** Towns customers have addresses in, for the CUSTOM audience's `areas`. */
+  areas: () => apiRequest<{ areas: SmsArea[] }>('/admin/sms-offers/areas').then((d) => d.areas),
+
+  placeholders: () => apiRequest<SmsPlaceholderList>('/admin/sms-placeholders'),
+};
+
+/** Saved SMS texts (2026-11-03): `/admin/sms-templates`. */
+export const smsTemplates = {
+  list: () => apiRequest<{ templates: SmsTemplate[] }>('/admin/sms-templates').then((d) => d.templates),
+  create: (input: SmsTemplateInput) =>
+    apiRequest<{ template: SmsTemplate }>('/admin/sms-templates', { method: 'POST', body: { ...input } }).then(
+      (d) => d.template
+    ),
+  update: (id: string, input: SmsTemplateInput) =>
+    apiRequest<{ template: SmsTemplate }>(`/admin/sms-templates/${id}`, { method: 'PUT', body: { ...input } }).then(
+      (d) => d.template
+    ),
+  remove: (id: string) => apiRequest(`/admin/sms-templates/${id}`, { method: 'DELETE' }),
+};
+
+/** Scheduled and automatic SMS (2026-11-03): `/admin/sms-campaigns`. */
+export const smsCampaigns = {
+  list: (filter: { status?: SmsCampaignStatus; kind?: SmsCampaignKind } = {}) => {
+    const query = new URLSearchParams(filter as Record<string, string>).toString();
+    return apiRequest<{ campaigns: SmsCampaign[] }>(`/admin/sms-campaigns${query ? `?${query}` : ''}`).then(
+      (d) => d.campaigns
+    );
+  },
+  get: (id: string) => apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}`).then((d) => d.campaign),
+  create: (input: SmsCampaignInput) =>
+    apiRequest<{ campaign: SmsCampaign }>('/admin/sms-campaigns', { method: 'POST', body: { ...input } }).then(
+      (d) => d.campaign
+    ),
+  update: (id: string, patch: SmsCampaignPatch) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}`, { method: 'PATCH', body: { ...patch } }).then(
+      (d) => d.campaign
+    ),
+  pause: (id: string) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}/pause`, { method: 'POST' }).then((d) => d.campaign),
+  resume: (id: string) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}/resume`, { method: 'POST' }).then((d) => d.campaign),
+  cancel: (id: string) =>
+    apiRequest<{ campaign: SmsCampaignDetail }>(`/admin/sms-campaigns/${id}/cancel`, { method: 'POST' }).then((d) => d.campaign),
+  /** Same numbers as the offer estimate, for a campaign's audience and texts. */
+  preview: (input: SmsCampaignPreviewInput) =>
+    apiRequest<{ preview: SmsOfferEstimate }>('/admin/sms-campaigns/preview', {
+      method: 'POST',
+      body: { ...input },
+    }).then((d) => d.preview),
+  /** Offers sent now and campaign runs, newest first. */
+  history: (limit?: number) =>
+    apiRequest<{ items: SmsHistoryItem[] }>(`/admin/sms-campaigns/history${limit ? `?limit=${limit}` : ''}`).then(
+      (d) => d.items
+    ),
+};
+
+/** SMS sending rules and limits (2026-11-03): More -> Customers and rewards -> SMS sending rules. */
+export const smsSettings = {
+  sending: {
+    get: () => apiRequest<SmsSendingRules>('/admin/settings/sms-sending'),
+    update: (body: SmsSendingInput) => apiRequest<SmsSendingRules>('/admin/settings/sms-sending', { method: 'PUT', body: { ...body } }),
+  },
+  limits: {
+    get: () => apiRequest<SmsLimitRules>('/admin/settings/sms-limits'),
+    update: (body: SmsLimitsInput) => apiRequest<SmsLimitRules>('/admin/settings/sms-limits', { method: 'PUT', body: { ...body } }),
+  },
 };
 
 /** Rider applications from the Rider app: Admin and Operations approve or reject. */

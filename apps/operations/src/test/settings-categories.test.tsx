@@ -27,7 +27,7 @@ afterEach(() => {
 
 const NAMES = ['Deliveries', 'Riders', 'Orders and payments', 'Customers and rewards', 'Sellers', 'Team and app'] as const;
 // tiles + cards
-const COUNTS = [10, 7, 7, 10, 3, 3];
+const COUNTS = [10, 7, 7, 11, 3, 3];
 
 /** Every link tile of More: category -> [title, href]. 26 tiles, each in exactly one category. */
 const TILES: Record<(typeof NAMES)[number], Array<[string, string]>> = {
@@ -169,6 +169,9 @@ describe('More categories', () => {
 
     await user.click(await tabOf('Customers and rewards'));
     expect(await screen.findByRole('heading', { name: 'Customer SMS language', level: 2 })).toBeInTheDocument();
+    // SMS sending rules (2026-11-03) sits after the SMS language card
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Customer SMS language', 'SMS sending rules']);
 
     await user.click(await tabOf('Sellers'));
     expect(await screen.findByRole('link', { name: /^Sellers/ })).toBeInTheDocument();
@@ -242,6 +245,8 @@ describe('More categories', () => {
       ['delivery-zones', /^Deliveries/, 'Extra delivery areas'],
       ['delivery-radius', /^Deliveries/, 'Delivery radius'],
       ['small-order-fee', /^Deliveries/, 'Small-order fee'],
+      ['sms-sending-rules', /^Customers and rewards/, 'SMS sending rules'],
+      ['sms-sending-rules-title', /^Customers and rewards/, 'SMS sending rules'],
       ['rider-commission-title', /^Riders/, 'Rider commission'],
       ['app-version-title', /^Team and app/, 'App version'],
     ];
@@ -269,7 +274,7 @@ describe('More categories', () => {
     await waitFor(() => expect(api.find('GET', '/admin/settings/delivery-fee').length).toBeGreaterThan(0));
     expect(api.find('GET', '/admin/settings/rider-trips').length).toBeGreaterThan(0);
     expect(api.find('GET', '/admin/settings/delivery-radius').length).toBeGreaterThan(0);
-    for (const path of ['cart-rules', 'payment-gateway', 'default-markup', 'rider-commission', 'customer-sms-language', 'app-updates']) {
+    for (const path of ['cart-rules', 'payment-gateway', 'default-markup', 'rider-commission', 'customer-sms-language', 'app-updates', 'sms-sending', 'sms-limits']) {
       expect(api.find('GET', `/admin/settings/${path}`)).toHaveLength(0);
     }
     // tile badges load only with their category
@@ -286,6 +291,11 @@ describe('More categories', () => {
     expect(api.find('GET', '/admin/settings/customer-sms-language')).toHaveLength(0);
     expect(api.find('GET', '/admin/settings/app-updates')).toHaveLength(0);
     expect(api.find('GET', '/admin/sellers')).toHaveLength(0);
+
+    await user.click(await tabOf('Customers and rewards'));
+    await waitFor(() => expect(api.find('GET', '/admin/settings/sms-sending')).toHaveLength(1));
+    expect(api.find('GET', '/admin/settings/sms-limits')).toHaveLength(1);
+    expect(api.find('GET', '/admin/settings/customer-sms-language')).toHaveLength(1);
 
     await user.click(await tabOf('Sellers'));
     await waitFor(() => expect(api.find('GET', '/admin/sellers')).toHaveLength(1));

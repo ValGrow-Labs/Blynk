@@ -787,6 +787,10 @@ function ClosedDaySmsCard({ schedule, onSaved }: CardProps) {
         </h2>
         <Switch label="Send offer/birthday texts on closed days" checked={on} onToggle={() => setOn((v) => !v)} />
       </div>
+      {/* 2026-11-03: SMS sending rules (More > Customers and rewards) replaced the opening-hours rule; this switch only counts when "Send at any time" is off. */}
+      <p className="quiet" data-testid="closed-sms-note">
+        Only used when &ldquo;Send at any time&rdquo; is off in SMS sending rules (More &gt; Customers and rewards).
+      </p>
       <p className="quiet">{on ? SMS_ON_CLOSED_DAYS_HINT.on : SMS_ON_CLOSED_DAYS_HINT.off}</p>
       <form className="form" onSubmit={save} noValidate>
         <button type="submit" className="button" disabled={saving}>

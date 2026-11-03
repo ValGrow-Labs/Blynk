@@ -97,6 +97,27 @@ const LEGACY_LABEL: Record<string, string> = {
   NEVER_ORDERED: 'Signed up, never ordered',
 };
 
+/** "Custom: in Colombo, Dehiwala; 1-5 delivered orders; last order 30+ days ago" (SMS campaigns, 2026-11-03). */
+export function customAudienceLabel(f: Record<string, unknown>): string {
+  const num = (k: string) => (typeof f[k] === 'number' ? (f[k] as number) : undefined);
+  const range = (lo?: number, hi?: number) => `${lo ?? 0}${hi !== undefined ? `-${hi}` : '+'}`;
+  const bits: string[] = [];
+  const areas = Array.isArray(f.areas) ? (f.areas as string[]) : [];
+  if (areas.length) bits.push(`in ${areas.join(', ')}`);
+  if (num('min_orders') !== undefined || num('max_orders') !== undefined) {
+    bits.push(`${range(num('min_orders'), num('max_orders'))} delivered orders`);
+  }
+  if (num('min_spend_lkr') !== undefined) bits.push(`spent LKR ${lkr.format(num('min_spend_lkr')!)}+ in ${num('spend_days') ?? 90} days`);
+  if (typeof f.language === 'string') bits.push(f.language === 'none' ? 'no SMS language' : `SMS language ${f.language}`);
+  if (num('min_points') !== undefined || num('max_points') !== undefined) {
+    bits.push(`${range(num('min_points'), num('max_points'))} points`);
+  }
+  if (num('last_order_days_min') !== undefined || num('last_order_days_max') !== undefined) {
+    bits.push(`last order ${range(num('last_order_days_min'), num('last_order_days_max'))} days ago`);
+  }
+  return bits.length ? `Custom: ${bits.join('; ')}` : 'Custom: all customers';
+}
+
 /** "Haven't ordered in 14 days", "Big spenders: LKR 5,000+ in 90 days", ... for history rows. */
 export function audienceLabel(audience: unknown): string {
   if (audience == null) return 'All customers';
@@ -104,6 +125,8 @@ export function audienceLabel(audience: unknown): string {
   if (typeof audience !== 'object') return String(audience);
   const a = audience as { group?: string; days?: number; min_spend_lkr?: number };
   switch (a.group) {
+    case 'CUSTOM':
+      return customAudienceLabel(audience as Record<string, unknown>);
     case 'ALL':
       return 'All customers';
     case 'LAPSED':

@@ -26,6 +26,7 @@ import { DeliveryRadiusCard } from '../components/DeliveryRadiusCard';
 import { DeliveryZonesCard } from '../components/DeliveryZonesCard';
 import { CartRulesCard } from '../components/CartRulesCard';
 import { CustomerSmsLanguageCard } from '../components/CustomerSmsLanguageCard';
+import { SmsSendingRulesCard } from '../components/SmsSendingRulesCard';
 import { AppVersionCard } from '../components/AppUpdate';
 import { AppUpdatesSettingsCard } from '../components/AppUpdatesSettingsCard';
 import { DefaultMarkupCard } from '../components/DefaultMarkupCard';
@@ -242,8 +243,12 @@ const MORE_CATEGORIES: readonly SettingsCategory[] = [
       // Blynk Wallet: refunds go to the customer's wallet (owner, 2026-10-15).
       { key: 'wallet', node: <Tile to="/more/wallet" title="Blynk Wallet" /> },
     ],
-    // Customer SMS language (owner, 2026-10-12).
-    cards: [{ key: 'sms-language', anchors: ['customer-sms-language-title'], node: <CustomerSmsLanguageCard /> }],
+    cards: [
+      // Customer SMS language (owner, 2026-10-12).
+      { key: 'sms-language', anchors: ['customer-sms-language-title'], node: <CustomerSmsLanguageCard /> },
+      // SMS sending rules (owner's brother, 2026-11-03): any time, quiet hours, per-customer cap, monthly budget.
+      { key: 'sms-sending-rules', anchors: ['sms-sending-rules', 'sms-sending-rules-title'], node: <SmsSendingRulesCard /> },
+    ],
   },
   {
     id: 'sellers',

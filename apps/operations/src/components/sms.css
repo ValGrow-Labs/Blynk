@@ -1,0 +1,227 @@
+/* SMS offers, campaigns, templates and sending rules (2026-11-03). Phone-first (360 dp): every tap
+   target is at least 44 px, nothing is wider than the screen, long words wrap. */
+.sms-page {
+  min-width: 0;
+}
+
+.sms-page .button,
+.sms-page .primary,
+.sms-rules .button,
+.sms-rules .primary {
+  min-height: 44px;
+}
+
+.sms-page .input,
+.sms-rules .input {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.sms-page .card,
+.sms-rules {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sms-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.sms-tab[hidden] {
+  display: none;
+}
+
+.sms-segmented--wrap .segmented__item {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sms-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sms-chip {
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+
+.sms-chip.is-selected {
+  background: var(--yellow);
+  border-color: var(--ink);
+}
+
+.sms-chip:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.sms-chip--token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+}
+
+.sms-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.sms-fields .field {
+  min-width: 0;
+}
+
+.sms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sms-actions .button {
+  flex: 1 1 120px;
+}
+
+.sms-example {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.sms-areas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sms-areas__list {
+  max-height: 224px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.sms-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: var(--text-meta);
+}
+
+.sms-area + .sms-area {
+  border-top: 1px solid var(--line);
+}
+
+.sms-area input {
+  accent-color: var(--ink);
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.sms-area__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.sms-area__count {
+  color: var(--ink-3);
+}
+
+.sms-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 0 4px 12px;
+  border-left: 3px solid var(--yellow);
+}
+
+.sms-samples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sms-samples .sms-preview {
+  display: block;
+}
+
+.sms-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.sms-switch-row > span {
+  min-width: 0;
+}
+
+.sms-switch-row strong {
+  display: block;
+}
+
+.sms-switch-row em {
+  display: block;
+  font-style: normal;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.sms-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.sms-campaign__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.sms-campaign__top .cat-row__title {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.sms-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sms-runs li {
+  padding: 8px 10px;
+  background: var(--canvas);
+  border-radius: var(--radius);
+  font-size: var(--text-meta);
+  overflow-wrap: anywhere;
+}
