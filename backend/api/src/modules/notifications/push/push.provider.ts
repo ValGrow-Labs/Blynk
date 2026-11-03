@@ -1,6 +1,7 @@
 import { logger } from '../../../utils/logger.js';
 import type { NotificationProvider, ProviderSendResult, SendNotificationParams } from '../notification.provider.js';
 import { deviceTokenRepository } from './push.repository.js';
+import { bodyWithEta } from './push.eta.js';
 import { getPushSender, type PushMessage } from './push.sender.js';
 
 /**
@@ -35,7 +36,9 @@ export class PushProvider implements NotificationProvider {
     try {
       outcomes = await sender.send(tokens, {
         title: payload.title,
-        body: payload.body,
+        // The "on the way" push: the driving time, only when the routing engine knows it right now.
+        body: await bodyWithEta(payload as { body: string }),
+        ...(typeof payload.tag === 'string' && payload.tag ? { tag: payload.tag } : {}),
         ...(typeof payload.image === 'string' && payload.image ? { image: payload.image } : {}),
         data,
       });

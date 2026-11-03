@@ -4,13 +4,15 @@ import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from 'react-
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useHasOpenOrder } from '@/blynk/orders/openOrders';
 import { TABS } from '@/blynk/ui/strings';
+import { ActiveOrderBanner } from '@/components/ActiveOrderBanner';
 import { tap } from '@/components/ui';
 import { C, F } from '@/lib/theme';
 
 /*
  * The shell's bottom bar (Flutter CustomerShell / AdaptiveScaffold): Shop, Orders, Help,
  * Profile. The selected tab gets Blynk's yellow pill behind its icon; Orders carries a dot
- * while an order is still open. Pushed screens (cart, product, order detail) cover it.
+ * while an order is still open, and the active-order strip rides on top of it. Pushed screens
+ * (cart, product, order detail, tracking) cover both.
  */
 
 type IconProps = { color: string; active: boolean };
@@ -55,6 +57,9 @@ export const TAB_BAR_H = 58;
 export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
   const openOrder = useHasOpenOrder();
   return (
+    <View>
+    {/* the slim active-order strip sits on the bar (hidden with no order in progress, and over the keyboard) */}
+    <ActiveOrderBanner />
     <View style={[styles.bar, { paddingBottom: insets.bottom }]} accessibilityRole="tablist">
       {state.routes.map((route, i) => {
         const meta = TAB_META[route.name];
@@ -72,6 +77,7 @@ export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
           <Tab key={route.key} label={meta.label()} Icon={meta.Icon} focused={focused} badge={badge} onPress={onPress} />
         );
       })}
+    </View>
     </View>
   );
 }

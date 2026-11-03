@@ -4,20 +4,45 @@ import { sql, type Transaction } from 'kysely';
 import { logger } from '../../../utils/logger.js';
 import { bestEffort, enqueuePush, PUSH_TYPES } from './push.repository.js';
 import { isPushEnabled } from './push.sender.js';
+import { orderPickupPoints } from '../../orders/pickup-points.js';
 
 type Trx = Transaction<Database>;
 
 /**
+ * The notification tag of an order's pushes (owner's brother, 2026-11-03, PickMe style): every
+ * status push of one order carries it, so the phone REPLACES the earlier notification instead of
+ * stacking one per stage (FCM android.notification.tag, web push tag, APNs collapse id).
+ */
+export function orderPushTag(orderId: string): string {
+  return `order-${orderId}`;
+}
+
+function arrivingBody(orderNumber: string, minutes: number | string): string {
+  return `Arriving in about ${minutes} min. Order ${orderNumber}. Your delivery code is in the app.`;
+}
+
+/**
  * What the customer's phone shows for each order status. Statuses not
  * listed (PLACED, ITEM_UNAVAILABLE) send no push. The delivery code is never
- * part of a push: it stays in the app.
+ * part of a push: it stays in the app. `etaMinutes` (OUT_FOR_DELIVERY only) is the driving time
+ * when it is known; without it the text carries no time - one is never guessed.
  */
-export function orderStatusPush(status: OrderStatus, orderNumber: string): { title: string; body: string } | null {
+export function orderStatusPush(
+  status: OrderStatus,
+  orderNumber: string,
+  etaMinutes?: number | null
+): { title: string; body: string } | null {
   switch (status) {
     case 'PACKED':
       return { title: 'Your order is packed', body: `Order ${orderNumber} is packed and waiting for a rider.` };
     case 'OUT_FOR_DELIVERY':
-      return { title: 'On the way', body: `Your rider is bringing order ${orderNumber}. Your delivery code is in the app.` };
+      return {
+        title: 'Your rider is on the way',
+        body:
+          typeof etaMinutes === 'number' && Number.isFinite(etaMinutes) && etaMinutes > 0
+            ? arrivingBody(orderNumber, Math.round(etaMinutes))
+            : `Order ${orderNumber} is on its way. Your delivery code is in the app.`,
+      };
     case 'DELIVERED':
       return { title: 'Delivered', body: `Order ${orderNumber} was delivered. Enjoy!` };
     case 'CANCELLED':
@@ -37,7 +62,14 @@ export function orderStatusPush(status: OrderStatus, orderNumber: string): { tit
  */
 export async function enqueueOrderStatusPush(
   trx: Trx,
-  order: { id: string; order_number: string; customer_id: string },
+  order: {
+    id: string;
+    order_number: string;
+    customer_id: string;
+    dark_store_id?: string;
+    delivery_latitude?: unknown;
+    delivery_longitude?: unknown;
+  },
   from: OrderStatus,
   to: OrderStatus
 ): Promise<void> {
@@ -46,15 +78,56 @@ export async function enqueueOrderStatusPush(
   if (!text) return;
   await bestEffort(
     trx,
-    () =>
-      enqueuePush(trx, {
+    async () => {
+      // The pushes of one order replace each other on the phone (tag). One push per status change:
+      // the key is the order, the stage and how often the order has entered it (a re-staged and
+      // re-dispatched order is announced again), so a replay of the same change sends nothing twice.
+      const entered = await trx
+        .selectFrom('order_status_history')
+        .select((eb) => eb.fn.countAll<string>().as('n'))
+        .where('order_id', '=', order.id)
+        .where('new_status', '=', to)
+        .executeTakeFirst();
+      // A trouble finding the time only costs the time, never the push (own savepoint).
+      const extra =
+        to === 'OUT_FOR_DELIVERY'
+          ? (await bestEffort(
+              trx,
+              () => etaFields(trx, order),
+              (err) => logger.warn({ err, orderId: order.id }, 'Could not prepare the on-the-way time; the push carries none')
+            )) ?? {}
+          : {};
+      await enqueuePush(trx, {
         userId: order.customer_id,
         orderId: order.id,
         type: PUSH_TYPES.ORDER_STATUS,
-        payload: { ...text, data: { type: 'order', order_id: order.id }, status: to },
-      }),
+        idempotencyKey: `push:order-status:${order.id}:${to}:${Number(entered?.n ?? 0)}`,
+        payload: { ...text, tag: orderPushTag(order.id), data: { type: 'order', order_id: order.id }, status: to, ...extra },
+      });
+    },
     (err) => logger.error({ err, orderId: order.id, status: to }, 'Could not queue the order status push; the transition goes ahead')
   );
+}
+
+/**
+ * What lets the worker put a driving time into the "on the way" push: the rider has just collected
+ * the order, so the way from the order's ONE pickup point (the store, or the seller when the whole
+ * order is theirs) to the customer's door is the trip. Several pickup points, or no coordinates:
+ * nothing is added and the push carries no time. The route is asked when the push is sent, not
+ * here, so the routing engine never delays the order transition.
+ */
+async function etaFields(
+  trx: Trx,
+  order: { id: string; order_number: string; dark_store_id?: string; delivery_latitude?: unknown; delivery_longitude?: unknown }
+): Promise<Record<string, unknown>> {
+  const to = { lat: Number(order.delivery_latitude), lng: Number(order.delivery_longitude) };
+  if (order.delivery_latitude == null || !Number.isFinite(to.lat) || !Number.isFinite(to.lng)) return {};
+  const points = await orderPickupPoints(order, trx);
+  if (points.length !== 1) return {};
+  return {
+    eta_route: { from: { lat: points[0]!.lat, lng: points[0]!.lng }, to },
+    body_with_eta: arrivingBody(order.order_number, '{min}'),
+  };
 }
 
 /**

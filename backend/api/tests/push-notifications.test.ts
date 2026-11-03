@@ -5,11 +5,14 @@ import { db, pool } from '../src/database/connection.js';
 import { generateAccessToken } from '../src/modules/auth/token.service.js';
 import {
   bestEffort,
+  bodyWithEta,
+  buildMulticast,
   classifyFcmError,
   enqueueOrderStatusPush,
   notificationService,
   orderStatusPush,
   parseServiceAccount,
+  pushEtaDeps,
   setPushSenderForTests,
   type ClaimedNotificationJob,
   type PushMessage,
@@ -213,7 +216,7 @@ describe('Device tokens: POST /me/devices, DELETE /me/devices/:token', () => {
 describe('Order status pushes', () => {
   const cases: [OrderStatus, string, string][] = [
     ['PACKED', 'Your order is packed', 'Order BL-TEST is packed and waiting for a rider.'],
-    ['OUT_FOR_DELIVERY', 'On the way', 'Your rider is bringing order BL-TEST. Your delivery code is in the app.'],
+    ['OUT_FOR_DELIVERY', 'Your rider is on the way', 'Order BL-TEST is on its way. Your delivery code is in the app.'],
     ['DELIVERED', 'Delivered', 'Order BL-TEST was delivered. Enjoy!'],
     ['CANCELLED', 'Order cancelled', 'Order BL-TEST was cancelled.'],
     ['FAILED', "We couldn't deliver", "We couldn't deliver order BL-TEST. We'll contact you."],
@@ -283,10 +286,175 @@ describe('Order status pushes', () => {
     expect(fake.calls).toEqual([
       {
         tokens: ['tok-order-11'],
-        message: { title: 'Your order is packed', body: rows[0].payload.body, data: { type: 'order', order_id: order.id } },
+        message: {
+          title: 'Your order is packed',
+          body: rows[0].payload.body,
+          tag: `order-${order.id}`,
+          data: { type: 'order', order_id: order.id },
+        },
       },
     ]);
     expect((await pool.query('SELECT status FROM notifications WHERE id = $1', [rows[0].id])).rows[0].status).toBe('SENT');
+  });
+
+  it('the on-the-way text carries a time only when one is known, never a guess', () => {
+    expect(orderStatusPush('OUT_FOR_DELIVERY', 'BL-TEST', 12)).toEqual({
+      title: 'Your rider is on the way',
+      body: 'Arriving in about 12 min. Order BL-TEST. Your delivery code is in the app.',
+    });
+    for (const none of [undefined, null, 0, -3, Number.NaN]) {
+      expect(orderStatusPush('OUT_FOR_DELIVERY', 'BL-TEST', none)!.body).toBe('Order BL-TEST is on its way. Your delivery code is in the app.');
+    }
+    // no other stage ever shows a time
+    expect(orderStatusPush('PACKED', 'BL-TEST', 12)!.body).not.toMatch(/min/);
+    expect(orderStatusPush('DELIVERED', 'BL-TEST', 12)!.body).not.toMatch(/min/);
+  });
+
+  async function queueTransitions(n: number, steps: [OrderStatus, OrderStatus][]) {
+    setPushSenderForTests(fake);
+    const c = await people.customer(n);
+    await registerDevice(c.token, `tok-order-${n}`);
+    const order = await expectCreated(await c.placeOrder([{ product_id: MILK, quantity: 1 }]));
+    const row = (await pool.query('SELECT * FROM orders WHERE id = $1', [order.id])).rows[0];
+    const queued = await db
+      .transaction()
+      .execute(async (trx) => {
+        for (const [from, to] of steps) await enqueueOrderStatusPush(trx, row, from, to);
+        const q = await trx
+          .selectFrom('notifications')
+          .selectAll()
+          .where('order_id', '=', order.id)
+          .where('channel', '=', 'PUSH')
+          .orderBy('created_at')
+          .execute();
+        throw Object.assign(new Error('rollback'), { q });
+      })
+      .catch((e: { q: any[] }) => e.q);
+    return { c, order, row, queued };
+  }
+
+  it('every stage of one order carries the same tag and order_id, with one idempotency key per stage change (one notification per order on the phone)', async () => {
+    const { order, queued } = await queueTransitions(14, [
+      ['PLACED', 'PACKED'],
+      ['PACKED', 'OUT_FOR_DELIVERY'],
+      ['OUT_FOR_DELIVERY', 'DELIVERED'],
+      ['OUT_FOR_DELIVERY', 'DELIVERED'], // the same change replayed queues nothing more
+    ]);
+    expect(queued.map((r) => r.payload.title)).toEqual(['Your order is packed', 'Your rider is on the way', 'Delivered']);
+    for (const r of queued) {
+      expect(r.payload.tag).toBe(`order-${order.id}`);
+      expect(r.payload.data).toEqual({ type: 'order', order_id: order.id });
+    }
+    expect(queued.map((r) => r.idempotency_key)).toEqual([
+      `push:order-status:${order.id}:PACKED:0`,
+      `push:order-status:${order.id}:OUT_FOR_DELIVERY:0`,
+      `push:order-status:${order.id}:DELIVERED:0`,
+    ]);
+  });
+
+  describe('the on-the-way time (resolved by the worker when it sends)', () => {
+    it('queues the route (pickup -> door), a {min} text, and a plain text without a time', async () => {
+      const { row, queued } = await queueTransitions(15, [['PACKED', 'OUT_FOR_DELIVERY']]);
+      const payload = queued[0].payload;
+      expect(payload.body).toBe(`Order ${row.order_number} is on its way. Your delivery code is in the app.`);
+      expect(payload.eta_route.to).toEqual({ lat: Number(row.delivery_latitude), lng: Number(row.delivery_longitude) });
+      expect(typeof payload.eta_route.from.lat).toBe('number');
+      expect(payload.body_with_eta).toBe(`Arriving in about {min} min. Order ${row.order_number}. Your delivery code is in the app.`);
+    });
+
+    it('other stages never carry a route', async () => {
+      const { queued } = await queueTransitions(17, [['PLACED', 'PACKED']]);
+      expect(queued[0].payload.eta_route).toBeUndefined();
+      expect(queued[0].payload.body_with_eta).toBeUndefined();
+    });
+
+    const route = { from: { lat: 6.46, lng: 79.98 }, to: { lat: 6.47, lng: 79.99 } };
+    const withRoute = { body: 'plain', eta_route: route, body_with_eta: 'In about {min} min' };
+
+    it('bodyWithEta: whole minutes from OSRM, at least 1', async () => {
+      const real = pushEtaDeps.fetchRoute;
+      try {
+        pushEtaDeps.fetchRoute = async () => ({ distance_m: 4000, duration_s: 12 * 60 + 20, coordinates: [] });
+        expect(await bodyWithEta(withRoute)).toBe('In about 12 min');
+        pushEtaDeps.fetchRoute = async () => ({ distance_m: 10, duration_s: 5, coordinates: [] });
+        expect(await bodyWithEta(withRoute)).toBe('In about 1 min');
+      } finally {
+        pushEtaDeps.fetchRoute = real;
+      }
+    });
+
+    it('bodyWithEta: routing down, no time, a bad answer or no route data all send the plain text', async () => {
+      const real = pushEtaDeps.fetchRoute;
+      try {
+        pushEtaDeps.fetchRoute = async () => {
+          throw new Error('OSRM down');
+        };
+        expect(await bodyWithEta(withRoute)).toBe('plain');
+        pushEtaDeps.fetchRoute = async () => ({ distance_m: 0, duration_s: 0, coordinates: [] });
+        expect(await bodyWithEta(withRoute)).toBe('plain');
+        pushEtaDeps.fetchRoute = async () => ({ distance_m: 1, duration_s: Number.NaN, coordinates: [] });
+        expect(await bodyWithEta(withRoute)).toBe('plain');
+        pushEtaDeps.fetchRoute = async () => ({ distance_m: 1, duration_s: 600, coordinates: [] });
+        expect(await bodyWithEta({ body: 'plain' })).toBe('plain');
+        expect(await bodyWithEta({ body: 'plain', eta_route: { from: { lat: 1 }, to: null }, body_with_eta: 'x {min}' })).toBe('plain');
+      } finally {
+        pushEtaDeps.fetchRoute = real;
+      }
+    });
+
+    it('the worker sends the tag and the minutes; without a route answer it sends the plain text', async () => {
+      const { c, order, row } = await queueTransitions(16, []);
+      const payload = {
+        title: 'Your rider is on the way',
+        body: `Order ${row.order_number} is on its way. Your delivery code is in the app.`,
+        tag: `order-${order.id}`,
+        data: { type: 'order', order_id: order.id },
+        eta_route: route,
+        body_with_eta: `Arriving in about {min} min. Order ${row.order_number}. Your delivery code is in the app.`,
+      };
+      const insert = async () =>
+        (
+          await pool.query(
+            `INSERT INTO notifications (user_id, order_id, channel, notification_type, recipient, payload, status, max_attempts)
+             VALUES ($1::uuid, $2, 'PUSH', 'PUSH_ORDER_STATUS', $4, $3, 'QUEUED', 3) RETURNING id`,
+            [c.id, order.id, JSON.stringify(payload), c.id]
+          )
+        ).rows[0].id as string;
+      const real = pushEtaDeps.fetchRoute;
+      try {
+        pushEtaDeps.fetchRoute = async () => ({ distance_m: 5000, duration_s: 9 * 60, coordinates: [] });
+        expect((await dispatch(await insert())).success).toBe(true);
+        pushEtaDeps.fetchRoute = async () => {
+          throw new Error('OSRM down');
+        };
+        expect((await dispatch(await insert())).success).toBe(true);
+      } finally {
+        pushEtaDeps.fetchRoute = real;
+      }
+      const data = { type: 'order', order_id: order.id };
+      expect(fake.calls.map((x) => x.message)).toEqual([
+        {
+          title: 'Your rider is on the way',
+          body: `Arriving in about 9 min. Order ${row.order_number}. Your delivery code is in the app.`,
+          tag: `order-${order.id}`,
+          data,
+        },
+        { title: 'Your rider is on the way', body: payload.body, tag: `order-${order.id}`, data },
+      ]);
+    });
+  });
+
+  it('the FCM request puts the tag on Android (channel orders), web push and APNs, and only when there is one', () => {
+    const data = { type: 'order', order_id: 'o1' };
+    const tagged = buildMulticast(['t'], { title: 'a', body: 'b', tag: 'order-o1', data });
+    expect(tagged.android?.notification).toMatchObject({ channelId: 'orders', tag: 'order-o1' });
+    expect(tagged.webpush?.notification).toMatchObject({ tag: 'order-o1' });
+    expect(tagged.apns?.headers).toEqual({ 'apns-collapse-id': 'order-o1' });
+    expect(tagged.data).toEqual(data);
+    const plain = buildMulticast(['t'], { title: 'a', body: 'b', data });
+    expect(plain.android?.notification).toEqual({ channelId: 'orders' });
+    expect(plain.apns?.headers).toBeUndefined();
+    expect(plain.webpush?.notification).not.toHaveProperty('tag');
   });
 
   it('queues nothing when push is not configured', async () => {

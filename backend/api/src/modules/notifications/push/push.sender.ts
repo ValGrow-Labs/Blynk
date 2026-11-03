@@ -10,6 +10,11 @@ export interface PushMessage {
   body: string;
   /** A picture shown under the text (https address); Android's big picture / the web push image. */
   image?: string;
+  /**
+   * Replaces an earlier notification with the same tag instead of piling up (Android notification
+   * tag, web push tag, APNs collapse id). The order status pushes use `order-<id>`.
+   */
+  tag?: string;
   /** FCM data values are strings. */
   data: Record<string, string>;
 }
@@ -48,6 +53,29 @@ export function classifyFcmError(code: string | undefined, message = ''): 'UNREG
   return 'OTHER';
 }
 
+/** The FCM request for one push (pure, so the tag and channel are testable without Google). */
+export function buildMulticast(tokens: string[], message: PushMessage): import('firebase-admin/messaging').MulticastMessage {
+  return {
+    tokens,
+    notification: { title: message.title, body: message.body, ...(message.image ? { imageUrl: message.image } : {}) },
+    data: message.data,
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: ORDERS_CHANNEL_ID,
+        ...(message.image ? { imageUrl: message.image } : {}),
+        ...(message.tag ? { tag: message.tag } : {}),
+      },
+    },
+    apns: { ...(message.tag ? { headers: { 'apns-collapse-id': message.tag } } : {}), payload: { aps: { sound: 'default' } } },
+    // The PWA (2026-10-08): the browser shows it; a tap opens the web app.
+    webpush: {
+      notification: { icon: webPushIcon(), ...(message.image ? { image: message.image } : {}), ...(message.tag ? { tag: message.tag } : {}) },
+      fcmOptions: { link: env.WEB_APP_URL },
+    },
+  };
+}
+
 /** firebase-admin (messaging only), loaded on the first send. */
 class FirebasePushSender implements PushSender {
   private messaging: Promise<import('firebase-admin/messaging').Messaging> | null = null;
@@ -79,18 +107,7 @@ class FirebasePushSender implements PushSender {
 
   async send(tokens: string[], message: PushMessage): Promise<PushTokenOutcome[]> {
     const messaging = await this.client();
-    const res = await messaging.sendEachForMulticast({
-      tokens,
-      notification: { title: message.title, body: message.body, ...(message.image ? { imageUrl: message.image } : {}) },
-      data: message.data,
-      android: { priority: 'high', notification: { channelId: ORDERS_CHANNEL_ID, ...(message.image ? { imageUrl: message.image } : {}) } },
-      apns: { payload: { aps: { sound: 'default' } } },
-      // The PWA (2026-10-08): the browser shows it; a tap opens the web app.
-      webpush: {
-        notification: { icon: webPushIcon(), ...(message.image ? { image: message.image } : {}) },
-        fcmOptions: { link: env.WEB_APP_URL },
-      },
-    });
+    const res = await messaging.sendEachForMulticast(buildMulticast(tokens, message));
     return res.responses.map((r, i): PushTokenOutcome => {
       const token = tokens[i]!;
       if (r.success) return { token, ok: true, messageId: r.messageId };

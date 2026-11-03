@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
+import { fetchRiderRoute } from '@/blynk/api/tracking';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
 import { appHidden, onVisible } from '@/blynk/lib/visibility';
 import { listOrders } from '@/blynk/orders/api';
+import { refreshActiveEta } from '@/blynk/orders/activeEta';
 import { setKnownOrders } from '@/blynk/orders/openOrders';
 import { TabBar } from '@/components/TabBar';
 import { DEMO } from '@/demo/mode';
@@ -35,7 +37,8 @@ export default function TabsLayout() {
 /**
  * Keeps the Orders badge current for a signed-in customer: the first page of GET /orders on
  * sign-in, whenever the app comes back, and every minute while it is open (the Orders tab
- * also reports each list it loads). Nothing for a guest.
+ * also reports each list it loads). Nothing for a guest. The same round keeps the slim active-order
+ * banner (src/components/ActiveOrderBanner.tsx) current; it adds no loop of its own.
  */
 function useOpenOrderBadge() {
   const session = useSession();
@@ -43,7 +46,14 @@ function useOpenOrderBadge() {
   useEffect(() => {
     if (DEMO || !userId) { setKnownOrders([]); return; }
     let alive = true;
-    const load = () => listOrders(1).then((r) => { if (alive) setKnownOrders(r.orders); }).catch(() => undefined);
+    // the same round feeds the "active order" banner: the order, and while it is on the road the server's time to the door
+    const load = () => listOrders(1)
+      .then(async (r) => {
+        if (!alive) return;
+        setKnownOrders(r.orders);
+        await refreshActiveEta((id) => fetchRiderRoute(id));
+      })
+      .catch(() => undefined);
     void load();
     const t = setInterval(() => { if (!appHidden()) void load(); }, 60_000);
     const off = onVisible(() => void load());
