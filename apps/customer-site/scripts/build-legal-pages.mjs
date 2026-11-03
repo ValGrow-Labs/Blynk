@@ -31,7 +31,7 @@ const siteDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const legalDir = join(siteDir, 'legal');
 
 const SITE = 'https://blynk.lk';
-const CSS = '/styles.css?v=20261015a';
+const CSS = '/styles.css?v=20261103a';
 const OG_IMAGE = `${SITE}/assets/og-image.jpg`;
 // blynk.lk/seller (owner's brother, 2026-10-27): the seller application form, built here so it shares the legal
 // pages' header, footer and phone / WhatsApp links (the number lives only in legal-config.json).

@@ -36,7 +36,7 @@ const YEAR = '2026';
 const PHONE = '+94717107374';
 const WHATSAPP = 'https://wa.me/94717107374';
 const OG_IMAGE = `${SITE}/assets/og-image.jpg`;
-const CSS = '/styles.css?v=20261014b';
+const CSS = '/styles.css?v=20261103a';
 const PAGES_CSS = '/pages.css?v=20261015c';
 const ANALYTICS = '/analytics.js?v=20261015a';
 const STORE_HOURS = '/store-hours.js?v=20261101a';

@@ -243,7 +243,7 @@ a { color: inherit; }
 .band__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 
 .footer { padding: 26px 0; color: var(--ink-3); border-top: 1px solid var(--line); background: var(--cream); }
-.footer__inner { display: grid; gap: 14px; justify-items: start; }
+.footer__inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; justify-items: start; }
 .footer__brand { display: inline-flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 700; text-decoration: none; color: var(--ink); }
 .footer nav { display: flex; flex-wrap: wrap; gap: 0 22px; }
 .footer nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; min-height: 44px; display: inline-flex; align-items: center; }
@@ -263,7 +263,7 @@ a { color: inherit; }
   .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .band__inner { grid-template-columns: 1.3fr 1fr; }
   .band__actions { justify-content: flex-end; }
-  .footer__inner { grid-template-columns: auto 1fr auto; align-items: center; }
+  .footer__inner { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 24px; }
   .footer nav { justify-content: center; }
 }
 @media (min-width: 1024px) {
@@ -502,7 +502,10 @@ html, body { overflow-x: clip; }
 .footer__legal a { color: var(--ink-2); text-decoration: none; font-size: 15px; min-height: 44px; display: inline-flex; align-items: center; }
 .footer__legal a:hover, .footer__legal a[aria-current="page"] { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
 @media (min-width: 768px) {
-  .footer .footer__legal { grid-column: 2 / -1; justify-content: flex-end; }
+  /* row 1: brand left, main links right; every row below spans the width, centred */
+  .footer__inner > nav:not(.footer__legal) { justify-self: end; justify-content: flex-end; }
+  .footer__inner > .footer__help, .footer__inner > small, .footer .footer__legal { grid-column: 1 / -1; justify-self: center; justify-content: center; text-align: center; }
+  .footer__inner > small { margin-top: 6px; }
 }
 
 .nav__home { margin-left: auto; }
