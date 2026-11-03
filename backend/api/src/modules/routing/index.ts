@@ -87,12 +87,15 @@ export async function roadDistanceM(
   osrmUrl: string | undefined = env.OSRM_URL,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 2500,
+  /** `shortest`: ask OSRM for alternative routes and answer the SHORTEST one (the delivery fee: a rider takes the shorter way, so the customer is not charged for the longer one; owner's brother, 2026-11-03). Default: OSRM's best (fastest) route. */
+  opts: { shortest?: boolean } = {},
 ): Promise<number> {
   if (!osrmUrl) throw new AppError('Route drawing is not configured on this server.', 503, 'ROUTING_UNAVAILABLE');
-  const url = `${osrmUrl.replace(/\/+$/, '')}/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`;
+  const url = `${osrmUrl.replace(/\/+$/, '')}/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false${opts.shortest ? '&alternatives=3' : ''}`;
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
   const body = (await response.json().catch(() => null)) as { code?: string; routes?: { distance?: number }[] } | null;
-  const distance = body?.routes?.[0]?.distance;
+  const distances = (body?.routes ?? []).map((r) => r?.distance).filter((d): d is number => typeof d === 'number' && Number.isFinite(d) && d >= 0);
+  const distance = opts.shortest ? (distances.length ? Math.min(...distances) : undefined) : body?.routes?.[0]?.distance;
   if (!response.ok || body?.code !== 'Ok' || typeof distance !== 'number' || !Number.isFinite(distance)) {
     throw new AppError('No road route was found between these points.', 404, 'ROUTE_NOT_FOUND');
   }

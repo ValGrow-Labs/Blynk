@@ -53,7 +53,7 @@ export interface DeliveryFeeQuote {
 
 /** Swappable in tests (OSRM is mocked there). */
 export const feeDistance = {
-  roadMetres: (from: Point, to: Point): Promise<number> => roadDistanceM(from, to, undefined, undefined, FEE_DISTANCE_TIMEOUT_MS),
+  roadMetres: (from: Point, to: Point): Promise<number> => roadDistanceM(from, to, undefined, undefined, FEE_DISTANCE_TIMEOUT_MS, { shortest: true }),
 };
 
 /**

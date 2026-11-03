@@ -258,7 +258,7 @@ export function LiveAddressScreen() {
   useTrackOnce(placed && outside, 'out_of_zone', () => trackOutOfZone(near?.name ?? city)); // GTM: the pin settled outside the circle
   const title = editing ? editing.address_line1 : flow.area ? flow.area.name : T.spot;
   const line = editing ? editing.city
-    : [near && !flow.area ? AREA.near(near.name) : city, far ? (far.km >= 0.1 ? `${kmText(far.km)} ${AREA.fromStore}` : null) : T.spotLine]
+    : [near && !flow.area ? AREA.near(near.name) : city, far ? (far.km >= 0.1 ? kmText(far.km) : null) : T.spotLine]
       .filter(Boolean).join(' · ');
 
   const leave = () => (ret ? router.dismissTo(ret as never) : goBack());

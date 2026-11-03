@@ -24,7 +24,6 @@ export const AREA = localized(
     listSub: 'Then type your house, street or landmark',
     inside: 'We deliver here',
     outside: "We don't deliver there yet",
-    fromStore: 'from Blynk',
     notListed: "Don't see your area? Drag the pin to your house instead.",
     store: 'Blynk',
     sea: 'Indian Ocean',
@@ -34,7 +33,7 @@ export const AREA = localized(
     legendOutside: 'Outside: not yet',
     seeMap: 'See the delivery area',
     setAddress: 'Set my delivery address',
-    mapNote: 'Distances are straight-line from the store.',
+    mapNote: 'Distances are in a straight line.',
     /** The small tag after a distance on the map for a place outside the circle. */
     outsideTag: 'outside',
     near: (name: string) => `Near ${name}`,
@@ -44,7 +43,7 @@ export const AREA = localized(
     /** One clause per extra area that is switched on: "We deliver within 4 km of the Clock Tower, Dharga Town, and in Beruwala." */
     within: (c: Coverage) => `We deliver within ${radiusText(c.radiusKm)} of the ${centreName(c)}${extra(c) ? `, and in ${extra(c)}` : ''}.`,
     withinShort: (c: Coverage) => `We deliver within ${radiusText(c.radiusKm)} of ${centreName(c)}${extra(c) ? `, and in ${extra(c)}` : ''}`,
-    farLine: (km: number, c: Coverage) => `This spot is ${kmText(km)} from the store. We deliver within ${radiusText(c.radiusKm)}${extra(c) ? `, and in ${extra(c)}` : ''}. Move the pin closer to continue.`,
+    farLine: (km: number, c: Coverage) => `This spot is ${kmText(km)} away. We deliver within ${radiusText(c.radiusKm)}${extra(c) ? `, and in ${extra(c)}` : ''}. Move the pin closer to continue.`,
     farHead: 'Looks outside our delivery area',
     areaLine: (name: string) => `We put the pin in the middle of ${name}. Move the map so the pin sits on your house.`,
   },
@@ -61,7 +60,6 @@ export const AREA = localized(
       listSub: 'ඉන්පසු ඔබේ ගෙදර, පාර හෝ ළඟ තියෙන ස්ථානය ටයිප් කරන්න',
       inside: 'අපි මෙහි බෙදාහරිනවා',
       outside: 'තවම එතැනට බෙදාහරින්නේ නැහැ',
-      fromStore: 'Blynk සිට',
       notListed: 'ඔබේ ප්‍රදේශය නැද්ද? ඒ වෙනුවට පින් එක ඔබේ ගෙදරට ඇදගෙන යන්න.',
       store: 'Blynk',
       sea: 'ඉන්දියන් සාගරය',
@@ -71,7 +69,7 @@ export const AREA = localized(
       legendOutside: 'පිටත: තවම නැහැ',
       seeMap: 'බෙදාහරින ප්‍රදේශය බලන්න',
       setAddress: 'මගේ බෙදාහැරීමේ ලිපිනය දමන්න',
-      mapNote: 'දුර මැනෙන්නේ සාප්පුවේ සිට සරල රේඛාවකිනි.',
+      mapNote: 'දුර මැනෙන්නේ සරල රේඛාවකිනි.',
       outsideTag: 'පිටත',
       near: (name: string) => `${name} ළඟ`,
       radiusLabel: (c: Coverage) => `${radiusText(c.radiusKm)} බෙදාහැරීමේ ප්‍රදේශය`,
@@ -83,8 +81,8 @@ export const AREA = localized(
         ? `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළතත්, ${extra(c)} ප්‍රදේශයේත් බෙදාහරිනවා`
         : `අපි ${centreName(c)} සිට ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා`),
       farLine: (km: number, c: Coverage) => (extra(c)
-        ? `මෙම ස්ථානය සාප්පුවේ සිට ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළතත්, ${extra(c)} ප්‍රදේශයේත් බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`
-        : `මෙම ස්ථානය සාප්පුවේ සිට ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`),
+        ? `මෙම ස්ථානය ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළතත්, ${extra(c)} ප්‍රදේශයේත් බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`
+        : `මෙම ස්ථානය ${kmText(km)} දුරයි. අපි ${radiusText(c.radiusKm)} ඇතුළත බෙදාහරිනවා. ඉදිරියට යාමට පින් එක ළඟට ගෙන එන්න.`),
       farHead: 'අපගේ බෙදාහැරීමේ ප්‍රදේශයෙන් පිටත වගේ',
       areaLine: (name: string) => `අපි පින් එක ${name} මැදට දැම්මා. පින් එක ඔබේ ගෙදර උඩට එන්න සිතියම ගෙන යන්න.`,
     },
@@ -100,7 +98,6 @@ export const AREA = localized(
       listSub: 'பிறகு உங்கள் வீடு, தெரு அல்லது அடையாளத்தை எழுதுங்கள்',
       inside: 'இங்கே டெலிவரி செய்கிறோம்',
       outside: 'அங்கே இன்னும் டெலிவரி செய்வதில்லை',
-      fromStore: 'Blynk இலிருந்து',
       notListed: 'உங்கள் பகுதி இல்லையா? பின்னை உங்கள் வீட்டுக்கு இழுத்துச் செல்லுங்கள்.',
       store: 'Blynk',
       sea: 'இந்தியப் பெருங்கடல்',
@@ -110,7 +107,7 @@ export const AREA = localized(
       legendOutside: 'வெளியே: இன்னும் இல்லை',
       seeMap: 'டெலிவரி பகுதியைப் பார்',
       setAddress: 'என் டெலிவரி முகவரியை அமை',
-      mapNote: 'தூரம் கடையிலிருந்து நேர்கோட்டில் கணக்கிடப்பட்டது.',
+      mapNote: 'தூரம் நேர்கோட்டில் கணக்கிடப்பட்டது.',
       outsideTag: 'வெளியே',
       near: (name: string) => `${name} அருகில்`,
       radiusLabel: (c: Coverage) => `${radiusText(c.radiusKm)} டெலிவரி பகுதி`,
@@ -122,8 +119,8 @@ export const AREA = localized(
         ? `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள்ளும், ${extra(c)} பகுதியிலும் டெலிவரி செய்கிறோம்`
         : `${centreName(c)} இலிருந்து ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம்`),
       farLine: (km: number, c: Coverage) => (extra(c)
-        ? `இந்த இடம் கடையிலிருந்து ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள்ளும், ${extra(c)} பகுதியிலும் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`
-        : `இந்த இடம் கடையிலிருந்து ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`),
+        ? `இந்த இடம் ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள்ளும், ${extra(c)} பகுதியிலும் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`
+        : `இந்த இடம் ${kmText(km)} தூரத்தில் உள்ளது. நாங்கள் ${radiusText(c.radiusKm)} தூரத்துக்குள் டெலிவரி செய்கிறோம். தொடர பின்னை அருகில் நகர்த்துங்கள்.`),
       farHead: 'எங்கள் டெலிவரி பகுதிக்கு வெளியே போலத் தெரிகிறது',
       areaLine: (name: string) => `பின்னை ${name} நடுவில் வைத்துள்ளோம். பின் உங்கள் வீட்டின் மேல் வரும்படி வரைபடத்தை நகர்த்துங்கள்.`,
     },

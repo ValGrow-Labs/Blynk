@@ -3,7 +3,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app.js';
 import { env } from '../src/config/env.js';
-import { fetchRoute, orderStopsByRoad } from '../src/modules/routing/index.js';
+import { fetchRoute, orderStopsByRoad, roadDistanceM } from '../src/modules/routing/index.js';
 
 const A = { lat: 6.4055, lng: 80.0524 };
 const B = { lat: 6.4382, lng: 80.0118 };
@@ -254,5 +254,28 @@ describe('routing: POST /api/v1/routing/stop-order', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     }
+  });
+});
+
+describe('routing: roadDistanceM (shortest of the alternatives for the delivery fee)', () => {
+  const A = { lat: 6.44, lng: 80.0 };
+  const B = { lat: 6.45, lng: 80.01 };
+  const reply = (distances: number[]) => vi.fn(async () => new Response(JSON.stringify({ code: 'Ok', routes: distances.map((distance) => ({ distance })) }), { status: 200 })) as unknown as typeof fetch;
+
+  it('answers OSRM\x27s best route by default (the first one)', async () => {
+    const f = reply([2600, 2100]);
+    expect(await roadDistanceM(A, B, 'http://osrm.test', f)).toBe(2600);
+    expect(String((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0])).not.toContain('alternatives');
+  });
+
+  it('with shortest: asks for alternatives and answers the shortest distance', async () => {
+    const f = reply([2600, 2100, 3400]);
+    expect(await roadDistanceM(A, B, 'http://osrm.test', f, 2500, { shortest: true })).toBe(2100);
+    expect(String((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0])).toContain('alternatives=3');
+  });
+
+  it('with shortest and one route: that route; with none or bad data: ROUTE_NOT_FOUND', async () => {
+    expect(await roadDistanceM(A, B, 'http://osrm.test', reply([1800]), 2500, { shortest: true })).toBe(1800);
+    await expect(roadDistanceM(A, B, 'http://osrm.test', reply([]), 2500, { shortest: true })).rejects.toMatchObject({ code: 'ROUTE_NOT_FOUND' });
   });
 });

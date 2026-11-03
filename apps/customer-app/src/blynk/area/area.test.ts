@@ -119,7 +119,7 @@ describe('Beruwala as an extra delivery area (the radius stays 4 km)', () => {
 
   test('the refusal line (a spot beyond the area) names the zone and does not claim the radius alone', () => {
     const far = insideCoverage(withZone, BENTOTA_SIDE);
-    expect(AREA.farLine(far.km, withZone)).toBe('This spot is 6.3 km from the store. We deliver within 4 km, and in Beruwala. Move the pin closer to continue.');
+    expect(AREA.farLine(far.km, withZone)).toBe('This spot is 6.3 km away. We deliver within 4 km, and in Beruwala. Move the pin closer to continue.');
     expect(AREA.farLine(far.km, cov)).toMatch(/We deliver within 4 km\. Move the pin closer to continue\./);
   });
 

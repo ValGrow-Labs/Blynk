@@ -37,7 +37,7 @@ export default function DeliveryArea() {
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: p.inside ? C.ink : '#fff', borderWidth: p.inside ? 0 : 1.6, borderColor: '#8D8F9C' }} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: F.semi, fontSize: 14.5, color: p.inside ? C.ink : '#8D8F9C' }}>{p.name}</Text>
-              <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.sub }}>{p.km < 0.05 ? centreName(coverage) : `${kmText(p.km)} ${AREA.fromStore}`}</Text>
+              <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.sub }}>{p.km < 0.05 ? centreName(coverage) : kmText(p.km)}</Text>
             </View>
             <Badge tone={p.inside ? 'positive' : 'neutral'} label={p.inside ? AREA.inside : AREA.outside} />
           </View>

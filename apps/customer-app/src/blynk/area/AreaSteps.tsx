@@ -98,11 +98,11 @@ export function AreaList({ coverage, onBack, onPick, onDrag }: {
         <View style={styles.listCard}>
           {inside.map((a, i) => (
             <PressScale key={a.id} onPress={() => onPick(a)} scaleTo={0.98}>
-              <View style={[styles.row, i > 0 && styles.rowLine]} accessible accessibilityRole="button" accessibilityLabel={`${a.name}, ${kmText(a.km)} ${AREA.fromStore}`}>
+              <View style={[styles.row, i > 0 && styles.rowLine]} accessible accessibilityRole="button" accessibilityLabel={`${a.name}, ${kmText(a.km)}`}>
                 <View style={styles.dot} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>{a.name}</Text>
-                  <Text style={styles.rowSub}>{a.km < 0.05 ? centreName(coverage) : `${kmText(a.km)} ${AREA.fromStore}`}</Text>
+                  <Text style={styles.rowSub}>{a.km < 0.05 ? centreName(coverage) : kmText(a.km)}</Text>
                 </View>
                 <View style={{ transform: [{ rotate: '-90deg' }] }}><ChevronIcon size={14} color={C.sub} stroke={2.2} /></View>
               </View>
