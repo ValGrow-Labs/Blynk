@@ -160,6 +160,61 @@ export interface SmsOffersTable {
   created_at: Generated<Date>;
 }
 
+/** Migration 066 (owner, 2026-11-03): saved SMS texts. */
+export interface SmsTemplatesTable {
+  id: Generated<string>;
+  name: string;
+  message_si: string | null;
+  message_ta: string | null;
+  message_en: string | null;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type SmsCampaignKind = 'ONCE' | 'RECURRING' | 'TRIGGER';
+export type SmsCampaignStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'COMPLETED';
+export type SmsCampaignRunStatus = 'SENT' | 'EMPTY' | 'BLOCKED_BUDGET' | 'FAILED';
+
+/** Migration 066 (owner, 2026-11-03): an SMS that is sent later, repeatedly or on a trigger (sms-offers/campaigns.service.ts). */
+export interface SmsCampaignsTable {
+  id: Generated<string>;
+  name: string;
+  kind: SmsCampaignKind;
+  status: Generated<SmsCampaignStatus>;
+  audience: ColumnType<unknown, string | undefined, string>;
+  fallback_language: SmsLanguage;
+  message_si: string | null;
+  message_ta: string | null;
+  message_en: string | null;
+  schedule: ColumnType<unknown, string, string>;
+  next_run_at: Date | null;
+  last_run_at: Date | null;
+  run_count: Generated<number>;
+  recipients_total: Generated<number>;
+  parts_total: Generated<number>;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  cancelled_at: Date | null;
+}
+
+/** Migration 066: one run of a campaign. */
+export interface SmsCampaignRunsTable {
+  id: Generated<string>;
+  campaign_id: string;
+  run_key: string;
+  scheduled_for: Date;
+  status: SmsCampaignRunStatus;
+  recipients: Generated<number>;
+  parts: Generated<number>;
+  skipped_opted_out: Generated<number>;
+  skipped_capped: Generated<number>;
+  skipped_no_phone: Generated<number>;
+  reason: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface OtpVerificationsTable {
   id: Generated<string>;
   phone: string;
@@ -1289,6 +1344,10 @@ export interface Database {
   service_areas: ServiceAreasTable;
   users: UsersTable;
   sms_offers: SmsOffersTable;
+  /** Migration 066 (owner, 2026-11-03). */
+  sms_templates: SmsTemplatesTable;
+  sms_campaigns: SmsCampaignsTable;
+  sms_campaign_runs: SmsCampaignRunsTable;
   otp_verifications: OtpVerificationsTable;
   refresh_tokens: RefreshTokensTable;
   customer_addresses: CustomerAddressesTable;

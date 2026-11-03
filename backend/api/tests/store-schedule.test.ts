@@ -17,7 +17,7 @@ import {
   type ScheduleState,
 } from '../src/utils/store-hours.js';
 import { runBirthdaySms } from '../src/modules/birthday/birthday.sms.js';
-import { assertSmsSendingWindow } from '../src/modules/sms-offers/sms-offers.service.js';
+import { DEFAULT_SMS_SENDING, assertSmsSendAllowed, smsSendingSettings } from '../src/modules/sms-offers/sending-rules.js';
 import { stockFixtures, tokens, auth, users } from './helpers/stock.js';
 
 /**
@@ -176,7 +176,12 @@ const order = async (extra: object = {}) => {
   return res;
 };
 
+// 2026-11-03: SMS go out at any time by default; the opening-hours rule these tests are about applies
+// with "any time" switched off (sms-offers/sending-rules.ts), so this file switches it off.
+const pinnedSending = smsSendingSettings.read;
+
 beforeAll(async () => {
+  smsSendingSettings.read = async () => ({ ...DEFAULT_SMS_SENDING, any_time: false });
   storeSchedule.read = storeSchedule.realRead;
   await fx.setup();
   testStart = (await pool.query('SELECT now() AS t')).rows[0].t;
@@ -185,6 +190,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  smsSendingSettings.read = pinnedSending;
   storeSchedule.read = pinnedRead;
   await fx.cleanup();
   await deleteRows();
@@ -242,8 +248,8 @@ describe('Store timing settings (Admin and Operations)', () => {
     expect(refused.body.error.details).toMatchObject({ opens_at: '13:00', closes_at: '18:30', closed_kind: 'OUTSIDE_HOURS', slots_enabled: false });
 
     // Offer SMS window = today's hours (noon is before 1 PM).
-    await expect(assertSmsSendingWindow()).rejects.toMatchObject({ code: 'OUTSIDE_SENDING_HOURS', message: 'Offers can be sent from 1 PM to 6:30 PM only.' });
-    await expect(assertSmsSendingWindow(at('2026-10-06T08:00:00Z'))).resolves.toBeUndefined(); // 1:30 PM
+    await expect(assertSmsSendAllowed()).rejects.toMatchObject({ code: 'OUTSIDE_SENDING_HOURS', message: 'Offers can be sent from 1 PM to 6:30 PM only.' });
+    await expect(assertSmsSendAllowed(at('2026-10-06T08:00:00Z'))).resolves.toBeUndefined(); // 1:30 PM
     expect(await runBirthdaySms({ now: at(TUE_NOON), userIds: [], setting: { enabled: true, percent: 10, sms_enabled: true, sms_text: 'x' } })).toEqual([]);
 
     const audit = (await pool.query("SELECT old_values, new_values FROM audit_logs WHERE action = 'STORE_HOURS_UPDATED' AND created_at >= $1 ORDER BY created_at DESC LIMIT 1", [testStart])).rows[0];
@@ -312,14 +318,14 @@ describe('Store timing settings (Admin and Operations)', () => {
 
     // Today (Tue) is a holiday: on (default), offers and birthday texts still go out.
     expect((await patch('store-holidays', { holidays: [{ date: '2026-10-06', reason: 'Poya' }] })).status).toBe(200);
-    await expect(assertSmsSendingWindow()).resolves.toBeUndefined();
+    await expect(assertSmsSendAllowed()).resolves.toBeUndefined();
 
     const off = await patch('store-sms', { sms_on_closed_days: false }, opsToken);
     expect(off.status).toBe(200);
     expect(off.body.data.sms).toMatchObject({ sms_on_closed_days: false });
     expect(off.body.data.sms.updated_at).not.toBeNull();
     expect((await request(app).get('/api/v1/admin/settings/store-schedule').set(auth(tokens.admin))).body.data.sms.sms_on_closed_days).toBe(false);
-    await expect(assertSmsSendingWindow()).rejects.toMatchObject({
+    await expect(assertSmsSendAllowed()).rejects.toMatchObject({
       code: 'OUTSIDE_SENDING_HOURS',
       message: 'Offers are not sent while today is a holiday ("Send offer/birthday texts on closed days" is off in Opening hours).',
     });
@@ -329,17 +335,17 @@ describe('Store timing settings (Admin and Operations)', () => {
 
     // No holiday, but closed now: still refused while off.
     expect((await patch('store-holidays', { holidays: [] })).status).toBe(200);
-    await expect(assertSmsSendingWindow()).resolves.toBeUndefined();
+    await expect(assertSmsSendAllowed()).resolves.toBeUndefined();
     expect((await patch('store-closure', { closed: true, reason: 'Rain' })).status).toBe(200);
-    await expect(assertSmsSendingWindow()).rejects.toMatchObject({ message: expect.stringContaining('the store is closed now') });
+    await expect(assertSmsSendAllowed()).rejects.toMatchObject({ message: expect.stringContaining('the store is closed now') });
     expect((await patch('store-closure', { closed: false })).status).toBe(200);
 
     // A closed weekday: off refuses all day; on falls back to 8 AM - 9 PM.
     const days = { ...uniformWeek('08:00', '21:00'), tue: { closed: true, open: '08:00', close: '21:00' } };
     expect((await patch('store-hours', { same_every_day: false, days })).status).toBe(200);
-    await expect(assertSmsSendingWindow()).rejects.toMatchObject({ message: expect.stringContaining('the store is closed today') });
+    await expect(assertSmsSendAllowed()).rejects.toMatchObject({ message: expect.stringContaining('the store is closed today') });
     expect((await patch('store-sms', { sms_on_closed_days: true })).status).toBe(200);
-    await expect(assertSmsSendingWindow()).resolves.toBeUndefined();
+    await expect(assertSmsSendAllowed()).resolves.toBeUndefined();
 
     const audit = (await pool.query("SELECT old_values, new_values FROM audit_logs WHERE action = 'STORE_SMS_UPDATED' AND created_at >= $1 ORDER BY created_at", [testStart])).rows;
     expect(audit.slice(-2).map((a) => [a.old_values, a.new_values])).toEqual([

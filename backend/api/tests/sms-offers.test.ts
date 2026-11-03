@@ -7,6 +7,7 @@ import { env } from '../src/config/env.js';
 import { enabledOfferLanguages, languageFor, smsParts } from '../src/modules/sms-offers/sms-offers.service.js';
 import { generateAccessToken } from '../src/modules/auth/token.service.js';
 import { DEFAULT_STORED_SCHEDULE, storeSchedule } from '../src/modules/configuration/store-schedule.js';
+import { DEFAULT_SMS_SENDING, smsSendingSettings } from '../src/modules/sms-offers/sending-rules.js';
 import { tokens, auth } from './helpers/stock.js';
 import { customerFixtures } from './helpers/customers.js';
 
@@ -151,9 +152,26 @@ describe('sending an offer', () => {
     expect(res.body.error.details.missing_languages).toContain('ta');
   });
 
-  it('refuses outside 8 AM - 9 PM', async () => {
+  it('sends at any time by default (2026-11-03), at 10:30 PM too', async () => {
     const pinned = orderingClock.now;
     orderingClock.now = () => new Date('2026-10-06T17:00:00.000Z'); // 10:30 PM in Colombo
+    try {
+      const res = await request(app)
+        .post('/api/v1/admin/sms-offers')
+        .set(auth(tokens.admin))
+        .send({ audience: 'ALL', fallback_language: 'si', messages: TEXT })
+        .expect(201);
+      offerIds.push(res.body.data.offer.id);
+    } finally {
+      orderingClock.now = pinned;
+    }
+  });
+
+  it('with "any time" switched off: refuses outside 8 AM - 9 PM', async () => {
+    const pinned = orderingClock.now;
+    const pinnedSending = smsSendingSettings.read;
+    orderingClock.now = () => new Date('2026-10-06T17:00:00.000Z'); // 10:30 PM in Colombo
+    smsSendingSettings.read = async () => ({ ...DEFAULT_SMS_SENDING, any_time: false });
     try {
       const res = await request(app)
         .post('/api/v1/admin/sms-offers')
@@ -163,6 +181,7 @@ describe('sending an offer', () => {
       expect(res.body.error.code).toBe('OUTSIDE_SENDING_HOURS');
     } finally {
       orderingClock.now = pinned;
+      smsSendingSettings.read = pinnedSending;
     }
   });
 
@@ -170,7 +189,9 @@ describe('sending an offer', () => {
     // The checkout clock is Tue 6 October, noon; make it a holiday. (Switch on
     // = holidays do not stop offers: tests/store-schedule.test.ts.)
     const pinnedRead = storeSchedule.read;
+    const pinnedSending = smsSendingSettings.read;
     const holiday = { ...DEFAULT_STORED_SCHEDULE, holidays: [{ date: '2026-10-06', reason: 'Poya' }] };
+    smsSendingSettings.read = async () => ({ ...DEFAULT_SMS_SENDING, any_time: false }); // the closed-days switch only applies with "any time" off
     try {
       storeSchedule.read = async () => ({ ...holiday, sms: { sms_on_closed_days: false } });
       const offer = await request(app)
@@ -189,6 +210,7 @@ describe('sending an offer', () => {
       expect((await pool.query(`SELECT 1 FROM notifications WHERE idempotency_key LIKE 'sms-offer-test:%'`)).rowCount).toBe(0);
     } finally {
       storeSchedule.read = pinnedRead;
+      smsSendingSettings.read = pinnedSending;
     }
   });
 
@@ -259,9 +281,11 @@ describe('sending an offer', () => {
     expect(rows[0].payload.text).toBe(TEXT.ta);
   });
 
-  it('test SMS: refused outside 8 AM - 9 PM, and at most 5 per staff member an hour', async () => {
+  it('test SMS: refused outside 8 AM - 9 PM (with "any time" off), and at most 5 per staff member an hour', async () => {
     const pinned = orderingClock.now;
+    const pinnedSending = smsSendingSettings.read;
     orderingClock.now = () => new Date('2026-10-06T17:00:00.000Z'); // 10:30 PM in Colombo
+    smsSendingSettings.read = async () => ({ ...DEFAULT_SMS_SENDING, any_time: false });
     try {
       const late = await request(app)
         .post('/api/v1/admin/sms-offers/test')
@@ -271,6 +295,7 @@ describe('sending an offer', () => {
       expect(late.body.error.code).toBe('OUTSIDE_SENDING_HOURS');
     } finally {
       orderingClock.now = pinned;
+      smsSendingSettings.read = pinnedSending;
     }
 
     // One test was sent above; four more reach the limit.

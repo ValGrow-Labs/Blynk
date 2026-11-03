@@ -45,6 +45,9 @@ import { SETTINGS_ENTITY_ID, writeAudit, type AuditActor } from '../audit/audit.
  *                   true: offer/test/birthday SMS still go out on a closed
  *                   weekday (8 AM - 9 PM), a holiday or while closed now;
  *                   false: only while the store is open (smsAllowedAt)
+ *                   2026-11-03: replaced by the 'SMS sending rules' (sms_sending, sms-offers/sending-rules.ts):
+ *                   by default SMS go out at any time and this switch blocks nothing; it still applies,
+ *                   unchanged, when 'any time' is switched off there. The row and its PATCH route stay.
  *
  * Everything that used the hard-coded 8 AM - 9 PM (order placement, the SMS
  * sending windows, GET /store) reads them through storeSchedule.read(), cached

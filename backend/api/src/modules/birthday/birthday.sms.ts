@@ -3,9 +3,9 @@ import type { DateTime } from 'luxon';
 import { db } from '../../database/connection.js';
 import { logger } from '../../utils/logger.js';
 import { normalizeSriLankanPhone } from '../../utils/phone.js';
-import { smsAllowedAt } from '../../utils/store-hours.js';
 import type { DBConnection } from '../auth/auth.repository.js';
 import { storeSchedule } from '../configuration/store-schedule.js';
+import { smsSendAllowed, smsSendingSettings } from '../sms-offers/sending-rules.js';
 import { OUTBOX_PAUSE_LOCK_KEY } from '../notifications/outbox-pause.js';
 import { BIRTHDAY_WINDOW_DAYS, birthdayOfferSettings, birthdaySmsText, type BirthdayOfferSetting } from '../configuration/settings.service.js';
 import { birthdayOfferStatus } from './birthday.offer.js';
@@ -29,7 +29,12 @@ import { colomboDay, monthDayCodes } from './birthday.rules.js';
  * ignored, so several workers or ticks never send twice. A 29 February
  * birthday gets its SMS on 28 February in other years.
  *
- * Closed days (owner, 2026-10-10): with "Send offer/birthday texts on closed
+ * Sending rules (owner's brother, 2026-11-03): when the text may go out is now decided by the "SMS
+ * sending rules" (sms-offers/sending-rules.ts): by default at any time, and never inside quiet hours
+ * when those are on - a birthday text that falls inside them goes out on the first run after they end
+ * (the same day). The opening-hours rule below only applies when "any time" is switched off there.
+ *
+ * Closed days (owner, 2026-10-10; now only with "any time" off): with "Send offer/birthday texts on closed
  * days" on (the default) the SMS goes out on the birthday itself - on a
  * weekday marked closed between 8 AM and 9 PM, and holidays / "close now" do
  * not stop it. Switched off, nothing is sent on a closed weekday, a holiday or
@@ -119,11 +124,13 @@ export interface BirthdaySmsOptions {
 /** One pass: queues today's birthday SMS (and missed ones, see above). Returns the customers queued. */
 export async function runBirthdaySms(opts: BirthdaySmsOptions = {}): Promise<string[]> {
   const now = opts.now ?? new Date();
-  // Sending window = the opening hours set by Ops and Admin, and their "texts
-  // on closed days" switch (owner, 2026-10-10).
+  // Sending rules (2026-11-03): any time by default, optional quiet hours; with "any time" off the
+  // opening hours set by Ops and Admin and their "texts on closed days" switch (owner, 2026-10-10) apply.
   const schedule = await storeSchedule.read();
-  const onClosedDays = schedule.sms.sms_on_closed_days;
-  if (!smsAllowedAt(schedule, now, onClosedDays)) return [];
+  const sendingRules = await smsSendingSettings.read();
+  if (!smsSendAllowed(sendingRules, now, schedule).allowed) return [];
+  // Only a closed-days window leaves birthdays to catch up on; at any time every day is open.
+  const onClosedDays = sendingRules.any_time ? true : schedule.sms.sms_on_closed_days;
   const today = colomboDay(now);
   // Recorded before the on/off checks, so days the SMS was switched off are not caught up later.
   const previousOpen = await previousOpenDay(db, today.toISODate()!);

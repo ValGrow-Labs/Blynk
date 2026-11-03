@@ -6,6 +6,7 @@ import { appointmentReminderJob } from './modules/dental/appointment-reminders.j
 import { paymentExpiryJob } from './modules/payments/expiry-job.js';
 import { walletExpiryJob } from './modules/wallet/expiry-job.js';
 import { repeatBasketJob } from './modules/repeat-baskets/repeat.runner.js';
+import { smsCampaignJob } from './modules/sms-offers/campaigns.runner.js';
 import { riderAutoAssignJob } from './modules/riders/rider.auto-assign.js';
 import { expiryPushJob } from './modules/expiry/expiry.job.js';
 import { dailyReportJob } from './modules/daily-report/daily-report.sender.js';
@@ -47,6 +48,8 @@ async function bootstrapWorker() {
     walletExpiryJob.start();
     // Repeat baskets (migration 054): due baskets are ordered as the customer, every minute.
     repeatBasketJob.start();
+    // SMS campaigns (migration 066; owner's brother, 2026-11-03): scheduled, repeating and automatic SMS, every minute.
+    smsCampaignJob.start();
     // Automatic rider assignment (owner, 2026-10-25; OFF until staff switch it on): every 20 s.
     riderAutoAssignJob.start();
     // Expiry dates (migration 059): one staff push a day at 8 am Colombo when stock is expired or expiring.
@@ -69,6 +72,7 @@ async function bootstrapWorker() {
       await paymentExpiryJob.stop();
       await walletExpiryJob.stop();
       await repeatBasketJob.stop();
+      await smsCampaignJob.stop();
       await riderAutoAssignJob.stop();
       await expiryPushJob.stop();
       await dailyReportJob.stop();

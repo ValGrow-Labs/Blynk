@@ -17,6 +17,7 @@ import {
 import { BIRTHDAY_SMS_DAYS_KEY, birthdayDaysToText, birthdaySmsKey, runBirthdaySms } from '../src/modules/birthday/birthday.sms.js';
 import { DEFAULT_STORED_SCHEDULE, storeSchedule, type StoredSchedule } from '../src/modules/configuration/store-schedule.js';
 import { uniformWeek } from '../src/utils/store-hours.js';
+import { DEFAULT_SMS_SENDING, smsSendingSettings } from '../src/modules/sms-offers/sending-rules.js';
 import { stockFixtures, tokens, auth, users } from './helpers/stock.js';
 import { customerFixtures, expectCreated } from './helpers/customers.js';
 
@@ -376,8 +377,15 @@ describe('Birthday SMS', () => {
   let optedIn = '';
   let optedOut = '';
   let otherDay = '';
+  // 2026-11-03: the 8 AM - 9 PM window this describe is about applies with "any time" switched off
+  // (sms-offers/sending-rules.ts); by default birthday texts go out at any time.
+  const pinnedSending = smsSendingSettings.read;
+  afterAll(() => {
+    smsSendingSettings.read = pinnedSending;
+  });
 
   beforeAll(async () => {
+    smsSendingSettings.read = async () => ({ ...DEFAULT_SMS_SENDING, any_time: false });
     await deleteRow(); // the store switch stays off: these runs pass their own setting
     const a = await people.customer(10);
     const b = await people.customer(11);
@@ -440,6 +448,11 @@ describe('Birthday SMS', () => {
 describe('Birthday SMS on closed days (owner, 2026-10-10)', () => {
   const ON: BirthdayOfferSetting = { ...DEFAULT_BIRTHDAY_OFFER, enabled: true, percent: 12 };
   const pinnedRead = storeSchedule.read;
+  // 2026-11-03: SMS go out at any time by default; the closed-days rules below apply with "any time" off.
+  const pinnedSending = smsSendingSettings.read;
+  beforeAll(() => {
+    smsSendingSettings.read = async () => ({ ...DEFAULT_SMS_SENDING, any_time: false });
+  });
   // Saturdays closed; holidays and "close now" set per step.
   const satClosed = { same_every_day: false, days: { ...uniformWeek('08:00', '21:00'), sat: { closed: true, open: '08:00', close: '21:00' } } };
   const schedule = (over: Partial<StoredSchedule>, smsOnClosedDays: boolean): StoredSchedule => ({
@@ -456,6 +469,7 @@ describe('Birthday SMS on closed days (owner, 2026-10-10)', () => {
     (await pool.query("SELECT idempotency_key FROM notifications WHERE user_id = $1 AND notification_type = 'BIRTHDAY_OFFER'", [id])).rows.map((r) => r.idempotency_key);
 
   afterAll(async () => {
+    smsSendingSettings.read = pinnedSending;
     storeSchedule.read = pinnedRead;
     await clearMarker();
   });
