@@ -4358,7 +4358,7 @@ a.button {
   gap: 8px;
 }
 
-/* ------------------------------------------- More: settings categories (2026-11-03) */
+/* ------------------------------------------- More: categories (2026-11-03) */
 .settings-cats {
   display: flex;
   flex-direction: column;
@@ -4366,10 +4366,15 @@ a.button {
 }
 
 .settings-cats__tabs {
+  /* the page's navigation: stays just under the app bar while the category scrolls */
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 4;
+  background: var(--canvas);
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 2px 2px 6px;
+  padding: 6px 2px;
   margin: 0 -2px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;

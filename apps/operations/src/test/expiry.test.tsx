@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import { AdjustDialog } from '../pages/Inventory/AdjustDialog';
-import { OPERATIONS_STAFF, fail, mockApi, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, mockApi, ok, moreSettings, renderAs } from './helpers';
 
 /**
  * More -> Expiry (wave 2, 2026-10-25; migration 059): buckets, add a batch, sold out, discard, the "not
@@ -58,7 +58,7 @@ const handlers = () => ({
 describe('More -> Expiry', () => {
   it('is reachable from More, opens on the most urgent bucket and switches buckets', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', handlers());
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('orders'), handlers());
     await user.click(await screen.findByRole('link', { name: 'Expiry' }));
     const card = await screen.findByRole('listitem', { name: 'Fresh Milk, Expired 5 days ago' });
     expect(within(card).getByText('6 units · MILK-1')).toBeInTheDocument();

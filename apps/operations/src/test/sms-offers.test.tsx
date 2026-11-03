@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { SmsLanguage, SmsOffer, SmsOfferEstimate } from '../api/types';
 import { smsParts, withOptOut } from '../lib/sms';
-import { OPERATIONS_STAFF, fail, ok, renderAs, type Call } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs, type Call } from './helpers';
 
 /**
  * More -> SMS offers (owner, 2026-10-06). The backend
@@ -120,7 +120,7 @@ describe('SMS parts counter', () => {
 describe('More -> SMS offers', () => {
   it('is reachable from More and shows the live estimate', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('customers'), {
       'GET /admin/sms-offers': () => ok({ offers: [] }),
       'POST /admin/sms-offers/estimate': (call) => estimateFor(call, { si: 4, ta: 5, en: 6 }),
     });

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { RiderApplication } from '../api/types';
 import { readablePhone } from '../pages/RiderRequests';
-import { OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs } from './helpers';
 
 /**
  * More -> Rider requests (backend migration 029). The API contract is tested
@@ -54,7 +54,7 @@ describe('Rider requests (Ops)', () => {
   });
 
   it('More shows the waiting count and links to the requests', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', {
+    renderAs(OPERATIONS_STAFF, moreSettings('riders'), {
       'GET /admin/rider-applications/count': () => ok({ pending: 3 }),
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 0, updated_at: null }),
     });

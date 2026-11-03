@@ -31,7 +31,7 @@ import { AppUpdatesSettingsCard } from '../components/AppUpdatesSettingsCard';
 import { DefaultMarkupCard } from '../components/DefaultMarkupCard';
 import { RiderAutoAssignCard } from '../components/RiderAutoAssignCard';
 import { PaymentGatewayCard } from '../components/PaymentGatewayCard';
-import { SellerHubCards } from './Sellers/HubCards';
+import { SellerApplicationsTile, SellerProductsTile, SellersTile } from './Sellers/HubCards';
 import { SettingsCategories, isCategoryHash, type SettingsCategory } from '../components/SettingsCategories';
 
 /**
@@ -55,17 +55,19 @@ import { SettingsCategories, isCategoryHash, type SettingsCategory } from '../co
  * Owner, 2026-10-13: "Global default markup" (`GET|PATCH
  * /admin/settings/default-markup`, migration 044) sits with the store
  * settings; /more#default-markup (linked from Catalog) scrolls to it.
- * Owner's brother, 2026-11-03: every setting sits in a category (Deliveries,
- * Riders, Orders and payments, Customers and rewards, App) under one
- * "Settings" block of chips. /more#settings-<id> opens a category; any card's
- * own anchor (#checkout-settings, #default-markup, #rider-auto-assign ...)
- * opens the category that holds it. Only the open category is mounted.
+ * Owner's brother, 2026-11-03: EVERYTHING on More (the link tiles and the
+ * settings cards) sits in a category - Deliveries, Riders, Orders and payments,
+ * Customers and rewards, Sellers, Team and app - behind one row of chips; the
+ * page is just the header, who is signed in, the chips, the open category and
+ * Sign out. /more#settings-<id> opens a category; any card's own anchor
+ * (#checkout-settings, #default-markup, #rider-auto-assign ...) opens the
+ * category that holds it. Only the open category is mounted (so only its tile
+ * badges and settings load).
  */
 export function More() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { hash } = useLocation();
-  const [pendingRiders, setPendingRiders] = useState(0);
 
   // /more#checkout-settings (owner, 2026-10-10): the Coupons page links here
   // when coupon codes are off. The card loads after a moment, so retry briefly.
@@ -80,17 +82,6 @@ export function More() {
     return () => window.clearInterval(timer);
   }, [hash]);
 
-  useEffect(() => {
-    let live = true;
-    riderApplications
-      .pendingCount()
-      .then((n) => live && setPendingRiders(n))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
-
   async function handleSignOut() {
     await signOut();
     navigate('/login', { replace: true });
@@ -98,7 +89,7 @@ export function More() {
 
   return (
     <div className="page">
-      <PageHeader title="More" description="Opening hours, riders, rider requests, rider cash and earnings, customer addresses, staff, SMS offers, birthday offer, coupons, settings (delivery fee, global markup and more), app updates and sign-out." />
+      <PageHeader title="More" description="Everything in one place, grouped by what it is for." />
       <section className="card">
         <p className="card__row">
           <span className="card__label">Signed in as</span>
@@ -110,105 +101,7 @@ export function More() {
         </p>
       </section>
 
-      <ul className="cat-hub">
-        <li>
-          <Link className="cat-hub__card" to="/more/riders">
-            <span className="cat-hub__title">Riders</span>
-          </Link>
-        </li>
-        <li>
-          {/* Where riders are and which orders wait for one (owner, 2026-10-25). */}
-          <Link className="cat-hub__card" to="/more/rider-map">
-            <span className="cat-hub__title">Rider map</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="cat-hub__card" to="/more/cash">
-            <span className="cat-hub__title">Cash</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="cat-hub__card" to="/more/earnings">
-            <span className="cat-hub__title">Rider earnings</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="cat-hub__card" to="/more/deliver">
-            <span className="cat-hub__title">Deliver orders myself</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="cat-hub__card" to="/more/rider-requests">
-            <span className="cat-hub__title">Rider requests</span>
-            {pendingRiders > 0 ? (
-              <span className="cat-hub__count" aria-label={`${pendingRiders} waiting`}>
-                {pendingRiders}
-              </span>
-            ) : null}
-          </Link>
-        </li>
-        <li>
-          {/* Each customer's saved addresses and orders per address (owner, 2026-10-11). */}
-          <Link className="cat-hub__card" to="/more/customers">
-            <span className="cat-hub__title">Customer addresses</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="cat-hub__card" to="/more/staff">
-            <span className="cat-hub__title">Staff accounts</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="cat-hub__card" to="/more/sms-offers">
-            <span className="cat-hub__title">SMS offers</span>
-          </Link>
-        </li>
-        <li>
-          {/* Push to every customer who allowed notifications (owner, 2026-10-19). */}
-          <Link className="cat-hub__card" to="/more/notifications">
-            <span className="cat-hub__title">Notifications</span>
-          </Link>
-        </li>
-        <li>
-          {/* Coupon codes for customers (owner, 2026-10-10). */}
-          <Link className="cat-hub__card" to="/more/coupons">
-            <span className="cat-hub__title">Coupons</span>
-          </Link>
-        </li>
-        <li>
-          {/* Customers' "deliver this basket every Monday" subscriptions (2026-10-24). */}
-          <Link className="cat-hub__card" to="/more/repeat-baskets">
-            <span className="cat-hub__title">Repeat baskets</span>
-          </Link>
-        </li>
-        <li>
-          {/* Order ratings and rider tips (2026-10-24). */}
-          <Link className="cat-hub__card" to="/more/ratings">
-            <span className="cat-hub__title">Ratings</span>
-          </Link>
-        </li>
-        <li>
-          {/* Expiry dates (owner, 2026-10-25; migration 059): what is expired or expiring. */}
-          <Link className="cat-hub__card" to="/more/expiry">
-            <span className="cat-hub__title">Expiry</span>
-          </Link>
-        </li>
-        <li>
-          {/* Reorder suggestions and supplier purchase orders (owner, 2026-10-25). */}
-          <Link className="cat-hub__card" to="/more/purchasing">
-            <span className="cat-hub__title">Purchasing</span>
-          </Link>
-        </li>
-        <li>
-          {/* The evening report SMS with the day's numbers (owner, 2026-10-25). */}
-          <Link className="cat-hub__card" to="/more/daily-report">
-            <span className="cat-hub__title">Daily report</span>
-          </Link>
-        </li>
-        <SellerHubCards />
-      </ul>
-
-      <SettingsCategories categories={SETTINGS_CATEGORIES} />
+      <SettingsCategories categories={MORE_CATEGORIES} />
 
       <section className="card">
         <button type="button" className="button button--ghost" onClick={() => void handleSignOut()}>
@@ -219,8 +112,8 @@ export function More() {
   );
 }
 
-/** A settings page reached by a link tile (same look and wording as the More hub tiles). */
-function SettingsLink({ to, title }: { to: string; title: string }) {
+/** A link tile (same look and wording as the old More hub tiles). */
+function Tile({ to, title }: { to: string; title: string }) {
   return (
     <Link className="cat-hub__card" to={to}>
       <span className="cat-hub__title">{title}</span>
@@ -228,21 +121,54 @@ function SettingsLink({ to, title }: { to: string; title: string }) {
   );
 }
 
+/** Rider requests, with the number of applications waiting (loaded only while Riders is open). */
+function RiderRequestsTile() {
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    let live = true;
+    riderApplications
+      .pendingCount()
+      .then((n) => live && setPending(n))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  return (
+    <Link className="cat-hub__card" to="/more/rider-requests">
+      <span className="cat-hub__title">Rider requests</span>
+      {pending > 0 ? (
+        <span className="cat-hub__count" aria-label={`${pending} waiting`}>
+          {pending}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
 /**
- * The settings, by category (names and order as Admin). Cards keep their own
- * code; the pages that were link tiles in the hub (opening hours, rider pay,
- * rider documents, birthday offer, refer a friend, points, wallet) are link
- * tiles here, under their category. `anchors` are the element ids a
- * /more#... link may point at.
+ * Everything on More, by category (names and order as Admin where they overlap).
+ * Each category lists its link tiles first, then its settings cards. Cards keep
+ * their own code. `anchors` are the element ids a /more#... link may point at.
+ * No tile or card is role-gated today (the tab itself is for every staff role);
+ * set `visible: false` on an item to hide it, and a category with nothing
+ * visible disappears with its chip.
  */
-const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
+const MORE_CATEGORIES: readonly SettingsCategory[] = [
   {
     id: 'deliveries',
     label: 'Deliveries',
     description: 'Everything about getting an order to the customer: hours, fees, areas and riders on the road.',
-    items: [
+    tiles: [
+      // Where riders are and which orders wait for one (owner, 2026-10-25).
+      { key: 'rider-map', node: <Tile to="/more/rider-map" title="Rider map" /> },
+      { key: 'deliver', node: <Tile to="/more/deliver" title="Deliver orders myself" /> },
+      // Each customer's saved addresses and orders per address (owner, 2026-10-11).
+      { key: 'customers', node: <Tile to="/more/customers" title="Customer addresses" /> },
       // Opening hours, close the store now, holidays and delivery slots - one screen (owner, 2026-10-10).
-      { key: 'opening-hours', node: <SettingsLink to="/more/opening-hours" title="Opening hours" /> },
+      { key: 'opening-hours', node: <Tile to="/more/opening-hours" title="Opening hours" /> },
+    ],
+    cards: [
       { key: 'delivery-fee', anchors: ['delivery-fee-title'], node: <DeliveryFeeCard /> },
       // Small-order fee (2026-10-25): off by default; needs migration 063.
       { key: 'small-order-fee', anchors: ['small-order-fee'], node: <SmallOrderFeeCard /> },
@@ -258,20 +184,32 @@ const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   {
     id: 'riders',
     label: 'Riders',
-    description: 'What riders are paid and which documents they must have.',
-    items: [
-      { key: 'rider-commission', anchors: ['rider-commission-title'], node: <RiderCommissionCard /> },
+    description: 'Your riders: who they are, what they earn and what they are paid.',
+    tiles: [
+      { key: 'riders', node: <Tile to="/more/riders" title="Riders" /> },
+      { key: 'rider-requests', node: <RiderRequestsTile /> },
+      { key: 'cash', node: <Tile to="/more/cash" title="Cash" /> },
+      { key: 'earnings', node: <Tile to="/more/earnings" title="Rider earnings" /> },
       // Rider pay model, rain/peak boosts, daily targets (owner, 2026-10-10).
-      { key: 'rider-pay', node: <SettingsLink to="/more/rider-pay" title="Rider pay" /> },
+      { key: 'rider-pay', node: <Tile to="/more/rider-pay" title="Rider pay" /> },
       // Which documents riders upload and must have verified (owner, 2026-10-10).
-      { key: 'rider-documents', node: <SettingsLink to="/more/rider-documents" title="Rider documents" /> },
+      { key: 'rider-documents', node: <Tile to="/more/rider-documents" title="Rider documents" /> },
     ],
+    cards: [{ key: 'rider-commission', anchors: ['rider-commission-title'], node: <RiderCommissionCard /> }],
   },
   {
     id: 'orders',
     label: 'Orders and payments',
-    description: 'How customers check out and pay: coupons, free deliveries, cart rules, online payments and the default markup.',
-    items: [
+    description: 'Checkout, carts, online payments, prices, stock buying and the daily report.',
+    tiles: [
+      // The evening report SMS with the day's numbers (owner, 2026-10-25).
+      { key: 'daily-report', node: <Tile to="/more/daily-report" title="Daily report" /> },
+      // Reorder suggestions and supplier purchase orders (owner, 2026-10-25).
+      { key: 'purchasing', node: <Tile to="/more/purchasing" title="Purchasing" /> },
+      // Expiry dates (owner, 2026-10-25; migration 059): what is expired or expiring.
+      { key: 'expiry', node: <Tile to="/more/expiry" title="Expiry" /> },
+    ],
+    cards: [
       { key: 'checkout', anchors: ['checkout-settings', 'checkout-settings-title'], node: <CheckoutSettingsCard /> },
       // Cart rules (owner, 2026-10-27): one seller per order, on by default.
       { key: 'cart-rules', anchors: ['cart-rules'], node: <CartRulesCard /> },
@@ -284,25 +222,46 @@ const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   {
     id: 'customers',
     label: 'Customers and rewards',
-    description: 'Gifts, rewards and how we talk to customers: birthday offer, referrals, Blynk Points, Wallet and SMS language.',
-    items: [
+    description: 'Coupons, offers, messages and rewards for customers.',
+    tiles: [
+      // Coupon codes for customers (owner, 2026-10-10).
+      { key: 'coupons', node: <Tile to="/more/coupons" title="Coupons" /> },
+      { key: 'sms-offers', node: <Tile to="/more/sms-offers" title="SMS offers" /> },
+      // Push to every customer who allowed notifications (owner, 2026-10-19).
+      { key: 'notifications', node: <Tile to="/more/notifications" title="Notifications" /> },
+      // Customers' "deliver this basket every Monday" subscriptions (2026-10-24).
+      { key: 'repeat-baskets', node: <Tile to="/more/repeat-baskets" title="Repeat baskets" /> },
+      // Order ratings and rider tips (2026-10-24).
+      { key: 'ratings', node: <Tile to="/more/ratings" title="Ratings" /> },
       // Birthday-week gift and birthday SMS (owner, 2026-10-09).
-      { key: 'birthday-offer', node: <SettingsLink to="/more/birthday-offer" title="Birthday offer" /> },
+      { key: 'birthday-offer', node: <Tile to="/more/birthday-offer" title="Birthday offer" /> },
       // Refer a friend rewards and referrals (owner, 2026-10-10).
-      { key: 'refer-a-friend', node: <SettingsLink to="/more/refer-a-friend" title="Refer a friend" /> },
+      { key: 'refer-a-friend', node: <Tile to="/more/refer-a-friend" title="Refer a friend" /> },
       // Blynk Points: earn on delivered orders, spend at checkout (owner, 2026-10-10).
-      { key: 'points', node: <SettingsLink to="/more/points" title="Blynk Points" /> },
+      { key: 'points', node: <Tile to="/more/points" title="Blynk Points" /> },
       // Blynk Wallet: refunds go to the customer's wallet (owner, 2026-10-15).
-      { key: 'wallet', node: <SettingsLink to="/more/wallet" title="Blynk Wallet" /> },
-      // Customer SMS language (owner, 2026-10-12).
-      { key: 'sms-language', anchors: ['customer-sms-language-title'], node: <CustomerSmsLanguageCard /> },
+      { key: 'wallet', node: <Tile to="/more/wallet" title="Blynk Wallet" /> },
+    ],
+    // Customer SMS language (owner, 2026-10-12).
+    cards: [{ key: 'sms-language', anchors: ['customer-sms-language-title'], node: <CustomerSmsLanguageCard /> }],
+  },
+  {
+    id: 'sellers',
+    label: 'Sellers',
+    description: 'Sellers, their applications and their products.',
+    // Badges: shops waiting, new applications, products waiting (each tile loads its own count).
+    tiles: [
+      { key: 'sellers', node: <SellersTile /> },
+      { key: 'seller-applications', node: <SellerApplicationsTile /> },
+      { key: 'seller-products', node: <SellerProductsTile /> },
     ],
   },
   {
     id: 'app',
-    label: 'App',
-    description: 'Updates for the Blynk Ops and Rider apps, and the version on this phone.',
-    items: [
+    label: 'Team and app',
+    description: 'Staff accounts, app updates and the app version.',
+    tiles: [{ key: 'staff', node: <Tile to="/more/staff" title="Staff accounts" /> }],
+    cards: [
       // In-app updates (owner, 2026-10-12): force or offer the new Ops / Rider APK.
       { key: 'app-updates', anchors: ['app-updates-title'], node: <AppUpdatesSettingsCard /> },
       // This phone's Blynk Ops version and "Check for updates".

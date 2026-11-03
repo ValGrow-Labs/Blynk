@@ -2,7 +2,7 @@ import { cleanup, configure, fireEvent, screen, waitFor, within } from '@testing
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
-import { OPERATIONS_STAFF, fail, ok, renderAs, type Call } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs, type Call } from './helpers';
 
 /**
  * More -> Sellers, Seller products and Seller commission (owner, 2026-10-25: the seller admin inside
@@ -102,7 +102,7 @@ describe('More -> Sellers list', () => {
 
   it('has More cards with waiting badges that lead to the list and the queue', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', {
+    renderAs(OPERATIONS_STAFF, moreSettings('sellers'), {
       ...listHandlers,
       'GET /admin/seller-submissions': () => ok({ submissions: [submission(), submission({ id: 'sub2' })] }),
     });

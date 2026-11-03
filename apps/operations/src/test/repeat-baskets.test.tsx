@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { BoardOrder, OrderDetail } from '../api/types';
-import { OPERATIONS_STAFF, fail, ok, renderAs, type Call } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs, type Call } from './helpers';
 
 /**
  * More -> Repeat baskets and the "Repeat" tag (plan 2026-10-24-buy-again-repeat.md §2 staff
@@ -56,7 +56,7 @@ function byStatus(call: Call) {
 describe('More -> Repeat baskets', () => {
   it('opens from More and lists active baskets with schedule, next run and last order', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/repeat-baskets': byStatus });
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('customers'), { 'GET /admin/repeat-baskets': byStatus });
     await user.click(await screen.findByRole('link', { name: 'Repeat baskets' }));
     const card = await screen.findByRole('listitem', { name: 'Milk and bread for Ahmed Rizvi' });
     expect(card).toHaveTextContent('Every Monday at 8:00 am · 3 items');

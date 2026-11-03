@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { Coupon } from '../api/types';
 import { parseDropoffKm } from '../lib/riderTrips';
-import { OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs } from './helpers';
 
 /**
  * Owner, 2026-10-10: "ops can control the 2 orders for one delivery if it's
@@ -122,7 +122,7 @@ describe('Rider trips card (More)', () => {
 
 describe('Coupons (More -> Coupons)', () => {
   it('More links to the Coupons page', async () => {
-    renderAs(OPERATIONS_STAFF, '/more');
+    renderAs(OPERATIONS_STAFF, moreSettings('customers'));
     expect(await screen.findByRole('link', { name: 'Coupons' })).toHaveAttribute('href', '/more/coupons');
   });
 

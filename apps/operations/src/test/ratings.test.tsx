@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { OrderDetail, RiderEarningsReport } from '../api/types';
-import { OPERATIONS_STAFF, fail, ok, renderAs, type Call } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs, type Call } from './helpers';
 
 /**
  * More -> Ratings, the rating + rider tip on the order screen, and the Tips figure in rider
@@ -66,7 +66,7 @@ const listRatings = (call: Call) =>
 describe('More -> Ratings', () => {
   it('shows the 30-day summary and the newest ratings with links to their orders', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('customers'), {
       'GET /admin/ratings/summary': () => ok(SUMMARY),
       'GET /admin/ratings': listRatings,
     });

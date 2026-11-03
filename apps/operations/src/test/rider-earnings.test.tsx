@@ -72,7 +72,7 @@ describe('Rider commission setting (More)', () => {
   });
 
   it('links to the earnings report', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', {});
+    renderAs(OPERATIONS_STAFF, moreSettings('riders'), {});
     expect(await screen.findByRole('link', { name: 'Rider earnings' })).toHaveAttribute('href', '/more/earnings');
   });
 });
@@ -139,7 +139,7 @@ function report(range: { from: string; to: string }, deliveriesScale = 1): Rider
 describe('Rider earnings report', () => {
   it('is reachable from More and shows totals and a card per rider', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('riders'), {
       'GET /admin/reports/rider-earnings': () => ok(report({ from: '2026-10-09', to: '2026-10-09' })),
     });
     await user.click(await screen.findByRole('link', { name: 'Rider earnings' }));

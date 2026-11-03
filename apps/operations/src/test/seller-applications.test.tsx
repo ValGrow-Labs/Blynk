@@ -2,7 +2,7 @@ import { cleanup, configure, screen, waitFor, within } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
-import { OPERATIONS_STAFF, fail, ok, renderAs, type Call } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs, type Call } from './helpers';
 import { pushOpenPath } from '../lib/growth';
 import {
   addSellerState,
@@ -104,7 +104,7 @@ describe('seller application helpers', () => {
 describe('More -> Seller applications', () => {
   it('has a More card with the NEW count that leads to the list', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', handlers);
+    renderAs(OPERATIONS_STAFF, moreSettings('sellers'), handlers);
     const link = await screen.findByRole('link', { name: /^Seller applications/ });
     expect(link).toHaveAttribute('href', '/more/seller-applications');
     expect(await within(link).findByLabelText('1 new applications')).toBeInTheDocument();

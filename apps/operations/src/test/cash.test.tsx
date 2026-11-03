@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { CashReconciliation, OrderDetail } from '../api/types';
 import { cashRiderLabel, cashRiderOrder, colomboToday, differenceText } from '../pages/Cash';
-import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, fail, ok, moreSettings, renderAs } from './helpers';
 
 /**
  * More -> Cash (backend migration 019) and the coupon discount on the order
@@ -67,7 +67,7 @@ describe('Cash screen', () => {
 
   it('is reachable from More and shows each rider short or over', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('riders'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 100, updated_at: null }),
       'GET /admin/cash/reconciliation': () => ok(RECON),
       'GET /admin/cash/handins': () => ok({ handins: [HANDIN] }),

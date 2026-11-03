@@ -26,11 +26,14 @@ type Reply = { status: number; data?: unknown; error?: { code?: string; message:
 type Handler = (call: Call) => Reply | unknown | Promise<Reply | unknown>;
 
 /**
- * The More route opened on one Settings category (the same hash a deep link
- * uses): 'deliveries' | 'riders' | 'orders' | 'customers' | 'app'. A settings
- * card only mounts once its category is open.
+ * The More route opened on one category (the same hash a deep link uses):
+ * 'deliveries' | 'riders' | 'orders' | 'customers' | 'sellers' | 'app'. Every
+ * tile and card of More lives in a category and only mounts once it is open.
+ * The last opened category is remembered per browser session; renderAs clears
+ * that so each test starts on Deliveries.
  */
-export const moreSettings = (category: 'deliveries' | 'riders' | 'orders' | 'customers' | 'app') => `/more#settings-${category}`;
+export type MoreCategory = 'deliveries' | 'riders' | 'orders' | 'customers' | 'sellers' | 'app';
+export const moreSettings = (category: MoreCategory) => `/more#settings-${category}`;
 
 export const ok = (data: unknown): Reply => ({ status: 200, data });
 export const fail = (status: number, code: string, message = code): Reply => ({ status, error: { code, message } });
@@ -133,6 +136,7 @@ export const STAFF: AuthUser = {
  * data needs - override any of these per test the same way.
  */
 export function renderAs(user: AuthUser | null, route: string, handlers: Record<string, Handler> = {}) {
+  window.sessionStorage.clear();
   if (user) tokenStore.save('test-access', 'test-refresh');
   const api = mockApi({
     'GET /auth/me': () => ok(user),

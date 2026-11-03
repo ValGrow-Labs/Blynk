@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { StaffAccount } from '../api/types';
-import { ADMIN_NO_RIDER, OPERATIONS_STAFF, fail, ok, renderAs, type Call } from './helpers';
+import { ADMIN_NO_RIDER, OPERATIONS_STAFF, fail, ok, moreSettings, renderAs, type Call } from './helpers';
 
 /**
  * More -> Staff accounts (owner, 2026-10-01). The screen offers only what
@@ -55,7 +55,7 @@ const roleOptions = (dialog: HTMLElement) =>
 describe('More -> Staff accounts as Operations', () => {
   it('is reachable from More and lists Inventory and Rider accounts with the rider vehicle', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/staff': () => ok({ staff: [account(), RIDER_ROW] }) });
+    renderAs(OPERATIONS_STAFF, moreSettings('app'), { 'GET /admin/staff': () => ok({ staff: [account(), RIDER_ROW] }) });
     await user.click(await screen.findByRole('link', { name: 'Staff accounts' }));
     const list = await screen.findByRole('list', { name: 'Staff accounts' });
     const items = within(list).getAllByRole('listitem');

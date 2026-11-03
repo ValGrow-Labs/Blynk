@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
-import { ADMIN_WITH_RIDER, fail, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, fail, ok, moreSettings, renderAs } from './helpers';
 
 afterEach(() => {
   tokenStore.clear();
@@ -31,7 +31,7 @@ const RIDERS = [
 describe('Riders', () => {
   it('is reachable from the More tab', async () => {
     const user = userEvent.setup();
-    renderAs(ADMIN_WITH_RIDER, '/more', { 'GET /admin/riders': () => ok({ riders: RIDERS }) });
+    renderAs(ADMIN_WITH_RIDER, moreSettings('riders'), { 'GET /admin/riders': () => ok({ riders: RIDERS }) });
     await user.click(await screen.findByRole('link', { name: 'Riders' }));
     expect(await screen.findByRole('heading', { name: 'Riders' })).toBeInTheDocument();
   });

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import { itemKey, orderBodyFor, receiveBody, receiveDefaults, type PoLine, type ReorderGroup, type ReorderItem } from '../lib/purchasing';
-import { OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, ok, moreSettings, renderAs } from './helpers';
 
 /**
  * More -> Purchasing (owner, 2026-10-25; migration 058): reorder suggestions, create, send/copy and
@@ -119,7 +119,7 @@ const summary = (over: Record<string, unknown> = {}) => ({
 describe('More -> Purchasing', () => {
   it('has a card on More and lists the orders with status and progress', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('orders'), {
       'GET /admin/purchase-orders': () => ok({ purchase_orders: [summary(), summary({ id: 'po2', po_number: 'BP-0008', status: 'DRAFT', supplier_name: null, units_received: 0 })], page: 1, limit: 50, total: 2 }),
     });
     await user.click(await screen.findByRole('link', { name: 'Purchasing' }));
