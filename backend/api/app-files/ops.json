@@ -1,8 +1,8 @@
 {
   "app": "ops",
-  "version_code": 402,
-  "version_name": "2.12",
-  "sha256": "d049ae462445bad9c94570f2ad195a4f63f2f3467ada046ae598d86a6b276e2f",
-  "size": 6433985,
-  "released_at": "2026-11-03T15:38:17.184Z"
+  "version_code": 403,
+  "version_name": "2.13",
+  "sha256": "fd7e4985572f7d7fe52ceba87aac3e5732098a729c564b3ada0383cc8da775b4",
+  "size": 6434224,
+  "released_at": "2026-11-03T16:33:06.973Z"
 }
