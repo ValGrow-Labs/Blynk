@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { CheckoutSettings, OrderDetail } from '../api/types';
-import { OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * 2026-10-25 (docs/superpowers/plans/2026-10-25-fees.md), on More: the
@@ -35,7 +35,7 @@ const FEE = {
 describe('Delivery fee card: Base + per km', () => {
   it('switches mode, shows the default values and the live preview, saves the four fields and the cap', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ ...FEE }),
       'PATCH /admin/settings/delivery-fee': (call) => ok({ ...FEE, ...(call.body as object), updated_at: '2026-10-25T10:00:00Z' }),
     });
@@ -91,7 +91,7 @@ describe('Delivery fee card: Base + per km', () => {
 
   it('opens on a stored Base + per km fee and refuses bad numbers before sending', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ ...FEE, fee_mode: 'BASE_PER_KM', base_lkr: 150, base_km: 2.5, per_km_lkr: 35 }),
     });
     const card = (await screen.findByRole('heading', { name: 'Delivery fee' })).closest('section') as HTMLElement;
@@ -123,7 +123,7 @@ describe('Delivery fee card: Base + per km', () => {
 
   it('shows the server validation detail', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', {
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ ...FEE, fee_mode: 'BASE_PER_KM' }),
       'PATCH /admin/settings/delivery-fee': () => ({
         status: 400,
@@ -150,7 +150,7 @@ const CHECKOUT: CheckoutSettings = {
 describe('Small-order fee card', () => {
   it('shows the defaults off, explains itself, and saves the switch with both amounts', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
       'PATCH /admin/settings/checkout': (call) => ok({ ...CHECKOUT, ...(call.body as object), updated_at: '2026-10-25T10:00:00Z' }),
     });
@@ -186,7 +186,7 @@ describe('Small-order fee card', () => {
 
   it('says "Needs migration 063" while the backend is not ready, and shows the 409 message inline', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/checkout': () => ok({ ...CHECKOUT, small_order_fee_ready: false }),
       'PATCH /admin/settings/checkout': () =>
         fail(409, 'SMALL_ORDER_FEE_NOT_READY', 'Run migration 063 in Coolify before switching the small-order fee on.'),
@@ -203,7 +203,7 @@ describe('Small-order fee card', () => {
 
   it('refuses a bad amount or fee before sending anything', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
     });
     const card = (await screen.findByRole('heading', { name: 'Small-order fee' })).closest('section') as HTMLElement;
@@ -226,7 +226,7 @@ describe('Small-order fee card', () => {
 describe('Delivery radius card', () => {
   it('shows the store and radius and saves a new radius', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-radius': () => ok({ radius_km: 4, store_name: 'Blynk Dharga Town' }),
       'PATCH /admin/settings/delivery-radius': (call) =>
         ok({ radius_km: (call.body as { radius_km: number }).radius_km, store_name: 'Blynk Dharga Town' }),
@@ -245,7 +245,7 @@ describe('Delivery radius card', () => {
 
   it('refuses an out-of-range radius before sending, and shows a server error', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-radius': () => ok({ radius_km: 4, store_name: 'Blynk Dharga Town' }),
       'PATCH /admin/settings/delivery-radius': () => ({
         status: 400,
@@ -267,7 +267,7 @@ describe('Delivery radius card', () => {
   });
 
   it('shows the load error and no form when the radius cannot be read', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', {
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-radius': () => fail(500, 'INTERNAL'),
     });
     const card = (await screen.findByRole('heading', { name: 'Delivery radius' })).closest('section') as HTMLElement;
@@ -279,7 +279,7 @@ describe('Delivery radius card', () => {
 describe('Checkout card: free delivery above an amount wording', () => {
   it('says the rule with the amount and that Blynk covers the rider share', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/settings/checkout': () => ok(CHECKOUT) });
+    renderAs(OPERATIONS_STAFF, moreSettings('orders'), { 'GET /admin/settings/checkout': () => ok(CHECKOUT) });
     const card = (await screen.findByRole('heading', { name: 'Checkout' })).closest('section') as HTMLElement;
     const toggle = await within(card).findByRole('checkbox', { name: /Free delivery above a basket amount/ });
     expect(toggle.closest('label')).toHaveTextContent('Free delivery when the item total is at least LKR 3,000.');

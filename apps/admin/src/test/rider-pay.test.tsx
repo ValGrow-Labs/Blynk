@@ -18,9 +18,9 @@ import { fail, mockApi, ok } from './mockApi';
  * pages ask for and show.
  */
 
-const renderPage = (ui: React.ReactElement) =>
+const renderPage = (ui: React.ReactElement, path = '/') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <ToastProvider>{ui}</ToastProvider>
     </MemoryRouter>
   );
@@ -155,7 +155,7 @@ describe('Settings - rider commission (owner, 2026-10-09)', () => {
       }
       return undefined;
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#riders');
 
     const panel = await screen.findByRole('region', { name: 'Rider commission' });
     const input = await within(panel).findByLabelText(/Default commission \(%\)/);
@@ -182,7 +182,7 @@ describe('Settings - rider commission (owner, 2026-10-09)', () => {
       if (c.method === 'PATCH') return fail(400, 'VALIDATION_ERROR', 'Invalid', [{ message: 'default_percent must be at most 100' }]);
       return undefined;
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#riders');
     const panel = await screen.findByRole('region', { name: 'Rider commission' });
     await within(panel).findByLabelText(/Default commission/);
     await user.click(within(panel).getByRole('button', { name: 'Save' }));

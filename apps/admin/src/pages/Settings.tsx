@@ -1,8 +1,8 @@
 import { errorMessage } from '../lib/apiErrors';
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ApiError } from '../api/client';
 import { settings as settingsApi } from '../api/resources';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type {
   BirthdayOfferSetting,
   CheckoutSettings,
@@ -67,65 +67,213 @@ import { formatPercent as formatMarkup, parseMarkupInput } from '../lib/pricing'
  * (GET/PATCH /admin/settings/birthday-offer; owner, 2026-10-09), and rider
  * trips - how many orders one rider may carry at once and how far apart their
  * drop-offs may be (GET/PATCH /admin/settings/rider-trips; owner, 2026-10-10).
- * /settings#checkout (the Coupons page's link) scrolls to Checkout. The
- * store schedule - store status with close-now, opening hours, holidays and
- * delivery slots - comes first (owner, 2026-10-10).
+ * /settings#checkout (the Coupons page's link) opens Orders and payments and
+ * scrolls to Checkout. The page is split into categories (Deliveries first;
+ * see SETTINGS_CATEGORIES); within Deliveries the store schedule - store
+ * status with close-now, opening hours, holidays and delivery slots - comes
+ * first (owner, 2026-10-10).
  */
 export function Settings() {
   const { hash } = useLocation();
+  const navigate = useNavigate();
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const active = categoryFromHash(hash);
 
-  // /settings#checkout (owner, 2026-10-10): the Coupons page links here when
-  // coupon codes are off. The panel loads after a moment, so retry briefly.
+  // A deep link to one card (/settings#checkout, the Coupons page's link; owner,
+  // 2026-10-10) opens its category, then scrolls to the card. The card loads
+  // after a moment, so retry briefly. A plain category hash does not scroll.
   useEffect(() => {
-    if (!hash) return;
+    const id = hashId(hash);
+    if (!id || SETTINGS_CATEGORIES.some((c) => c.slug === id)) return;
     let tries = 0;
     const timer = window.setInterval(() => {
-      const el = document.getElementById(hash.slice(1));
+      const el = document.getElementById(id);
       if (el || ++tries > 20) window.clearInterval(timer);
       el?.scrollIntoView?.({ block: 'start' });
     }, 100);
     return () => window.clearInterval(timer);
   }, [hash]);
 
+  const select = (slug: string, focus = false) => {
+    navigate({ hash: `#${slug}` }, { replace: true });
+    if (focus) tabRefs.current[slug]?.focus();
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const last = SETTINGS_CATEGORIES.length - 1;
+    const at = SETTINGS_CATEGORIES.findIndex((c) => c.slug === active.slug);
+    let to: number;
+    if (event.key === 'ArrowRight') to = at === last ? 0 : at + 1;
+    else if (event.key === 'ArrowLeft') to = at === 0 ? last : at - 1;
+    else if (event.key === 'Home') to = 0;
+    else if (event.key === 'End') to = last;
+    else return;
+    event.preventDefault();
+    select(SETTINGS_CATEGORIES[to].slug, true);
+  };
+
   return (
     <>
-      <PageHeader title="Settings" description="Store-wide values the customer app uses." />
-      <StoreScheduleSettings />
-      <DeliveryFeeSettingPanel />
-      {/* Delivery radius (owner, 2026-10-25). */}
-      <DeliveryRadiusCard />
-      {/* Extra delivery areas (2026-11-01): Beruwala etc. as separate circles. */}
-      <DeliveryZonesCard />
-      {/* Global default markup (migration 044; owner, 2026-10-13). */}
-      <DefaultMarkupPanel />
-      <CheckoutSettingsPanel />
-      {/* Small-order fee (owner, 2026-10-25): off by default; needs migration 063. */}
-      <SmallOrderFeeCard />
-      {/* Cart rules (owner, 2026-10-27): one seller per order, on by default. */}
-      <CartRulesCard />
-      {/* PayHere online payments (migration 047; docs/api/payhere.md). */}
-      <PaymentGatewayCard />
-      {/* Customer SMS language (owner, 2026-10-12). */}
-      <CustomerSmsLanguagePanel />
-      {/* Rider pay (owner, 2026-10-10): default pay model, bonuses and the rain
-          boost. Its % is the default commission, so the old commission card
-          only shows against an API without the pay controls. */}
-      <RiderPaySettings fallback={<RiderCommissionPanel />} />
-      <RiderTripsPanel />
-      {/* Automatic rider assignment (owner, 2026-10-25): off by default. */}
-      <RiderAutoAssignCard />
-      {/* Rider documents riders upload at sign-up (owner, 2026-10-10). */}
-      <RiderDocumentsSettingsCard />
-      <BirthdayOfferPanel />
-      {/* Refer a friend and Blynk Points (owner, 2026-10-10). */}
-      <ReferralSettingsCard />
-      <PointsSettingsCard />
-      {/* Blynk Wallet: refunds go to the wallet (owner, 2026-10-15; docs/api/wallet.md). */}
-      <WalletSettingsCard />
-      {/* In-app updates for Blynk Ops and Blynk Rider (owner, 2026-10-12). */}
-      <AppUpdatesPanel />
+      <PageHeader
+        title="Settings"
+        description="Store-wide values the customer app uses, grouped by category: Deliveries, Riders, Orders and payments, Customers and rewards, and App."
+      />
+      <div className="settings-tabs" role="tablist" aria-label="Settings categories" onKeyDown={onKeyDown}>
+        {SETTINGS_CATEGORIES.map((category) => {
+          const selected = category.slug === active.slug;
+          return (
+            <button
+              key={category.slug}
+              ref={(el) => {
+                tabRefs.current[category.slug] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`settings-tab-${category.slug}`}
+              aria-selected={selected}
+              aria-controls={selected ? 'settings-tabpanel' : undefined}
+              tabIndex={selected ? 0 : -1}
+              className={selected ? 'settings-tabs__tab is-selected' : 'settings-tabs__tab'}
+              onClick={() => select(category.slug)}
+            >
+              {category.label}
+              <span className="settings-tabs__count" aria-hidden="true">
+                {category.cards.length}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Only the selected category renders, so a hidden one never fetches its settings. */}
+      <div id="settings-tabpanel" role="tabpanel" aria-labelledby={`settings-tab-${active.slug}`} className="settings-category">
+        <h2 className="settings-category__title">{active.label}</h2>
+        <p className="settings-category__description">{active.description}</p>
+        <div className="settings-category__cards">
+          {active.cards.map((card) => (
+            <Fragment key={card.key}>{card.render()}</Fragment>
+          ))}
+        </div>
+      </div>
     </>
   );
+}
+
+type SettingsCard = { key: string; render: () => ReactNode };
+type SettingsCategory = {
+  slug: string;
+  label: string;
+  description: string;
+  /** Element ids inside this category's cards; /settings#<id> opens the category. */
+  anchors: string[];
+  cards: SettingsCard[];
+};
+
+/**
+ * Settings categories (owner's brother, 2026-11-03): every card lives under one
+ * of these, in this order. Operations has the same names and order. The slug is
+ * the URL hash (/settings#riders); a card id (/settings#checkout) opens the
+ * category that holds the card.
+ */
+const SETTINGS_CATEGORIES: SettingsCategory[] = [
+  {
+    slug: 'deliveries',
+    label: 'Deliveries',
+    description: 'Everything about getting an order to the customer: hours, fees, areas and riders on the road.',
+    anchors: [
+      'store-status',
+      'opening-hours',
+      'holidays',
+      'delivery-slots',
+      'closed-day-sms',
+      'small-order-fee',
+      'delivery-radius',
+      'delivery-zones',
+      'rider-auto-assign',
+    ],
+    cards: [
+      { key: 'store-schedule', render: () => <StoreScheduleSettings /> },
+      { key: 'delivery-fee', render: () => <DeliveryFeeSettingPanel /> },
+      // Small-order fee (owner, 2026-10-25): off by default; needs migration 063.
+      { key: 'small-order-fee', render: () => <SmallOrderFeeCard /> },
+      // Delivery radius (owner, 2026-10-25).
+      { key: 'delivery-radius', render: () => <DeliveryRadiusCard /> },
+      // Extra delivery areas (2026-11-01): Beruwala etc. as separate circles.
+      { key: 'delivery-zones', render: () => <DeliveryZonesCard /> },
+      { key: 'rider-trips', render: () => <RiderTripsPanel /> },
+      // Automatic rider assignment (owner, 2026-10-25): off by default.
+      { key: 'rider-auto-assign', render: () => <RiderAutoAssignCard /> },
+    ],
+  },
+  {
+    slug: 'riders',
+    label: 'Riders',
+    description: 'What riders are paid and the documents they must upload.',
+    anchors: ['rider-pay'],
+    cards: [
+      // Rider pay (owner, 2026-10-10): default pay model, bonuses and the rain
+      // boost. Its % is the default commission, so the old commission card
+      // only shows against an API without the pay controls.
+      { key: 'rider-pay', render: () => <RiderPaySettings fallback={<RiderCommissionPanel />} /> },
+      // Rider documents riders upload at sign-up (owner, 2026-10-10).
+      { key: 'rider-documents', render: () => <RiderDocumentsSettingsCard /> },
+    ],
+  },
+  {
+    slug: 'orders',
+    label: 'Orders and payments',
+    description: 'How an order is placed and paid: coupons, free deliveries, cart rules, online payments and pricing.',
+    anchors: ['checkout', 'cart-rules', 'online-payments', 'default-markup'],
+    cards: [
+      { key: 'checkout', render: () => <CheckoutSettingsPanel /> },
+      // Cart rules (owner, 2026-10-27): one seller per order, on by default.
+      { key: 'cart-rules', render: () => <CartRulesCard /> },
+      // PayHere online payments (migration 047; docs/api/payhere.md).
+      { key: 'online-payments', render: () => <PaymentGatewayCard /> },
+      // Global default markup (migration 044; owner, 2026-10-13).
+      { key: 'default-markup', render: () => <DefaultMarkupPanel /> },
+    ],
+  },
+  {
+    slug: 'customers',
+    label: 'Customers and rewards',
+    description: 'Offers, rewards and messages for customers: birthdays, referrals, points, wallet and SMS language.',
+    anchors: ['wallet'],
+    cards: [
+      { key: 'birthday-offer', render: () => <BirthdayOfferPanel /> },
+      // Refer a friend and Blynk Points (owner, 2026-10-10).
+      { key: 'referral', render: () => <ReferralSettingsCard /> },
+      { key: 'points', render: () => <PointsSettingsCard /> },
+      // Blynk Wallet: refunds go to the wallet (owner, 2026-10-15; docs/api/wallet.md).
+      { key: 'wallet', render: () => <WalletSettingsCard /> },
+      // Customer SMS language (owner, 2026-10-12).
+      { key: 'sms-language', render: () => <CustomerSmsLanguagePanel /> },
+    ],
+  },
+  {
+    slug: 'app',
+    label: 'App',
+    description: 'Updates for the Blynk Ops and Blynk Rider apps.',
+    anchors: [],
+    cards: [
+      // In-app updates for Blynk Ops and Blynk Rider (owner, 2026-10-12).
+      { key: 'app-updates', render: () => <AppUpdatesPanel /> },
+    ],
+  },
+];
+
+function hashId(hash: string): string {
+  const raw = hash.replace(/^#/, '');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** The category a URL hash opens: its slug, or a card id inside it; anything else opens Deliveries. */
+function categoryFromHash(hash: string): SettingsCategory {
+  const id = hashId(hash);
+  return SETTINGS_CATEGORIES.find((c) => c.slug === id || c.anchors.includes(id)) ?? SETTINGS_CATEGORIES[0];
 }
 
 /**

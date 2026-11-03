@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { LowStockItem, LowStockResult, StockDetail } from '../api/types';
-import { ADMIN_NO_RIDER, ADMIN_WITH_RIDER, fail, ok, renderAs } from './helpers';
+import { ADMIN_NO_RIDER, ADMIN_WITH_RIDER, fail, moreSettings, ok, renderAs } from './helpers';
 
 /** Low-stock alerts, per-product threshold, and the Delivery fee setting (API contract §2-3). */
 
@@ -166,7 +166,7 @@ const FLAT_FEE = { fee_lkr: 250, fee_mode: 'FLAT', tiers: [], max_fee_lkr: null,
 describe('Delivery fee setting', () => {
   it('shows the current fee and saves a valid new one', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ ...FLAT_FEE }),
       'PATCH /admin/settings/delivery-fee': (call) => ok({ ...FLAT_FEE, ...call.body, updated_at: '2026-09-30T10:00:00Z' }),
     });
@@ -186,7 +186,7 @@ describe('Delivery fee setting', () => {
 
   it('validates 0-1000 and 2 decimals before sending anything', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
     });
     const input = await screen.findByLabelText('New fee (LKR)');
@@ -204,7 +204,7 @@ describe('Delivery fee setting', () => {
 
   it('shows the server VALIDATION_ERROR detail', async () => {
     const user = userEvent.setup();
-    renderAs(ADMIN_WITH_RIDER, '/more', {
+    renderAs(ADMIN_WITH_RIDER, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
       'PATCH /admin/settings/delivery-fee': () => ({
         status: 400,
@@ -220,7 +220,7 @@ describe('Delivery fee setting', () => {
 describe('Delivery fee by distance - per-km tiers (owner, 2026-10-10)', () => {
   it('switches to by distance: km 1 starts at the flat fee, rows add and remove, live example with a cap, saves the tiers', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () => ok({ ...FLAT_FEE }),
       'PATCH /admin/settings/delivery-fee': (call) => ok({ ...FLAT_FEE, ...call.body, updated_at: '2026-10-10T10:00:00Z' }),
     });
@@ -280,7 +280,7 @@ describe('Delivery fee by distance - per-km tiers (owner, 2026-10-10)', () => {
 
   it('shows stored tiers, refuses bad amounts and a bad cap before sending, and can go back to one fee', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('deliveries'), {
       'GET /admin/settings/delivery-fee': () =>
         ok({
           ...FLAT_FEE,
@@ -339,7 +339,7 @@ describe('Checkout settings (owner, 2026-10-08)', () => {
 
   it('shows both switches and saves them', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('orders'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
       'PATCH /admin/settings/checkout': (call) => {
@@ -386,7 +386,7 @@ describe('Checkout settings (owner, 2026-10-08)', () => {
 
   it("switches \"Show 'Save LKR' on offers\" (owner, 2026-10-10), sending it only when flipped", async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('orders'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
       'GET /admin/settings/checkout': () => ok({ ...CHECKOUT, show_offer_savings: false }),
       'PATCH /admin/settings/checkout': (call) => ok({ ...CHECKOUT, ...(call.body as object), updated_at: '2026-10-10T04:00:00Z' }),
@@ -414,7 +414,7 @@ describe('Checkout settings (owner, 2026-10-08)', () => {
 
   it('starts the count again from today after a confirm (owner, 2026-10-09)', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('orders'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
       'PATCH /admin/settings/checkout': (call) => ok({ ...CHECKOUT, ...(call.body as object), updated_at: '2026-10-20T04:00:00Z' }),
@@ -442,7 +442,7 @@ describe('Checkout settings (owner, 2026-10-08)', () => {
 
   it('refuses a count above 10 before sending anything', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('orders'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
     });

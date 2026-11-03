@@ -17,9 +17,9 @@ import { fail, mockApi, ok } from './mockApi';
  * and coupons.
  */
 
-const renderPage = (ui: React.ReactElement) =>
+const renderPage = (ui: React.ReactElement, path = '/') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <ToastProvider>{ui}</ToastProvider>
     </MemoryRouter>
   );
@@ -135,7 +135,7 @@ describe('Coupons - coupon codes switched off at checkout (owner, 2026-10-10)', 
 
   it('the Checkout panel in Settings is the link target', async () => {
     mockApi((c) => (c.path === '/admin/settings/checkout' ? ok(checkout(false)) : undefined));
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#orders');
     expect(await screen.findByRole('region', { name: 'Checkout' })).toHaveAttribute('id', 'checkout');
   });
 });

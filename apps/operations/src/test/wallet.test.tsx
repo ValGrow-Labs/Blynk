@@ -19,7 +19,7 @@ import {
   walletErrorMessage,
   walletPaidLine,
 } from '../lib/wallet';
-import { OPERATIONS_STAFF, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, moreSettings, ok, renderAs } from './helpers';
 
 /** Blynk Wallet in Operations (owner, 2026-10-15; docs/api/wallet.md). */
 
@@ -351,7 +351,7 @@ describe('Blynk Wallet settings', () => {
 
   it('is linked from More, and saves only what changed', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more');
+    renderAs(OPERATIONS_STAFF, moreSettings('customers'));
     expect(await screen.findByRole('link', { name: 'Blynk Wallet' })).toHaveAttribute('href', '/more/wallet');
     cleanup();
     vi.unstubAllGlobals();

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { CheckoutSettings, CustomerSmsLanguageSetting, OrderDetail } from '../api/types';
 import { checkoutExtrasPatch, parseBasketAmount } from '../lib/checkoutExtras';
-import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * Owner, 2026-10-12, on More: the Customer SMS language card, and the new
@@ -58,7 +58,7 @@ describe('checkout extras helpers', () => {
 describe('Checkout card (More)', () => {
   it('saves the basket amount and the "for someone else" switches', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('orders'), {
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
       'PATCH /admin/settings/checkout': (call) => ok({ ...CHECKOUT, ...call.body }),
       'GET /admin/settings/customer-sms-language': () => ok(SMS),
@@ -87,7 +87,7 @@ describe('Checkout card (More)', () => {
 describe('Customer SMS language card (More)', () => {
   it('shows the samples and saves a forced language', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('customers'), {
       'GET /admin/settings/checkout': () => ok(CHECKOUT),
       'GET /admin/settings/customer-sms-language': () => ok(SMS),
       'PATCH /admin/settings/customer-sms-language': (call) => ok({ ...SMS, ...call.body, updated_at: '2026-10-12T05:00:00Z' }),

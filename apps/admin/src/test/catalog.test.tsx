@@ -40,9 +40,9 @@ function mockApi(handler: (call: Call) => Reply | undefined) {
   return { calls, find: (method: string, path: string) => calls.filter((c) => c.method === method && c.path === path) };
 }
 
-const renderPage = (ui: React.ReactElement) =>
+const renderPage = (ui: React.ReactElement, path = '/') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <ToastProvider>{ui}</ToastProvider>
     </MemoryRouter>
   );
@@ -412,7 +412,7 @@ describe('checkout settings (owner, 2026-10-08)', () => {
         return { data: { show_offer_savings: false, ...c.body, new_customer_free_deliveries: free, updated_at: '2026-10-10T05:00:00.000Z' } };
       }
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#orders');
 
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     const savings = await within(panel).findByRole('checkbox', { name: "Show 'Save LKR' on offers" });
@@ -455,7 +455,7 @@ describe('checkout settings (owner, 2026-10-08)', () => {
         return { data: { ...c.body, new_customer_free_deliveries: free, updated_at: '2026-10-08T05:00:00.000Z' } };
       }
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#orders');
 
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     const coupons = await within(panel).findByRole('checkbox', { name: 'Coupon codes at checkout' });
@@ -494,7 +494,7 @@ describe('checkout settings (owner, 2026-10-08)', () => {
         return { data: { coupons_enabled: false, new_customer_free_deliveries: { enabled: true, count: 2, since: SINCE }, updated_at: null } };
       }
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#orders');
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     const count = await within(panel).findByLabelText(/Free deliveries per customer/);
     await user.clear(count);
@@ -514,7 +514,7 @@ describe('checkout settings (owner, 2026-10-08)', () => {
         return { data: { coupons_enabled: true, ...c.body, updated_at: '2026-10-20T05:00:00.000Z' } };
       }
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#orders');
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     expect(await within(panel).findByText(/Counting orders since 9 Oct 2026/)).toBeInTheDocument();
 
@@ -546,7 +546,7 @@ describe('checkout settings (owner, 2026-10-08)', () => {
         return { data: { coupons_enabled: true, new_customer_free_deliveries: { enabled: false, count: 2, since: '2026-10-23T05:00:00.000Z' }, ...c.body, updated_at: null } };
       }
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#orders');
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     const count = await within(panel).findByLabelText(/Free deliveries per customer/);
     // tick the switch and change the count, then press "Start again from today" before saving

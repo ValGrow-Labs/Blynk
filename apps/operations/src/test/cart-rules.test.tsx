@@ -2,7 +2,7 @@ import { cleanup, configure, screen, waitFor, within } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
-import { OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * 2026-10-27 (docs/superpowers/plans/2026-10-27-one-seller-cart-and-seller-applications.md, section R), on More:
@@ -25,7 +25,7 @@ const cardOf = async () => (await screen.findByRole('heading', { name: 'Cart rul
 
 describe('Cart rules card', () => {
   it('shows "One seller per order" ON with its explanation and the "coming later" line', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/settings/cart-rules': () => ok(ON) });
+    renderAs(OPERATIONS_STAFF, moreSettings('orders'), { 'GET /admin/settings/cart-rules': () => ok(ON) });
     const card = await cardOf();
     const toggle = await within(card).findByRole('switch', { name: 'One seller per order' });
     expect(toggle).toHaveAttribute('aria-checked', 'true');
@@ -36,20 +36,20 @@ describe('Cart rules card', () => {
   });
 
   it('shows the switch ON when the API has no value yet', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/settings/cart-rules': () => ok({ updated_at: null }) });
+    renderAs(OPERATIONS_STAFF, moreSettings('orders'), { 'GET /admin/settings/cart-rules': () => ok({ updated_at: null }) });
     const card = await cardOf();
     expect(await within(card).findByRole('switch', { name: 'One seller per order' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows a saved OFF state', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/settings/cart-rules': () => ok(OFF) });
+    renderAs(OPERATIONS_STAFF, moreSettings('orders'), { 'GET /admin/settings/cart-rules': () => ok(OFF) });
     const card = await cardOf();
     expect(await within(card).findByRole('switch', { name: 'One seller per order' })).toHaveAttribute('aria-checked', 'false');
   });
 
   it('toggles OFF, saves with PATCH /admin/settings/cart-rules and shows the saved state', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('orders'), {
       'GET /admin/settings/cart-rules': () => ok(ON),
       'PATCH /admin/settings/cart-rules': (call) => ok({ ...(call.body as object), updated_at: '2026-10-27T05:00:00.000Z' }),
     });
@@ -65,7 +65,7 @@ describe('Cart rules card', () => {
 
   it('switches back ON and saves', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('orders'), {
       'GET /admin/settings/cart-rules': () => ok(OFF),
       'PATCH /admin/settings/cart-rules': (call) => ok({ ...(call.body as object), updated_at: null }),
     });
@@ -79,7 +79,7 @@ describe('Cart rules card', () => {
 
   it('shows a save error inline and keeps the switch where it was set', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', {
+    renderAs(OPERATIONS_STAFF, moreSettings('orders'), {
       'GET /admin/settings/cart-rules': () => ok(ON),
       'PATCH /admin/settings/cart-rules': () => ({
         status: 400,
@@ -94,7 +94,7 @@ describe('Cart rules card', () => {
   });
 
   it('shows the load error and no form when the cart rules cannot be read', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/settings/cart-rules': () => fail(500, 'INTERNAL') });
+    renderAs(OPERATIONS_STAFF, moreSettings('orders'), { 'GET /admin/settings/cart-rules': () => fail(500, 'INTERNAL') });
     const card = await cardOf();
     expect(await within(card).findByText('The Blynk API had a problem. Try again in a moment.')).toBeInTheDocument();
     expect(within(card).queryByRole('switch')).not.toBeInTheDocument();

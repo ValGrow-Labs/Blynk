@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { AdminProduct, Category } from '../api/types';
-import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * Selling-price modes + category markup (migration 044; owner, 2026-10-13):
@@ -315,7 +315,7 @@ describe('More - Global default markup', () => {
   ] as const) {
     it(`shows and saves the global default markup (${who})`, async () => {
       const u = userEvent.setup();
-      const { api } = renderAs(user, '/more', {
+      const { api } = renderAs(user, moreSettings('orders'), {
         'GET /admin/settings/default-markup': () => ok({ markup_percent: 20, updated_at: null, products_using: 42 }),
         'PATCH /admin/settings/default-markup': (call) =>
           ok({ markup_percent: call.body.markup_percent, updated_at: '2026-10-13T05:00:00.000Z', products_using: 42 }),

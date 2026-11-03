@@ -7,7 +7,7 @@ import { AppUpdatePrompt, AppVersionCard } from '../components/AppUpdate';
 import { AppUpdatesSettingsCard } from '../components/AppUpdatesSettingsCard';
 import { __resetAppUpdateForTests, appUpdateDeps, updateStore, type UpdateManifest, type UpdatePolicy } from '../lib/app-update';
 import { minimumWarning, parseMinVersionCode, parseShareHours } from '../lib/appUpdatesSettings';
-import { OPERATIONS_STAFF, fail, mockApi, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, mockApi, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * In-app updates (owner, 2026-10-12): the "Update available" card, the
@@ -376,7 +376,7 @@ describe('More > App updates (setting)', () => {
   });
 
   it('is on the More page with App version', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { 'GET /admin/settings/app-updates': () => ok(SETTING) });
+    renderAs(OPERATIONS_STAFF, moreSettings('app'), { 'GET /admin/settings/app-updates': () => ok(SETTING) });
     expect(await screen.findByRole('heading', { name: 'App updates' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'App version' })).toBeInTheDocument();
   });

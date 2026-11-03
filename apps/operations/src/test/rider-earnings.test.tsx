@@ -5,7 +5,7 @@ import { tokenStore } from '../api/client';
 import type { MyEarnings, RiderEarningsReport } from '../api/types';
 import { __resetTrackerSessionForTests } from '../lib/tracker-session';
 import { formatPercent, parseCommissionPercent, parseOwnPercent, payLabel } from '../lib/riderPay';
-import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, OPERATIONS_STAFF, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * Rider pay (owner, 2026-10-09): company riders are salaried, commission
@@ -44,7 +44,7 @@ describe('rider pay helpers', () => {
 describe('Rider commission setting (More)', () => {
   it('shows the default % and saves a new one', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(ADMIN_WITH_RIDER, '/more', {
+    const { api } = renderAs(ADMIN_WITH_RIDER, moreSettings('riders'), {
       'GET /admin/settings/delivery-fee': () => ok({ fee_lkr: 250, updated_at: null }),
       'GET /admin/settings/rider-commission': () => ok({ default_percent: 80, updated_at: null }),
       'PATCH /admin/settings/rider-commission': (call) =>

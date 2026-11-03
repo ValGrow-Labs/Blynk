@@ -175,7 +175,7 @@ describe('Settings > App updates', () => {
   it('is on the Settings page', async () => {
     mockApi((c) => (c.path === '/admin/settings/app-updates' && c.method === 'GET' ? ok(SETTING) : undefined));
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#app']}>
         <ToastProvider>
           <Settings />
         </ToastProvider>

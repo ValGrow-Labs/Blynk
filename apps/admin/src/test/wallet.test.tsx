@@ -43,7 +43,7 @@ describe('Settings -> Blynk Wallet', () => {
     const api = settingsApi((c) =>
       c.method === 'PATCH' && c.path === '/admin/settings/wallet' ? ok({ ...SETTING, ...c.body, updated_at: '2026-10-15T04:00:00Z' }) : undefined
     );
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Blynk Wallet' });
     const on = await within(panel).findByRole('checkbox', { name: /^Blynk Wallet at checkout/ });
     expect(on).toBeChecked();
@@ -63,7 +63,7 @@ describe('Settings -> Blynk Wallet', () => {
   it('refuses a bad max use % before sending', async () => {
     const user = userEvent.setup();
     const api = settingsApi();
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Blynk Wallet' });
     const max = await within(panel).findByLabelText(/^Most of an order the wallet can pay/);
     await user.clear(max);

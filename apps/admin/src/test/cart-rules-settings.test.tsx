@@ -15,7 +15,7 @@ import { fail, mockApi, ok, type Call, type Reply } from './mockApi';
 
 const renderPage = () =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/settings#orders']}>
       <ToastProvider>
         <Settings />
       </ToastProvider>

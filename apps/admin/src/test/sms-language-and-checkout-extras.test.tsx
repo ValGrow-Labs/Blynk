@@ -17,9 +17,9 @@ import { mockApi, ok } from './mockApi';
  * here, what the page shows and sends.
  */
 
-const renderPage = () =>
+const renderPage = (hash = '') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[`/settings${hash}`]}>
       <ToastProvider>
         <Settings />
       </ToastProvider>
@@ -92,7 +92,7 @@ describe('Settings - checkout switches (owner, 2026-10-12)', () => {
       if (c.path === '/admin/settings/customer-sms-language') return ok(SMS);
       return undefined;
     });
-    renderPage();
+    renderPage('#orders');
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     const basket = await within(panel).findByRole('checkbox', { name: /Free delivery when the item total is at least LKR/ });
     const amount = within(panel).getByLabelText(/Free delivery from \(LKR\)/);
@@ -121,7 +121,7 @@ describe('Settings - checkout switches (owner, 2026-10-12)', () => {
   it('refuses a bad basket amount before saving', async () => {
     const user = userEvent.setup();
     const api = mockApi((c) => (c.path === '/admin/settings/checkout' ? ok(CHECKOUT) : undefined));
-    renderPage();
+    renderPage('#orders');
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     await user.click(await within(panel).findByRole('checkbox', { name: /Free delivery when the item total is at least LKR/ }));
     const amount = within(panel).getByLabelText(/Free delivery from \(LKR\)/);
@@ -141,7 +141,7 @@ describe('Settings - customer SMS language (owner, 2026-10-12)', () => {
       if (c.method === 'GET') return ok(SMS);
       return ok({ ...SMS, ...c.body, updated_at: '2026-10-12T05:00:00.000Z' });
     });
-    renderPage();
+    renderPage('#customers');
     const panel = await screen.findByRole('region', { name: 'Customer SMS language' });
     const english = await within(panel).findByRole('button', { name: 'English only' });
     expect(english).toHaveAttribute('aria-pressed', 'true');

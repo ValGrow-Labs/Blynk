@@ -32,6 +32,7 @@ import { DefaultMarkupCard } from '../components/DefaultMarkupCard';
 import { RiderAutoAssignCard } from '../components/RiderAutoAssignCard';
 import { PaymentGatewayCard } from '../components/PaymentGatewayCard';
 import { SellerHubCards } from './Sellers/HubCards';
+import { SettingsCategories, isCategoryHash, type SettingsCategory } from '../components/SettingsCategories';
 
 /**
  * The More tab (plan §8: rider list, settings, sign-out). Sign-out is real,
@@ -54,6 +55,11 @@ import { SellerHubCards } from './Sellers/HubCards';
  * Owner, 2026-10-13: "Global default markup" (`GET|PATCH
  * /admin/settings/default-markup`, migration 044) sits with the store
  * settings; /more#default-markup (linked from Catalog) scrolls to it.
+ * Owner's brother, 2026-11-03: every setting sits in a category (Deliveries,
+ * Riders, Orders and payments, Customers and rewards, App) under one
+ * "Settings" block of chips. /more#settings-<id> opens a category; any card's
+ * own anchor (#checkout-settings, #default-markup, #rider-auto-assign ...)
+ * opens the category that holds it. Only the open category is mounted.
  */
 export function More() {
   const { user, signOut } = useAuth();
@@ -64,7 +70,7 @@ export function More() {
   // /more#checkout-settings (owner, 2026-10-10): the Coupons page links here
   // when coupon codes are off. The card loads after a moment, so retry briefly.
   useEffect(() => {
-    if (!hash) return;
+    if (!hash || isCategoryHash(hash)) return;
     let tries = 0;
     const timer = window.setInterval(() => {
       const el = document.getElementById(hash.slice(1));
@@ -106,13 +112,6 @@ export function More() {
 
       <ul className="cat-hub">
         <li>
-          {/* Opening hours, close the store now, holidays and delivery
-              slots - one screen (owner, 2026-10-10). */}
-          <Link className="cat-hub__card" to="/more/opening-hours">
-            <span className="cat-hub__title">Opening hours</span>
-          </Link>
-        </li>
-        <li>
           <Link className="cat-hub__card" to="/more/riders">
             <span className="cat-hub__title">Riders</span>
           </Link>
@@ -134,12 +133,6 @@ export function More() {
           </Link>
         </li>
         <li>
-          {/* Rider pay model, rain/peak boosts, daily targets (owner, 2026-10-10). */}
-          <Link className="cat-hub__card" to="/more/rider-pay">
-            <span className="cat-hub__title">Rider pay</span>
-          </Link>
-        </li>
-        <li>
           <Link className="cat-hub__card" to="/more/deliver">
             <span className="cat-hub__title">Deliver orders myself</span>
           </Link>
@@ -152,12 +145,6 @@ export function More() {
                 {pendingRiders}
               </span>
             ) : null}
-          </Link>
-        </li>
-        <li>
-          {/* Which documents riders upload and must have verified (owner, 2026-10-10). */}
-          <Link className="cat-hub__card" to="/more/rider-documents">
-            <span className="cat-hub__title">Rider documents</span>
           </Link>
         </li>
         <li>
@@ -183,33 +170,9 @@ export function More() {
           </Link>
         </li>
         <li>
-          {/* Birthday-week gift and birthday SMS (owner, 2026-10-09). */}
-          <Link className="cat-hub__card" to="/more/birthday-offer">
-            <span className="cat-hub__title">Birthday offer</span>
-          </Link>
-        </li>
-        <li>
           {/* Coupon codes for customers (owner, 2026-10-10). */}
           <Link className="cat-hub__card" to="/more/coupons">
             <span className="cat-hub__title">Coupons</span>
-          </Link>
-        </li>
-        <li>
-          {/* Refer a friend rewards and referrals (owner, 2026-10-10). */}
-          <Link className="cat-hub__card" to="/more/refer-a-friend">
-            <span className="cat-hub__title">Refer a friend</span>
-          </Link>
-        </li>
-        <li>
-          {/* Blynk Points: earn on delivered orders, spend at checkout (owner, 2026-10-10). */}
-          <Link className="cat-hub__card" to="/more/points">
-            <span className="cat-hub__title">Blynk Points</span>
-          </Link>
-        </li>
-        <li>
-          {/* Blynk Wallet: refunds go to the customer's wallet (owner, 2026-10-15). */}
-          <Link className="cat-hub__card" to="/more/wallet">
-            <span className="cat-hub__title">Blynk Wallet</span>
           </Link>
         </li>
         <li>
@@ -245,30 +208,7 @@ export function More() {
         <SellerHubCards />
       </ul>
 
-      <DeliveryFeeCard />
-      {/* Small-order fee (2026-10-25): off by default; needs migration 063. */}
-      <SmallOrderFeeCard />
-      {/* Delivery radius (2026-10-25): how far from the store orders are accepted. */}
-      <DeliveryRadiusCard />
-      {/* Extra delivery areas (2026-11-01): separate circles such as Beruwala, added to the radius. */}
-      <DeliveryZonesCard />
-      {/* Cart rules (owner, 2026-10-27): one seller per order, on by default. */}
-      <CartRulesCard />
-      {/* Selling prices (owner, 2026-10-13): the markup products fall back to. */}
-      <DefaultMarkupCard />
-      <CheckoutSettingsCard />
-      {/* PayHere online payments (docs/api/payhere.md): on/off, window, methods; credentials Admin-only. */}
-      <PaymentGatewayCard />
-      {/* Customer SMS language (owner, 2026-10-12). */}
-      <CustomerSmsLanguageCard />
-      <RiderCommissionCard />
-      <RiderTripsCard />
-      {/* Automatic rider assignment (owner, 2026-10-25): off by default. */}
-      <RiderAutoAssignCard />
-      {/* In-app updates (owner, 2026-10-12): force or offer the new Ops / Rider APK. */}
-      <AppUpdatesSettingsCard />
-      {/* This phone's Blynk Ops version and "Check for updates". */}
-      <AppVersionCard />
+      <SettingsCategories categories={SETTINGS_CATEGORIES} />
 
       <section className="card">
         <button type="button" className="button button--ghost" onClick={() => void handleSignOut()}>
@@ -278,6 +218,98 @@ export function More() {
     </div>
   );
 }
+
+/** A settings page reached by a link tile (same look and wording as the More hub tiles). */
+function SettingsLink({ to, title }: { to: string; title: string }) {
+  return (
+    <Link className="cat-hub__card" to={to}>
+      <span className="cat-hub__title">{title}</span>
+    </Link>
+  );
+}
+
+/**
+ * The settings, by category (names and order as Admin). Cards keep their own
+ * code; the pages that were link tiles in the hub (opening hours, rider pay,
+ * rider documents, birthday offer, refer a friend, points, wallet) are link
+ * tiles here, under their category. `anchors` are the element ids a
+ * /more#... link may point at.
+ */
+const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
+  {
+    id: 'deliveries',
+    label: 'Deliveries',
+    description: 'Everything about getting an order to the customer: hours, fees, areas and riders on the road.',
+    items: [
+      // Opening hours, close the store now, holidays and delivery slots - one screen (owner, 2026-10-10).
+      { key: 'opening-hours', node: <SettingsLink to="/more/opening-hours" title="Opening hours" /> },
+      { key: 'delivery-fee', anchors: ['delivery-fee-title'], node: <DeliveryFeeCard /> },
+      // Small-order fee (2026-10-25): off by default; needs migration 063.
+      { key: 'small-order-fee', anchors: ['small-order-fee'], node: <SmallOrderFeeCard /> },
+      // Delivery radius (2026-10-25): how far from the store orders are accepted.
+      { key: 'delivery-radius', anchors: ['delivery-radius'], node: <DeliveryRadiusCard /> },
+      // Extra delivery areas (2026-11-01): separate circles such as Beruwala, added to the radius.
+      { key: 'delivery-zones', anchors: ['delivery-zones'], node: <DeliveryZonesCard /> },
+      { key: 'rider-trips', anchors: ['rider-trips-title'], node: <RiderTripsCard /> },
+      // Automatic rider assignment (owner, 2026-10-25): off by default.
+      { key: 'rider-auto-assign', anchors: ['rider-auto-assign'], node: <RiderAutoAssignCard /> },
+    ],
+  },
+  {
+    id: 'riders',
+    label: 'Riders',
+    description: 'What riders are paid and which documents they must have.',
+    items: [
+      { key: 'rider-commission', anchors: ['rider-commission-title'], node: <RiderCommissionCard /> },
+      // Rider pay model, rain/peak boosts, daily targets (owner, 2026-10-10).
+      { key: 'rider-pay', node: <SettingsLink to="/more/rider-pay" title="Rider pay" /> },
+      // Which documents riders upload and must have verified (owner, 2026-10-10).
+      { key: 'rider-documents', node: <SettingsLink to="/more/rider-documents" title="Rider documents" /> },
+    ],
+  },
+  {
+    id: 'orders',
+    label: 'Orders and payments',
+    description: 'How customers check out and pay: coupons, free deliveries, cart rules, online payments and the default markup.',
+    items: [
+      { key: 'checkout', anchors: ['checkout-settings', 'checkout-settings-title'], node: <CheckoutSettingsCard /> },
+      // Cart rules (owner, 2026-10-27): one seller per order, on by default.
+      { key: 'cart-rules', anchors: ['cart-rules'], node: <CartRulesCard /> },
+      // PayHere online payments (docs/api/payhere.md): on/off, window, methods; credentials Admin-only.
+      { key: 'payment-gateway', anchors: ['payment-gateway-title'], node: <PaymentGatewayCard /> },
+      // Selling prices (owner, 2026-10-13): the markup products fall back to.
+      { key: 'default-markup', anchors: ['default-markup'], node: <DefaultMarkupCard /> },
+    ],
+  },
+  {
+    id: 'customers',
+    label: 'Customers and rewards',
+    description: 'Gifts, rewards and how we talk to customers: birthday offer, referrals, Blynk Points, Wallet and SMS language.',
+    items: [
+      // Birthday-week gift and birthday SMS (owner, 2026-10-09).
+      { key: 'birthday-offer', node: <SettingsLink to="/more/birthday-offer" title="Birthday offer" /> },
+      // Refer a friend rewards and referrals (owner, 2026-10-10).
+      { key: 'refer-a-friend', node: <SettingsLink to="/more/refer-a-friend" title="Refer a friend" /> },
+      // Blynk Points: earn on delivered orders, spend at checkout (owner, 2026-10-10).
+      { key: 'points', node: <SettingsLink to="/more/points" title="Blynk Points" /> },
+      // Blynk Wallet: refunds go to the customer's wallet (owner, 2026-10-15).
+      { key: 'wallet', node: <SettingsLink to="/more/wallet" title="Blynk Wallet" /> },
+      // Customer SMS language (owner, 2026-10-12).
+      { key: 'sms-language', anchors: ['customer-sms-language-title'], node: <CustomerSmsLanguageCard /> },
+    ],
+  },
+  {
+    id: 'app',
+    label: 'App',
+    description: 'Updates for the Blynk Ops and Rider apps, and the version on this phone.',
+    items: [
+      // In-app updates (owner, 2026-10-12): force or offer the new Ops / Rider APK.
+      { key: 'app-updates', anchors: ['app-updates-title'], node: <AppUpdatesSettingsCard /> },
+      // This phone's Blynk Ops version and "Check for updates".
+      { key: 'app-version', anchors: ['app-version-title'], node: <AppVersionCard /> },
+    ],
+  },
+];
 
 /** Store-wide delivery fee. New orders use the saved value; placed orders
  * keep theirs (the server snapshots it on each order).

@@ -5,7 +5,7 @@ import { tokenStore } from '../api/client';
 import type { MyEarnings, RiderAdjustment, RiderEarningsReport, RiderPaySettings } from '../api/types';
 import { __resetTrackerSessionForTests } from '../lib/tracker-session';
 import { colomboToday } from '../pages/Cash';
-import { ADMIN_NO_RIDER, OPERATIONS_STAFF, ok, renderAs } from './helpers';
+import { ADMIN_NO_RIDER, OPERATIONS_STAFF, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * Rider pay controls (owner, 2026-10-10: "give the option in ops and admin to
@@ -85,7 +85,7 @@ const card = async (name: string) => (await screen.findByRole('heading', { name 
 describe('Rider pay page (More -> Rider pay)', () => {
   it('is reachable from More and saves the store default model (FIXED with a minimum, then DISTANCE)', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', settingsHandlers());
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('riders'), settingsHandlers());
     await user.click(await screen.findByRole('link', { name: 'Rider pay' }));
     expect(await screen.findByRole('heading', { name: 'Rider pay' })).toBeInTheDocument();
     expect(screen.getByText(/Each daily target pays once/)).toBeInTheDocument();

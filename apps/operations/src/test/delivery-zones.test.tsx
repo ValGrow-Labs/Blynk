@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { OrderMap } from '../api/insights';
-import { OPERATIONS_STAFF, fail, ok, renderAs } from './helpers';
+import { OPERATIONS_STAFF, fail, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * 2026-11-01 (docs/superpowers/plans/2026-11-01-extra-delivery-areas.md, section A and O), Operations:
@@ -30,7 +30,7 @@ const cardOf = async () => (await screen.findByRole('heading', { name: 'Extra de
 
 describe('Extra delivery areas card', () => {
   it('shows the Beruwala default switched off with its centre, radius, Maps link and the explanation', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => ok(DEFAULT) });
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => ok(DEFAULT) });
     const card = await cardOf();
     const row = await within(card).findByRole('listitem', { name: 'Extra area: Beruwala' });
     expect(within(row).getByRole('switch', { name: 'Beruwala on or off' })).toHaveAttribute('aria-checked', 'false');
@@ -46,7 +46,7 @@ describe('Extra delivery areas card', () => {
   });
 
   it('is placed right after the Delivery radius card on More', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => ok(DEFAULT) });
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => ok(DEFAULT) });
     const card = await cardOf();
     const radius = (await screen.findByRole('heading', { name: 'Delivery radius' })).closest('section')!;
     expect(radius.nextElementSibling).toBe(card);
@@ -55,7 +55,7 @@ describe('Extra delivery areas card', () => {
   it('switches Beruwala on and saves with the exact PUT body', async () => {
     const user = userEvent.setup();
     const saved = { zones: [{ ...BERUWALA, enabled: true }], updated_at: '2026-11-01T05:00:00.000Z' };
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => ok(DEFAULT), [PUT_ZONES]: () => ok(saved) });
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => ok(DEFAULT), [PUT_ZONES]: () => ok(saved) });
     const card = await cardOf();
     await user.click(await within(card).findByRole('switch', { name: 'Beruwala on or off' }));
     expect(within(card).getByTestId('zones-unsaved')).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('Extra delivery areas card', () => {
 
   it('adds an area from a pasted Google Maps link and saves it', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       [GET_ZONES]: () => ok(DEFAULT),
       [PUT_ZONES]: (call) => ok({ zones: call.body.zones, updated_at: '2026-11-01T05:00:00.000Z' }),
     });
@@ -97,7 +97,7 @@ describe('Extra delivery areas card', () => {
 
   it('also reads a pasted "lat, lng" and tells when the paste is not a position', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => ok({ zones: [], updated_at: null }) });
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => ok({ zones: [], updated_at: null }) });
     const card = await cardOf();
     expect(await within(card).findByText('No extra areas yet.')).toBeInTheDocument();
     await user.click(within(card).getByRole('button', { name: 'Add area' }));
@@ -115,7 +115,7 @@ describe('Extra delivery areas card', () => {
 
   it('removes an area and saves the shorter list', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', {
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       [GET_ZONES]: () => ok(DEFAULT),
       [PUT_ZONES]: () => ok({ zones: [], updated_at: '2026-11-01T05:00:00.000Z' }),
     });
@@ -130,7 +130,7 @@ describe('Extra delivery areas card', () => {
 
   it('shows the problems inline and sends nothing when the rows are not valid', async () => {
     const user = userEvent.setup();
-    const { api } = renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => ok(DEFAULT) });
+    const { api } = renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => ok(DEFAULT) });
     const card = await cardOf();
     await user.click(await within(card).findByRole('button', { name: 'Add area' }));
     await user.clear(within(card).getByLabelText('Latitude of Beruwala'));
@@ -147,7 +147,7 @@ describe('Extra delivery areas card', () => {
   it('allows at most 10 areas (Add area is disabled at 10)', async () => {
     const user = userEvent.setup();
     const ten = Array.from({ length: 10 }, (_, i) => ({ ...BERUWALA, id: `a${i}`, name: `Area ${i}` }));
-    renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => ok({ zones: ten, updated_at: null }) });
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => ok({ zones: ten, updated_at: null }) });
     const card = await cardOf();
     const add = await within(card).findByRole('button', { name: 'Add area' });
     expect(add).toBeDisabled();
@@ -157,7 +157,7 @@ describe('Extra delivery areas card', () => {
 
   it('shows the API error when saving fails, and keeps the typed rows', async () => {
     const user = userEvent.setup();
-    renderAs(OPERATIONS_STAFF, '/more', {
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), {
       [GET_ZONES]: () => ok(DEFAULT),
       [PUT_ZONES]: () => fail(400, 'VALIDATION_ERROR', 'zones.0.radius_km: too big'),
     });
@@ -170,7 +170,7 @@ describe('Extra delivery areas card', () => {
   });
 
   it('shows the API error when loading fails', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', { [GET_ZONES]: () => fail(500, 'INTERNAL', 'Zones are unavailable') });
+    renderAs(OPERATIONS_STAFF, moreSettings('deliveries'), { [GET_ZONES]: () => fail(500, 'INTERNAL', 'Zones are unavailable') });
     const card = await cardOf();
     expect(await within(card).findByText('The Blynk API had a problem. Try again in a moment.')).toBeInTheDocument();
     expect(within(card).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();

@@ -5,7 +5,7 @@ import { tokenStore } from '../api/client';
 import type { BirthdayOfferSetting, OrderDetail } from '../api/types';
 import { OrderBill } from '../components/OrderBill';
 import { birthdayWhen, fillPercent, formatDayMonth, formatDayMonthYear, parseBirthdayPercent } from '../lib/birthday';
-import { ADMIN_WITH_RIDER, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, moreSettings, ok, renderAs } from './helpers';
 
 /** More -> Birthday offer (owner, 2026-10-09). */
 
@@ -94,7 +94,7 @@ describe('Birthday offer helpers', () => {
 
 describe('Birthday offer screen', () => {
   it('is linked from More', async () => {
-    renderAs(ADMIN_WITH_RIDER, '/more');
+    renderAs(ADMIN_WITH_RIDER, moreSettings('customers'));
     expect(await screen.findByRole('link', { name: 'Birthday offer' })).toHaveAttribute('href', '/more/birthday-offer');
   });
 

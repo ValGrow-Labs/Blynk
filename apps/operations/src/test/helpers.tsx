@@ -25,6 +25,13 @@ export interface Call {
 type Reply = { status: number; data?: unknown; error?: { code?: string; message: string; details?: unknown } };
 type Handler = (call: Call) => Reply | unknown | Promise<Reply | unknown>;
 
+/**
+ * The More route opened on one Settings category (the same hash a deep link
+ * uses): 'deliveries' | 'riders' | 'orders' | 'customers' | 'app'. A settings
+ * card only mounts once its category is open.
+ */
+export const moreSettings = (category: 'deliveries' | 'riders' | 'orders' | 'customers' | 'app') => `/more#settings-${category}`;
+
 export const ok = (data: unknown): Reply => ({ status: 200, data });
 export const fail = (status: number, code: string, message = code): Reply => ({ status, error: { code, message } });
 /** Makes fetch itself throw, the way a dropped connection does. */

@@ -112,7 +112,7 @@ describe('Settings - birthday offer (owner, 2026-10-09)', () => {
       const next = { ...SETTING, ...c.body, updated_at: '2026-10-09T05:00:00.000Z' };
       return ok({ ...next, sms_preview: next.sms_text.split('{percent}').join(String(next.percent)), sms_parts: 1 });
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#customers');
 
     const panel = await screen.findByRole('region', { name: 'Birthday offer' });
     const on = await within(panel).findByRole('checkbox', { name: /^Birthday offer/ });
@@ -153,7 +153,7 @@ describe('Settings - birthday offer (owner, 2026-10-09)', () => {
       if (c.method === 'GET') return ok(SETTING);
       return fail(400, 'VALIDATION_ERROR', 'Invalid', [{ message: 'sms_text is too long' }]);
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Birthday offer' });
     const percent = await within(panel).findByLabelText(/Birthday discount/);
     await user.clear(percent);

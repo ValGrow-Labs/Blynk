@@ -28,9 +28,9 @@ import { mockApi, ok } from './mockApi';
  * against PostgreSQL in the backend; here, what the pages send and show.
  */
 
-const renderPage = (ui: React.ReactElement) =>
+const renderPage = (ui: React.ReactElement, path = '/') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <ToastProvider>{ui}</ToastProvider>
     </MemoryRouter>
   );
@@ -127,7 +127,7 @@ describe('Settings - Rider pay (owner, 2026-10-10)', () => {
   it('loads the store default pay and saves the model with its own PATCH', async () => {
     const user = userEvent.setup();
     const api = settingsApi();
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#riders');
 
     const panel = await screen.findByRole('region', { name: 'Rider pay' });
     // One % control: the old Rider commission card is not shown with the new API.
@@ -171,7 +171,7 @@ describe('Settings - Rider pay (owner, 2026-10-10)', () => {
       ...initial,
       default_model: { ...initial.default_model, model: 'DISTANCE', distance_mode: 'LINEAR', km_tiers: [] },
     });
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#riders');
     const panel = await screen.findByRole('region', { name: 'Rider pay' });
     const form = within(panel).getByRole('form', { name: 'Store default pay' });
     expect(form).toHaveTextContent('Now LKR 50 + LKR 20/km');
@@ -225,7 +225,7 @@ describe('Settings - Rider pay (owner, 2026-10-10)', () => {
   it('saves each bonus section on its own (company riders, peak, daily target, long distance)', async () => {
     const user = userEvent.setup();
     const api = settingsApi();
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#riders');
     const panel = await screen.findByRole('region', { name: 'Rider pay' });
     const bodies = () => api.find('PATCH', '/admin/settings/rider-pay/bonuses').map((c) => c.body);
 
@@ -308,7 +308,7 @@ describe('Settings - Rider pay (owner, 2026-10-10)', () => {
   it('turns the rain boost on with an auto-off, updates it, and turns it off', async () => {
     const user = userEvent.setup();
     const api = settingsApi();
-    renderPage(<Settings />);
+    renderPage(<Settings />, '/settings#riders');
     const panel = await screen.findByRole('region', { name: 'Rider pay' });
     const rain = within(panel).getByRole('group', { name: 'Rain boost' });
     const sw = within(rain).getByRole('switch', { name: 'Rain boost' });

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../api/client';
 import type { PointsSetting, ReferralPage, ReferralSetting } from '../api/referralPoints';
 import { parseAdjustPoints, parseNumber, parseReason, pointsEarned, pointsExample, readReferralForm } from '../lib/referralPoints';
-import { ADMIN_WITH_RIDER, fail, ok, renderAs } from './helpers';
+import { ADMIN_WITH_RIDER, fail, moreSettings, ok, renderAs } from './helpers';
 
 /** More -> Refer a friend and More -> Blynk Points (owner, 2026-10-10). */
 
@@ -113,7 +113,7 @@ describe('Refer a friend screen', () => {
   }
 
   it('is linked from More, with Blynk Points', async () => {
-    renderAs(ADMIN_WITH_RIDER, '/more');
+    renderAs(ADMIN_WITH_RIDER, moreSettings('customers'));
     expect(await screen.findByRole('link', { name: 'Refer a friend' })).toHaveAttribute('href', '/more/refer-a-friend');
     expect(screen.getByRole('link', { name: 'Blynk Points' })).toHaveAttribute('href', '/more/points');
   });

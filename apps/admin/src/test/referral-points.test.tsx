@@ -69,7 +69,7 @@ describe('Settings -> Refer a friend', () => {
         ? ok({ ...REFERRAL, ...c.body, updated_at: '2026-10-10T04:00:00Z' })
         : undefined
     );
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Refer a friend' });
     const on = await within(panel).findByRole('checkbox', { name: /^Refer a friend/ });
     expect(on).not.toBeChecked();
@@ -92,7 +92,7 @@ describe('Settings -> Refer a friend', () => {
     const api = settingsApi((c) =>
       c.method === 'PATCH' && c.path === '/admin/settings/referrals' ? ok({ ...REFERRAL, ...c.body }) : undefined
     );
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Refer a friend' });
     const toggle = await within(panel).findByRole('checkbox', { name: /^Unused friend reward becomes a credit/ });
     expect(toggle).toBeChecked();
@@ -107,7 +107,7 @@ describe('Settings -> Refer a friend', () => {
     const api = settingsApi((c) =>
       c.method === 'PATCH' && c.path === '/admin/settings/referrals' ? ok({ ...REFERRAL, ...c.body }) : undefined
     );
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Refer a friend' });
     const inviter = await within(panel).findByLabelText(/^Inviter's reward/);
     await user.clear(inviter);
@@ -129,7 +129,7 @@ describe('Settings -> Blynk Points', () => {
     const api = settingsApi((c) =>
       c.method === 'PATCH' && c.path === '/admin/settings/points' ? ok({ ...POINTS, ...c.body }) : undefined
     );
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Blynk Points' });
     expect(await within(panel).findByTestId('points-example')).toHaveTextContent('A LKR 1,000 order earns 10 points; 100 points = LKR 100');
     expect(panel).toHaveTextContent(/combine with a coupon, birthday gift or referral reward/);
@@ -147,7 +147,7 @@ describe('Settings -> Blynk Points', () => {
   it('refuses a fractional points value before sending', async () => {
     const user = userEvent.setup();
     const api = settingsApi();
-    renderPage(<Settings />, '/settings');
+    renderPage(<Settings />, '/settings#customers');
     const panel = await screen.findByRole('region', { name: 'Blynk Points' });
     const min = await within(panel).findByLabelText(/^Minimum points to use/);
     await user.clear(min);

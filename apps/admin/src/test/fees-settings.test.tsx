@@ -16,9 +16,9 @@ import { fail, mockApi, ok, type Call, type Reply } from './mockApi';
  * backend's; here, what the page shows and sends.
  */
 
-const renderPage = () =>
+const renderPage = (hash = '') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[`/settings${hash}`]}>
       <ToastProvider>
         <Settings />
       </ToastProvider>
@@ -320,7 +320,7 @@ describe('Settings - small-order fee card', () => {
   it('does not change the Checkout card save (it never sends small_order_fee)', async () => {
     const user = userEvent.setup();
     const api = feesApi();
-    renderPage();
+    renderPage('#orders');
     const checkout = await screen.findByRole('region', { name: 'Checkout' });
     await user.click(await within(checkout).findByRole('button', { name: 'Save' }));
     await waitFor(() => expect(api.find('PATCH', '/admin/settings/checkout')).toHaveLength(1));
@@ -383,7 +383,7 @@ describe('Settings - free delivery above an amount wording', () => {
   it('says "Free delivery when the item total is at least LKR X" and that Blynk covers the rider share', async () => {
     const user = userEvent.setup();
     feesApi();
-    renderPage();
+    renderPage('#orders');
     const panel = await screen.findByRole('region', { name: 'Checkout' });
     const toggle = await within(panel).findByRole('checkbox', { name: 'Free delivery when the item total is at least LKR 3,000' });
     expect(toggle).toBeChecked();

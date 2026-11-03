@@ -5,7 +5,7 @@ import { fetchPrivateFile, tokenStore } from '../api/client';
 import type { RiderApplication, RiderDocumentRequirement, StaffRiderDocument } from '../api/types';
 import { formatDay } from '../lib/riderDocuments';
 import { colomboDate } from '../lib/slots';
-import { ADMIN_NO_RIDER, ADMIN_WITH_RIDER, OPERATIONS_STAFF, ok, renderAs } from './helpers';
+import { ADMIN_NO_RIDER, ADMIN_WITH_RIDER, OPERATIONS_STAFF, moreSettings, ok, renderAs } from './helpers';
 
 /**
  * Rider documents in Operations (owner, 2026-10-10): thumbnails fetched
@@ -325,7 +325,7 @@ describe('Settings -> Rider documents (owner, 2026-10-10)', () => {
   ].map((d) => ({ ...d, builtin: true, enabled: true, required_for: ['MOTORCYCLE', 'SCOOTER', 'THREE_WHEELER', 'CAR'] }));
 
   it('is linked from More', async () => {
-    renderAs(OPERATIONS_STAFF, '/more', {});
+    renderAs(OPERATIONS_STAFF, moreSettings('riders'), {});
     expect(await screen.findByRole('link', { name: 'Rider documents' })).toHaveAttribute('href', '/more/rider-documents');
   });
 
