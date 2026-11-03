@@ -29,8 +29,6 @@ import { needsRegistration, useSession } from '@/blynk/auth/session';
 import { useCatalog } from '@/blynk/catalog/CatalogContext';
 import { addressSummary } from '@/blynk/address/api';
 import { clearSelection, useDeliveryLocation, type DeliveryLocation } from '@/blynk/address/store';
-import { CoverageCard } from '@/blynk/area/AreaSteps';
-import { coverageOf } from '@/blynk/area/coverage';
 import { ComboAdd, comboHasSaving, ComboThumb, comboSummary } from '@/blynk/combos/ComboViews';
 import { couponAppliedNote, couponErrorText, couponInputError, discountLabel, normalizeCoupon } from '@/blynk/checkout/coupon';
 import { deliveryFormulaText, smallFeeFor, smallFeeNote, smallFeeRule } from '@/blynk/checkout/fees';
@@ -650,14 +648,7 @@ export default function Cart() {
           <PaymentChoice info={payInfo} toPay={checkout.toPay} method={payMethod} onChange={setPayChoice} nothingNote={checkout.wallet > 0 ? WALLET_COPY.nothingOnline : undefined} />
         )}
 
-        {/* where we deliver (owner, 2026-10-14: show the surroundings when they order) */}
-        {!DEMO && (
-          <CoverageCard
-            coverage={coverageOf(store)}
-            pin={addr ? { lat: addr.latitude, lng: addr.longitude } : loc.guestPin}
-            style={{ marginHorizontal: 15, marginBottom: 15 }}
-          />
-        )}
+        {/* the "We deliver within..." map card is not shown here any more (owner's brother, 2026-11-03: "No need"); it stays on the address pages */}
 
         <Text style={styles.policyTitle}>{CART.policyTitle}</Text>
         <Text style={styles.policy}>{DEMO ? COPY.policy : CART.policy}</Text>
