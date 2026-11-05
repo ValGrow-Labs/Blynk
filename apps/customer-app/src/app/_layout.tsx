@@ -8,7 +8,6 @@ import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Fragment, useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionEffects } from '@/blynk/account/SessionEffects';
 // GTM events: page views, who is shopping, the catalogue for item names (src/blynk/analytics)
 import { AnalyticsHost } from '@/blynk/analytics/AnalyticsHost';
@@ -30,6 +29,10 @@ import { SplashHandoverHost } from '@/components/SplashHandover';
 import { ConfigProblemScreen } from '@/components/ConfigProblem';
 import { DEMO } from '@/demo/mode';
 import { CartProvider } from '@/lib/cart';
+// the web build re-reads the iPhone's safe-area insets (src/lib/SafeAreaRoot.web.tsx); a phone uses the library's provider
+import { SafeAreaRoot as SafeAreaProvider } from '@/lib/SafeAreaRoot';
+// a small "Add to Home Screen" hint for iPhone Safari visitors (web only)
+import { IosInstallHint } from '@/components/IosInstallHint';
 
 // a screen that throws while drawing shows the friendly error screen (Try again -> Home), never a white screen
 export { RootError as ErrorBoundary } from '@/components/RootError';
@@ -111,6 +114,8 @@ function AppShell() {
               <RatingPromptHost />
               {/* the launch intro's exit, over the whole window and everything in it (src/lib/splash.ts) */}
               <SplashHandoverHost />
+              {/* iPhone Safari (not installed yet): how to add Blynk to the Home Screen; nothing on a phone app or once installed */}
+              <IosInstallHint />
               </Fragment>
             </CatalogProvider>
           </StoreProvider>

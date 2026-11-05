@@ -60,15 +60,38 @@
     <link rel="manifest" href="/app/manifest.json" />
     <meta name="theme-color" content="#2E0C66" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- iPhone (owner's brother's video, 2026-11-05): "default" = dark clock on a light bar, which is what
+         iOS already showed for "black"; the app keeps clear of the notch with the safe-area insets
+         (src/lib/SafeAreaRoot.web.tsx). black-translucent would turn the clock white over the white pages. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Blynk" />
-    <link rel="apple-touch-icon" href="/app/icons/Icon-192.png" />
+    <meta name="color-scheme" content="light" />
+    <meta name="format-detection" content="telephone=no" />
+    <!-- 180x180, no transparency: iOS paints transparent corners of a Home Screen icon black -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/apple-touch-icon-180.png" />
     <link rel="preconnect" href="https://blynk-api.valgrowlabs.com" crossorigin />
     <style id="expo-reset">
       /* white from the very first frame, under the white intro (no colour before the app draws) */
       html, body { height: 100%; background-color: #FFFFFF; }
       body { overflow: hidden; }
       #root { display: flex; height: 100%; flex: 1; }
+      /* iPhone / iPad (owner's brother's video, 2026-11-05). All of it is inert on Android and desktop. */
+      html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+      /* no 300 ms wait and no double-tap zoom on anything tappable; the app's own scroll views are not touched */
+      a, button, [role="button"], [role="tab"], input, select, textarea, label { touch-action: manipulation; }
+      /* the page itself never scrolls or rubber-bands (the app's own lists do), so the header cannot slide
+         under the status bar clock; 100dvh follows Safari's toolbar, the 100% above is the fallback */
+      html { overscroll-behavior: none; }
+      body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; overscroll-behavior: none; }
+      @supports (height: 100dvh) {
+        html, body, #root { height: 100dvh; }
+        body { bottom: auto; }
+      }
+      /* iOS zooms the page when a field under 16px gets focus (and stays zoomed): -webkit-touch-callout is iOS-only */
+      @supports (-webkit-touch-callout: none) {
+        input, textarea, select { font-size: 16px !important; }
+      }
     </style>
   </head>
   <body>
@@ -135,8 +158,8 @@
         try { sessionStorage.setItem('blynk-install-helper', 'closed'); } catch (e) {}
       });
       if (isIOS) {
-        // Safari's Share button is in the bottom toolbar on iPhone.
-        show('Install Blynk: tap <b>Share</b> below, then <b>Add to Home Screen</b>.', { arrow: true });
+        // iPhone Safari has its own hint inside the app (src/components/IosInstallHint.web.tsx):
+        // English / Sinhala / Tamil, only in Safari, not again for 14 days (owner's brother, 2026-11-05).
         return;
       }
       // Android adds the web app too (owner, 2026-10-08: full PWA, no APK):
