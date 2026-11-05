@@ -5,6 +5,7 @@ import { PageHeader } from '../components/Layout';
 import { EmptyState, Spinner } from '../components/ui';
 import { CustomerWalletSection } from '../components/Wallet';
 import { formatColomboDate } from '../lib/catalog';
+import { customerDisplayName, customerDisplayPhone } from '../lib/deletedAccount';
 import { errorMessage } from '../lib/errors';
 
 /**
@@ -82,9 +83,9 @@ export function CustomerAddressBook() {
           {rows.map((c) => (
             <li key={c.id} className="cat-row cat-row--flat">
               <Link className="cat-row__main" to={`/more/customers/${c.id}`}>
-                <p className="cat-row__title">{c.full_name || 'Unnamed customer'}</p>
+                <p className="cat-row__title">{customerDisplayName(c)}</p>
                 <p className="cat-row__meta">
-                  {c.phone} · {ordersText(c.orders_count)}
+                  {customerDisplayPhone(c.phone)} · {ordersText(c.orders_count)}
                 </p>
                 <p className="cat-row__meta">
                   {c.default_address ?? 'No saved address'}
@@ -134,7 +135,7 @@ export function CustomerAddressDetail() {
   const c = data?.customer;
   return (
     <div className="page">
-      <PageHeader title={c ? c.full_name || 'Unnamed customer' : 'Customer'} description={c ? c.phone : undefined} />
+      <PageHeader title={c ? customerDisplayName(c) : 'Customer'} description={c ? customerDisplayPhone(c.phone) : undefined} />
       <p>
         <Link className="link" to="/more/customers">
           All customers

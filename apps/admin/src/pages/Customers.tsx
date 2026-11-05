@@ -1,4 +1,5 @@
 import { errorMessage } from '../lib/apiErrors';
+import { customerDisplayName, customerDisplayPhone } from '../lib/deletedAccount';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { customers as customersApi, orders as ordersApi, settings as settingsApi } from '../api/resources';
@@ -192,10 +193,10 @@ export function Customers() {
                       <tr key={c.id}>
                         <td>
                           <Link className="link cell__primary" to={`/customers/${c.id}`}>
-                            {c.full_name || 'Unnamed customer'}
+                            {customerDisplayName(c)}
                           </Link>
                         </td>
-                        <td className="cell__secondary mono">{c.phone}</td>
+                        <td className="cell__secondary mono">{customerDisplayPhone(c.phone)}</td>
                         <td>
                           {c.default_address ?? <span className="cell__secondary">None saved</span>}
                           {(c.addresses_count ?? 0) > 1 ? <span className="cell__secondary"> +{(c.addresses_count ?? 0) - 1} more</span> : null}
@@ -264,8 +265,8 @@ export function CustomerDetail() {
   return (
     <>
       <PageHeader
-        title={c ? c.full_name || 'Unnamed customer' : 'Customer'}
-        description={c ? `${c.phone}${c.email ? ` · ${c.email}` : ''} · joined ${formatDay(c.created_at)}` : undefined}
+        title={c ? customerDisplayName(c) : 'Customer'}
+        description={c ? `${customerDisplayPhone(c.phone)}${c.email ? ` · ${c.email}` : ''} · joined ${formatDay(c.created_at)}` : undefined}
         actions={
           <Link className="button button--ghost" to="/customers">
             All customers

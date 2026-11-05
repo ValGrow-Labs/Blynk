@@ -33,11 +33,16 @@ const defaultAddressLine = sql<string | null>`(SELECT concat_ws(', ', a.address_
   FROM customer_addresses a WHERE a.user_id = u.id AND a.is_deleted = false
   ORDER BY a.is_default DESC, a.created_at DESC LIMIT 1)`;
 
-function baseQuery(search?: string) {
+/** A deleted account's phone is replaced by `del:<hex>` (users/account.service.ts deletedPhonePlaceholder). */
+export const DELETED_PHONE_PREFIX = 'del:';
+
+function baseQuery(search?: string, opts: { hideDeleted?: boolean } = {}) {
   let q = db
     .selectFrom('users as u')
     .leftJoin(orderStats, 's.customer_id', 'u.id')
     .where('u.role', '=', 'CUSTOMER');
+  // The address book is for finding a customer to look at addresses; a deleted account has none.
+  if (opts.hideDeleted) q = q.where('u.phone', 'not like', `${DELETED_PHONE_PREFIX}%`);
   const text = search?.trim();
   if (text) {
     const pattern = containsPattern(text);
@@ -383,7 +388,7 @@ export async function customerAddresses(id: string) {
 export async function listCustomerAddressBook(params: { search?: string; page: number; limit: number }) {
   const offset = (params.page - 1) * params.limit;
   const [rows, count] = await Promise.all([
-    baseQuery(params.search)
+    baseQuery(params.search, { hideDeleted: true })
       .select([
         'u.id',
         'u.full_name',
@@ -399,7 +404,7 @@ export async function listCustomerAddressBook(params: { search?: string; page: n
       .limit(params.limit)
       .offset(offset)
       .execute(),
-    baseQuery(params.search).select(sql<number>`count(*)::int`.as('n')).executeTakeFirstOrThrow(),
+    baseQuery(params.search, { hideDeleted: true }).select(sql<number>`count(*)::int`.as('n')).executeTakeFirstOrThrow(),
   ]);
   return {
     customers: rows.map((r) => ({

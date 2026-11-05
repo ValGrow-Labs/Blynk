@@ -280,6 +280,21 @@ describe('customer addresses', () => {
     expect(byPhone.body.data.customers.map((c: { id: string }) => c.id)).toEqual([bob.id]);
   });
 
+  it('a deleted account (phone del:<hex>, no name) is left out of the Ops address book but stays in the Admin customer list', async () => {
+    const gone = await people.customer(4, 'Zqxreport Gone');
+    const placeholder = 'del:0123456789abcdef';
+    await pool.query('UPDATE users SET phone = $1, full_name = NULL, is_active = false WHERE id = $2', [placeholder, gone.id]);
+    for (const t of [tokens.admin, opsToken]) {
+      const book = await request(app).get('/api/v1/admin/customer-addresses?search=del:').set(auth(t));
+      expect(book.status, JSON.stringify(book.body)).toBe(200);
+      expect(book.body.data.customers).toEqual([]);
+      const unfiltered = await request(app).get('/api/v1/admin/customer-addresses?limit=100').set(auth(t));
+      expect(unfiltered.body.data.customers.some((c: { id: string }) => c.id === gone.id)).toBe(false);
+    }
+    const list = await request(app).get('/api/v1/admin/customers?search=del:0123456789abcdef').set(auth(tokens.admin));
+    expect(list.body.data.customers.map((c: { id: string }) => c.id)).toEqual([gone.id]);
+  });
+
   it('staff only; a missing customer is 404 and a bad id 400', async () => {
     for (const t of STAFF_ONLY) {
       expect((await request(app).get(`/api/v1/admin/customers/${alice.id}/addresses`).set(auth(t))).status).toBe(403);
