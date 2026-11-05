@@ -143,6 +143,15 @@ adminRouter.post(
   orderController.waiveDeliveryFeeAdmin.bind(orderController)
 );
 
+// Bicycle order -> motorbike (2026-11-05): the same as POST /orders/:id/delivery-method, under the staff prefix the Admin and
+// Ops apps use. Admin and Operations; before pickup, unpaid cash-on-delivery orders only; audited (orders/switch-delivery-method.ts).
+adminRouter.post(
+  '/orders/:id/delivery-method',
+  requireAuth,
+  requireRoles(['ADMIN', 'OPERATIONS']),
+  orderController.switchDeliveryMethod.bind(orderController)
+);
+
 // Out-of-stock / Item Unavailable resolution (both POST /resolve-item and PATCH /items/:itemId)
 adminRouter.patch(
   '/orders/:id/items/:itemId',

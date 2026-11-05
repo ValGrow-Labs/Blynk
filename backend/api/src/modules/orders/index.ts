@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.middleware.js';
-import { requireShopper } from '../../middleware/role.middleware.js';
+import { requireRoles, requireShopper } from '../../middleware/role.middleware.js';
 import { orderController } from './order.controller.js';
 import { streamOrderLocation } from './order.location.controller.js';
 import { getOrderRoute } from './order.route.controller.js';
@@ -22,6 +22,13 @@ ordersRouter.get('/slots', requireAuth, requireShopper(), orderController.getDel
 ordersRouter.get('/', requireAuth, orderController.getCustomerOrders.bind(orderController));
 ordersRouter.get('/:id', requireAuth, orderController.getCustomerOrderById.bind(orderController));
 ordersRouter.post('/:id/cancel', requireAuth, orderController.cancelOrder.bind(orderController));
+// Staff switch a bicycle order to motorbike (2026-11-05): Admin and Operations only; see orders/switch-delivery-method.ts.
+ordersRouter.post(
+  '/:id/delivery-method',
+  requireAuth,
+  requireRoles(['ADMIN', 'OPERATIONS']),
+  orderController.switchDeliveryMethod.bind(orderController)
+);
 ordersRouter.get('/:id/location/stream', requireAuth, requireShopper(), streamOrderLocation);
 // Road route + driving time from the rider to the door (owner, 2026-10-10;
 // reverses plan D.13). Cached per order: see order.route.controller.ts.

@@ -32,6 +32,8 @@ export interface LocalizedTexts {
   /** reason: a staff-written reason, or null (cancelled by the customer). */
   orderCancelled(n: string, reason: string | null): string;
   itemUnavailable(n: string, item: string, newTotal: string): string;
+  /** Staff switched a bicycle order to motorbike (2026-11-05): the new cash total. */
+  deliveryMethodChanged(n: string, newTotal: string): string;
   riderAssigned(n: string, rider: string | null, vehicle: string | null): string;
   /** The most sent text: kept to one Unicode part (70) for a typical total. */
   outForDelivery(n: string, total: string, code: string | null): string;
@@ -57,6 +59,7 @@ const si: LocalizedTexts = {
       ? `Blynk: ඇණවුම #${n} අවලංගු කළා (${reason}).`
       : `Blynk: ඇණවුම #${n} අවලංගු කළා. ඔබ ඉල්ලුවේ නැත්නම් අපිට කතා කරන්න.`,
   itemUnavailable: (n, item, newTotal) => `Blynk: #${n} - ${item} නැති නිසා ඉවත් කළා. නව මුදල LKR ${newTotal}.`,
+  deliveryMethodChanged: (n, newTotal) => `Blynk: ඇණවුම #${n} දැන් යන්නේ මෝටර් බයිසිකලයෙන්. නව මුදල LKR ${newTotal}.`,
   riderAssigned: (n, rider, vehicle) =>
     `Blynk: ${rider ?? 'රයිඩර්'}${vehicle ? ` (${vehicle})` : ''} ඇණවුම #${n} ගෙන එයි.`,
   outForDelivery: (n, total, code) =>
@@ -84,6 +87,7 @@ const ta: LocalizedTexts = {
       ? `Blynk: ஆர்டர் #${n} ரத்து செய்யப்பட்டது (${reason}).`
       : `Blynk: ஆர்டர் #${n} ரத்து செய்யப்பட்டது. நீங்கள் கேட்கவில்லை எனில் அழைக்கவும்.`,
   itemUnavailable: (n, item, newTotal) => `Blynk: #${n} - ${item} இல்லாததால் நீக்கப்பட்டது. புதிய தொகை LKR ${newTotal}.`,
+  deliveryMethodChanged: (n, newTotal) => `Blynk: ஆர்டர் #${n} இப்போது மோட்டார் பைக்கில் வரும். புதிய தொகை LKR ${newTotal}.`,
   riderAssigned: (n, rider, vehicle) =>
     `Blynk: ${rider ?? 'ரைடர்'}${vehicle ? ` (${vehicle})` : ''} ஆர்டர் #${n} கொண்டு வருவார்.`,
   outForDelivery: (n, total, code) =>

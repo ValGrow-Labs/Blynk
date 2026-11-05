@@ -7,6 +7,7 @@ import { riderLocationService } from './rider.location.service.js';
 import { suggestRidersForOrder } from './rider.suggestions.service.js';
 import { getLiveRiderMap } from './rider.live.service.js';
 import { z } from 'zod';
+import { AppError } from '../../middleware/error.middleware.js';
 
 export class RiderController {
   async getActiveDeliveries(req: Request, res: Response, next: NextFunction) {
@@ -107,6 +108,8 @@ export const riderController = new RiderController();
 const ridersListQuerySchema = z.object({
   /** "true" also lists riders who can no longer deliver (the cash hand-in picker). */
   include_inactive: z.enum(['true', 'false']).optional(),
+  /** Bicycle delivery (2026-11-05): with the order being assigned, a BICYCLE order lists only riders on a bicycle. */
+  order_id: z.string().uuid('order_id must be a valid UUID').optional(),
 });
 
 /**
@@ -117,10 +120,15 @@ const ridersListQuerySchema = z.object({
  */
 export async function listRidersForAssignment(req: Request, res: Response, next: NextFunction) {
   try {
-    const { include_inactive } = ridersListQuerySchema.parse(req.query);
-    const riders = await riderRepository.listActiveRidersForAssignment(undefined, {
+    const { include_inactive, order_id } = ridersListQuerySchema.parse(req.query);
+    let riders = await riderRepository.listActiveRidersForAssignment(undefined, {
       includeInactive: include_inactive === 'true',
     });
+    if (order_id) {
+      const order = await riderRepository.findOrderDispatchPoints(order_id);
+      if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
+      if (order.delivery_method === 'BICYCLE') riders = riders.filter((r) => r.vehicle_type === 'BICYCLE');
+    }
     res.status(200).json({ success: true, data: { riders } });
   } catch (err) {
     next(err);

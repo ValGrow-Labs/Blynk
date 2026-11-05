@@ -10,7 +10,11 @@ import { orderingClock } from '../../utils/time.js';
 import { buildSlots, storeClosedMessage, storeStatusAt, STORE_TIMEZONE } from '../../utils/store-hours.js';
 import { storeSchedule } from '../configuration/store-schedule.js';
 import { AppError } from '../../middleware/error.middleware.js';
-import { OrderStatus } from '../../database/types.js';
+import { OrderStatus, type DeliveryMethod } from '../../database/types.js';
+// Bicycle delivery (migration 067; 2026-11-05): a separate, cheaper method for short routes.
+import { assertBicycleAvailable, quoteBicycleDelivery } from './bicycle-delivery.js';
+import { deliveryMethodOf } from './delivery-method.js';
+import { switchDeliveryMethodToMotorbike } from './switch-delivery-method.js';
 import { logger } from '../../utils/logger.js';
 import { runTransition } from './lifecycle/engine.js';
 import { findDeliveryCodeForCustomer } from './lifecycle/delivery-code.js';
@@ -137,6 +141,8 @@ export function sanitizeCustomerOrder(order: any) {
   const { internal_notes, ...safeOrder } = order;
   return {
     ...safeOrder,
+    // Bicycle delivery (migration 067): MOTORBIKE or BICYCLE; MOTORBIKE for every order before 067.
+    delivery_method: deliveryMethodOf(order),
     // Bundle offers (migration 062): bundle_savings, bundle_applied, gift_items; 0 / [] before 062.
     ...bundleSummary(order.items),
     can_cancel: customerCanCancel(order.order_status),
@@ -487,10 +493,28 @@ export class OrderService {
     // the road distance from the hub. Server authoritative; snapshotted below.
     // Owner, 2026-10-24: from the farthest pickup point of the cart's items
     // (combo items included) - a seller's approved shop for their products.
-    const feeQuote = await quoteDeliveryFee(
+    const motorbikeQuote = await quoteDeliveryFee(
       { lat: Number(address.latitude), lng: Number(address.longitude) },
       { hub: store, productIds: orderItemsData.map((it) => it.product_id) }
     );
+    // Bicycle delivery (2026-11-05): re-checked here, authoritatively (switched on, within max_km, a bicycle rider
+    // exists); the bicycle fee rule then replaces the motorbike fee, and free delivery / coupons apply to it as usual.
+    const deliveryMethod: DeliveryMethod = input.delivery_method ?? 'MOTORBIKE';
+    let feeQuote = motorbikeQuote;
+    if (deliveryMethod === 'BICYCLE') {
+      const bicycle = await quoteBicycleDelivery(
+        { lat: Number(address.latitude), lng: Number(address.longitude) },
+        { hub: store, productIds: orderItemsData.map((it) => it.product_id), motorbike: motorbikeQuote }
+      );
+      assertBicycleAvailable(bicycle);
+      feeQuote = {
+        fee_lkr: bicycle.fee_lkr,
+        fee_mode: 'DISTANCE_TIERS',
+        distance_km: bicycle.distance_km,
+        distance_estimated: bicycle.distance_estimated,
+        km_counted: null,
+      };
+    }
     const deliveryFee = feeQuote.fee_lkr;
     // With coupons off a code is ignored, not refused, so an older app that
     // still sends one can order.
@@ -514,6 +538,7 @@ export class OrderService {
       delivery_fee: deliveryFee,
       small_order_fee: smallOrderFee,
       delivery_fee_quote: feeQuote,
+      ...(deliveryMethod === 'BICYCLE' ? { delivery_method: deliveryMethod } : {}),
       free_delivery: settings.new_customer_free_deliveries,
       // Owner, 2026-10-12: decided on the server-priced subtotal in the transaction.
       basket_free_delivery: basketFreeDeliveryOf(settings),
@@ -571,7 +596,7 @@ export class OrderService {
     const free = basketFree ? null : await freeDeliveryStatus(db, customerId, settings.new_customer_free_deliveries);
     // Owner, 2026-10-10: the fee for the chosen address (address_id), as the order will charge it.
     const deliveryFee =
-      basketFree || free?.applies ? 0 : (await this.quoteForCustomer(customerId, input.address_id, productIds)).quote.fee_lkr;
+      basketFree || free?.applies ? 0 : await this.standardFeeFor(customerId, input.address_id, productIds, input.delivery_method);
     // The small-order fee (owner's brother, 2026-10-25) rides on the total, never discounted.
     const smallOrderFee = (await smallOrderFeeReady()) ? smallOrderFeeCharged(smallOrderFeeOf(settings), subtotal) : 0;
     const applied = await evaluateCoupon(db, { code: input.code, customerId, subtotal, deliveryFee });
@@ -653,12 +678,23 @@ export class OrderService {
     customerId: string,
     addressId?: string,
     productIds: readonly string[] = []
-  ): Promise<{ quote: DeliveryFeeQuote; address_id: string | null }> {
+  ): Promise<{ quote: DeliveryFeeQuote; address_id: string | null; point: { lat: number; lng: number } | null }> {
     const address = await this.feeAddress(customerId, addressId);
-    const quote = await quoteDeliveryFee(address ? { lat: Number(address.latitude), lng: Number(address.longitude) } : null, {
-      productIds,
-    });
-    return { quote, address_id: address?.id ?? null };
+    const point = address ? { lat: Number(address.latitude), lng: Number(address.longitude) } : null;
+    const quote = await quoteDeliveryFee(point, { productIds });
+    return { quote, address_id: address?.id ?? null, point };
+  }
+
+  /**
+   * The standard fee the coupon preview shows: the motorbike fee, or - for delivery_method BICYCLE - the bicycle's
+   * (400 BICYCLE_UNAVAILABLE when it is not available, exactly as order placement refuses it).
+   */
+  private async standardFeeFor(customerId: string, addressId: string | undefined, productIds: readonly string[], method?: DeliveryMethod) {
+    const fee = await this.quoteForCustomer(customerId, addressId, productIds);
+    if (method !== 'BICYCLE') return fee.quote.fee_lkr;
+    const bicycle = await quoteBicycleDelivery(fee.point, { productIds, motorbike: fee.quote });
+    assertBicycleAvailable(bicycle);
+    return bicycle.fee_lkr;
   }
 
   /**
@@ -697,6 +733,11 @@ export class OrderService {
       subtotal
     );
     const charged = basket.applies === true || free.applies ? 0 : standardFee;
+    // Bicycle delivery (2026-11-05): offered next to the motorbike fee (which stays as it was) when it is on, the
+    // address is within max_km and a bicycle rider exists. fee_lkr is the standard bicycle fee, charged_fee_lkr what
+    // it would cost after free delivery (as delivery_fee_lkr is for the motorbike).
+    const bicycle = await quoteBicycleDelivery(fee.point, { productIds, motorbike: fee.quote });
+    const bicycleCharged = basket.applies === true || free.applies ? 0 : bicycle.fee_lkr;
     return {
       delivery_fee_lkr: charged,
       standard_delivery_fee_lkr: standardFee,
@@ -704,6 +745,15 @@ export class OrderService {
       delivery_distance_km: fee.quote.distance_km,
       delivery_distance_estimated: fee.quote.distance_estimated,
       delivery_fee_address_id: fee.address_id,
+      bicycle: {
+        available: bicycle.available,
+        ...(bicycle.reason ? { reason: bicycle.reason } : {}),
+        fee_lkr: bicycle.fee_lkr,
+        charged_fee_lkr: bicycleCharged,
+        max_km: bicycle.max_km,
+        distance_km: bicycle.distance_km,
+        distance_estimated: bicycle.distance_estimated,
+      },
       coupons_enabled: settings.coupons_enabled,
       free_delivery: free,
       basket_free_delivery: basket,
@@ -833,11 +883,22 @@ export class OrderService {
       ...staffOrderView(order),
       // Repeat baskets (migration 054): the "Repeat" tag; null before 054.
       repeat_basket_id: order.repeat_basket_id ?? null,
+      // Bicycle delivery (migration 067): MOTORBIKE or BICYCLE.
+      delivery_method: deliveryMethodOf(order),
       delivery_fee_waiver: await deliveryFeeWaiver(order.id),
       pickups: await orderPickups({ id: order.id, dark_store_id: order.dark_store_id, order_status: order.order_status }),
       // Ratings (migration 055): the customer's rating of this order, or null.
       rating: await staffOrderRating(order.id),
     };
+  }
+
+  /**
+   * POST /orders/:id/delivery-method (Admin and Operations): a bicycle order switched to motorbike - see
+   * switch-delivery-method.ts. Answers with the staff order detail.
+   */
+  async switchDeliveryMethod(orderId: string, method: 'MOTORBIKE', actor: AuditActor) {
+    await switchDeliveryMethodToMotorbike(orderId, method, actor);
+    return await this.getAdminOrderById(orderId);
   }
 
   /** POST /admin/orders/:id/waive-delivery-fee (Admin and Operations): see waive-delivery-fee.ts. */

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { orderComboLineSchema } from '../catalog/catalog.combos.js';
 import { normalizeSriLankanPhone } from '../../utils/phone.js';
 import { riderTipLkrSchema } from '../ratings/ratings.rules.js';
+import { DELIVERY_METHODS } from './delivery-method.js';
 
 /**
  * The receiver of an order placed "For someone else" (owner, 2026-10-12): for
@@ -111,6 +112,11 @@ export const createOrderSchema = z.object({
    * migration 055 exists.
    */
   rider_tip_lkr: riderTipLkrSchema.optional(),
+  /**
+   * Bicycle delivery (migration 067; 2026-11-05): MOTORBIKE (the default) or BICYCLE - a cheaper delivery for
+   * short routes, offered in GET /orders/checkout-info `bicycle`. Re-checked at placement (400 BICYCLE_UNAVAILABLE).
+   */
+  delivery_method: z.enum(DELIVERY_METHODS, { errorMap: () => ({ message: 'delivery_method must be MOTORBIKE or BICYCLE' }) }).optional(),
 }).refine((v) => v.items.length + (v.combos?.length ?? 0) > 0, {
   message: 'At least one order item is required',
   path: ['items'],
@@ -255,6 +261,18 @@ export const waiveDeliveryFeeSchema = z
       .nullable(),
   })
   .default({});
+
+/**
+ * POST /orders/:id/delivery-method (Admin and Operations; 2026-11-05): only BICYCLE -> MOTORBIKE, so the only
+ * method that can be asked for is MOTORBIKE (a bicycle order is the customer's own choice at checkout).
+ */
+export const switchDeliveryMethodSchema = z
+  .object({
+    method: z.enum(['MOTORBIKE'], {
+      errorMap: () => ({ message: 'method must be MOTORBIKE (staff can only switch a bicycle order to motorbike)' }),
+    }),
+  })
+  .strict();
 
 /** Route params for /admin/orders/:id[/items/:itemId] - malformed ids are a 400. */
 export const orderItemParamsSchema = z.object({

@@ -190,6 +190,8 @@ describe('Free deliveries for every customer', () => {
       delivery_distance_km: null,
       delivery_distance_estimated: null,
       delivery_fee_address_id: me.addressId,
+      // Bicycle delivery (2026-11-05): switched off by default (its own contract is tests/bicycle-delivery.test.ts).
+      bicycle: expect.objectContaining({ available: false, max_km: expect.any(Number) }),
       coupons_enabled: false,
       free_delivery: { enabled: true, count: 2, since: DEFAULT_SINCE, used: 0, remaining: 2, applies: true },
       // Owner, 2026-10-12: free delivery above a basket amount (off), and ordering for someone else (on).

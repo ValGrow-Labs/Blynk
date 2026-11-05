@@ -111,6 +111,8 @@ function renderLocalized(t: LocalizedTexts, notificationType: string, data: Reco
       return t.orderCancelled(orderNumber, (data.cancelled_by !== 'customer' && (data.reason as string)) || null);
     case 'ITEM_UNAVAILABLE':
       return t.itemUnavailable(orderNumber, (data.item_name as string) || '-', Number(data.new_total_amount || 0).toFixed(2));
+    case 'DELIVERY_METHOD_CHANGED':
+      return t.deliveryMethodChanged(orderNumber, Number(data.new_total_amount || 0).toFixed(2));
     case 'RIDER_ASSIGNED':
       return t.riderAssigned(
         orderNumber,
@@ -191,6 +193,11 @@ export class NotificationTemplates {
         const itemName = (data.item_name as string) || 'An item';
         const newTotal = Number(data.new_total_amount || 0).toFixed(2);
         return `Blynk: Update on order #${orderNumber} - ${itemName} was unavailable and has been removed. Updated COD total: LKR ${newTotal}.`;
+      }
+
+      case 'DELIVERY_METHOD_CHANGED': {
+        const newTotal = Number(data.new_total_amount || 0).toFixed(2);
+        return `Blynk: Order #${orderNumber} will now be delivered by motorbike instead of bicycle. Updated COD total: LKR ${newTotal}.`;
       }
 
       case 'RIDER_ASSIGNED': {

@@ -31,6 +31,8 @@ export type ItemFulfillmentStatus =
   | 'SUBSTITUTED';
 
 export type PaymentMethod = 'COD' | 'ONLINE';
+/** Migration 067 (2026-11-05): how an order is delivered. */
+export type DeliveryMethod = 'MOTORBIKE' | 'BICYCLE';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
 export type DeliveryAssignmentStatus =
   | 'ASSIGNED'
@@ -481,6 +483,12 @@ export interface OrdersTable {
    * separately from delivery_fee (total_amount includes it). Absent before 063 - read as 0.
    */
   small_order_fee: ColumnType<number, number | string | undefined, number | string>;
+  /**
+   * Migration 067 (2026-11-05): MOTORBIKE (the default, every older order) or BICYCLE - a cheaper delivery
+   * for short routes the customer picked at checkout; a BICYCLE order is only assigned to a BICYCLE rider.
+   * Absent before 067 - read as MOTORBIKE.
+   */
+  delivery_method: ColumnType<DeliveryMethod, DeliveryMethod | undefined, DeliveryMethod>;
   scheduled_for: Date | null;
   /** Migration 036 (owner, 2026-10-10): end of the delivery slot the customer picked; scheduled_for is its start. */
   scheduled_until: ColumnType<Date | null, Date | null | undefined, Date | null>;

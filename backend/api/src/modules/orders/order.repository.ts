@@ -1,7 +1,8 @@
 import { sql, Transaction } from 'kysely';
 import { defaultMarkupFrom } from '../pricing/index.js';
 import { db } from '../../database/connection.js';
-import { Database, OrderStatus, ItemFulfillmentStatus } from '../../database/types.js';
+import { Database, OrderStatus, ItemFulfillmentStatus, type DeliveryMethod } from '../../database/types.js';
+import { withDeliveryMethod } from './delivery-method.js';
 import { ACTIVE_DELIVERY_STATUSES, initialOrderStatus, isUncostedSubstitution } from './lifecycle/catalogue.js';
 import { recordOrderPlaced } from './lifecycle/status-writer.js';
 import { enqueueNewOrderStaffPush } from '../notifications/push/push.events.js';
@@ -164,6 +165,12 @@ export interface CreateOrderData {
    * or 0 = no tip (and the column is not written, so it works before 055).
    */
   rider_tip?: number;
+  /**
+   * Bicycle delivery (migration 067; 2026-11-05): absent / MOTORBIKE = an ordinary order (the column is not written, so
+   * it works before 067); BICYCLE = the customer chose the bicycle and the service already checked it and priced the
+   * fee (delivery_fee / delivery_fee_quote are the bicycle's).
+   */
+  delivery_method?: DeliveryMethod;
   /**
    * Repeat baskets (owner, 2026-10-24; migration 054): the basket the worker
    * placed this order from. Absent = an ordinary order (column not written).
@@ -470,6 +477,8 @@ export class OrderRepository {
           ...(riderTip > 0 ? { rider_tip: riderTip } : {}),
           // Migration 054: written only for a repeat basket's order.
           ...(data.repeat_basket_id ? { repeat_basket_id: data.repeat_basket_id } : {}),
+          // Migration 067: written only for a bicycle order (the column defaults to MOTORBIKE).
+          ...(data.delivery_method === 'BICYCLE' ? { delivery_method: 'BICYCLE' as const } : {}),
           total_amount: collectAmount,
           scheduled_for: data.scheduled_for,
           scheduled_until: data.delivery_slot?.until ?? null,
@@ -570,7 +579,7 @@ export class OrderRepository {
       // shows the confirmation. See CUSTOMER_ORDER_SMS (lifecycle/notify.ts).
 
       return {
-        ...order,
+        ...withDeliveryMethod(order),
         subtotal_amount: Number(Number(order.subtotal_amount).toFixed(2)),
         delivery_fee: Number(Number(order.delivery_fee).toFixed(2)),
         small_order_fee: Number(Number(order.small_order_fee ?? 0).toFixed(2)),
@@ -654,7 +663,7 @@ export class OrderRepository {
     ]);
 
     return {
-      ...order,
+      ...withDeliveryMethod(order),
       subtotal_amount: Number(Number(order.subtotal_amount).toFixed(2)),
       delivery_fee: Number(Number(order.delivery_fee).toFixed(2)),
       small_order_fee: Number(Number(order.small_order_fee ?? 0).toFixed(2)),
@@ -732,7 +741,7 @@ export class OrderRepository {
       : [];
 
     return orders.map((o) => ({
-      ...o,
+      ...withDeliveryMethod(o),
       subtotal_amount: Number(Number(o.subtotal_amount).toFixed(2)),
       delivery_fee: Number(Number(o.delivery_fee).toFixed(2)),
       small_order_fee: Number(Number(o.small_order_fee ?? 0).toFixed(2)),
@@ -838,7 +847,7 @@ export class OrderRepository {
       const summary = summaries.find((s) => s.order_id === o.id);
       const delivery = active.find((d) => d.order_id === o.id);
       return {
-        ...o,
+        ...withDeliveryMethod(o),
         subtotal_amount: Number(Number(o.subtotal_amount).toFixed(2)),
         delivery_fee: Number(Number(o.delivery_fee).toFixed(2)),
         small_order_fee: Number(Number(o.small_order_fee ?? 0).toFixed(2)),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DELIVERY_METHODS } from '../orders/delivery-method.js';
 import { orderItemInputSchema } from '../orders/order.schema.js';
 import { orderComboLineSchema } from '../catalog/catalog.combos.js';
 
@@ -81,6 +82,8 @@ export const validateCouponSchema = z
     subtotal: z.coerce.number().min(0).max(10_000_000).optional(),
     /** Per-km tiers (owner, 2026-10-10): the delivery fee is for this address (else the default one). */
     address_id: z.string().uuid('address_id must be a valid UUID').optional(),
+    /** Bicycle delivery (2026-11-05): the delivery fee is the bicycle's when BICYCLE (as the order will charge it). */
+    delivery_method: z.enum(DELIVERY_METHODS).optional(),
   })
   .refine((v) => (v.items?.length ?? 0) + (v.combos?.length ?? 0) > 0 || v.subtotal !== undefined, {
     message: 'Send the cart items or its subtotal',

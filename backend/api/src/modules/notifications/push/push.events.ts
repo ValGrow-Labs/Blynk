@@ -138,7 +138,7 @@ async function etaFields(
  */
 export async function enqueueNewOrderStaffPush(
   trx: Trx,
-  order: { id: string; order_number: string; total_amount: number | string },
+  order: { id: string; order_number: string; total_amount: number | string; delivery_method?: string },
 ): Promise<void> {
   if (!isPushEnabled()) return;
   await bestEffort(
@@ -153,7 +153,9 @@ export async function enqueueNewOrderStaffPush(
         .execute();
       const total = Number(order.total_amount);
       const amount = Number.isFinite(total) ? ` · LKR ${total.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '';
-      const body = `Order ${order.order_number}${amount}. Open Blynk Ops to pack it.`;
+      // Bicycle delivery (2026-11-05): staff see at once that this one goes by bicycle.
+      const byBicycle = order.delivery_method === 'BICYCLE' ? ' Bicycle delivery.' : '';
+      const body = `Order ${order.order_number}${amount}.${byBicycle} Open Blynk Ops to pack it.`;
       for (const s of staff) {
         await enqueuePush(trx, {
           userId: s.id,
@@ -306,7 +308,7 @@ async function enqueueOrderMilestonePush(trx: Trx, order: { id: string; order_nu
  */
 export async function enqueueRiderAssignedPush(
   trx: Trx,
-  input: { riderUserId: string; deliveryId: string; order: { id: string; order_number: string } },
+  input: { riderUserId: string; deliveryId: string; order: { id: string; order_number: string; delivery_method?: string } },
 ): Promise<void> {
   if (!isPushEnabled()) return;
   await bestEffort(
@@ -319,7 +321,8 @@ export async function enqueueRiderAssignedPush(
         idempotencyKey: `rider-assigned:${input.deliveryId}`,
         payload: {
           title: 'New delivery assigned',
-          body: `Order ${input.order.order_number} is yours. Open Blynk Rider to pick it up.`,
+          // Bicycle delivery (2026-11-05): the rider sees the label in the push too.
+          body: `Order ${input.order.order_number} is yours.${input.order.delivery_method === 'BICYCLE' ? ' Bicycle delivery.' : ''} Open Blynk Rider to pick it up.`,
           data: { type: 'rider_delivery', order_id: input.order.id, delivery_id: input.deliveryId },
         },
       });

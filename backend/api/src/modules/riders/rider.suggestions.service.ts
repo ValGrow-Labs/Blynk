@@ -43,6 +43,8 @@ export interface RiderSuggestion {
 
 export interface RiderSuggestions {
   order_id: string;
+  /** Bicycle delivery (2026-11-05): a BICYCLE order lists only riders on a bicycle. */
+  delivery_method: 'MOTORBIKE' | 'BICYCLE';
   rules: BatchingRules & { location_fresh_minutes: number };
   riders: RiderSuggestion[];
 }
@@ -69,7 +71,9 @@ export async function suggestRidersForOrder(orderId: string, now: Date = new Dat
   const store = toPoint(order.store_latitude, order.store_longitude);
   const dropoff = toPoint(order.delivery_latitude, order.delivery_longitude);
 
-  const [rules, riders] = await Promise.all([getBatchingRules(), riderRepository.listActiveRidersForAssignment()]);
+  const deliveryMethod = order.delivery_method === 'BICYCLE' ? 'BICYCLE' : 'MOTORBIKE';
+  const [rules, everyRider] = await Promise.all([getBatchingRules(), riderRepository.listActiveRidersForAssignment()]);
+  const riders = deliveryMethod === 'BICYCLE' ? everyRider.filter((r) => r.vehicle_type === 'BICYCLE') : everyRider;
   const ids = riders.map((r) => r.id);
   const [points, open] = await Promise.all([
     riderRepository.findLastKnownPoints(ids),
@@ -115,7 +119,7 @@ export async function suggestRidersForOrder(orderId: string, now: Date = new Dat
   const best = rows.find((r) => !r.at_capacity && r.trip_within_distance);
   if (best) best.suggested = true;
 
-  return { order_id: orderId, rules: { ...rules, location_fresh_minutes: LOCATION_FRESH_MINUTES }, riders: rows };
+  return { order_id: orderId, delivery_method: deliveryMethod, rules: { ...rules, location_fresh_minutes: LOCATION_FRESH_MINUTES }, riders: rows };
 }
 
 export function compareSuggestions(a: RiderSuggestion, b: RiderSuggestion): number {

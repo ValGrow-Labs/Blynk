@@ -44,6 +44,8 @@ export interface LiveUnassignedOrder {
   order_status: string;
   /** Seconds since the order was packed (how long it has waited for a rider). */
   waiting_seconds: number;
+  /** Bicycle delivery (2026-11-05): a BICYCLE order needs a rider on a bicycle. */
+  delivery_method: 'MOTORBIKE' | 'BICYCLE';
   address: string;
   dropoff: { lat: number; lng: number } | null;
 }
@@ -122,6 +124,7 @@ export async function getLiveRiderMap(now: Date = new Date()): Promise<LiveRider
       order_number: o.order_number,
       order_status: o.order_status,
       waiting_seconds: Math.max(0, Math.round((now.getTime() - new Date(o.packed_at).getTime()) / 1000)),
+      delivery_method: o.delivery_method === 'BICYCLE' ? ('BICYCLE' as const) : ('MOTORBIKE' as const),
       address: [o.delivery_address_line1, o.delivery_city].filter(Boolean).join(', '),
       dropoff: toPoint(o.delivery_latitude, o.delivery_longitude),
     })),
@@ -138,10 +141,12 @@ async function findWaitingOrders() {
     delivery_city: string;
     delivery_latitude: unknown;
     delivery_longitude: unknown;
+    delivery_method: string;
     packed_at: Date;
   }>`
     SELECT o.id, o.order_number, o.order_status, o.delivery_address_line1, o.delivery_city,
            o.delivery_latitude, o.delivery_longitude,
+           coalesce(to_jsonb(o)->>'delivery_method', 'MOTORBIKE') AS delivery_method,
            COALESCE(
              (SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.new_status = 'PACKED'),
              o.updated_at

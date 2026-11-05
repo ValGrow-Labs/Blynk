@@ -5,6 +5,7 @@ import { confirmWithCode, confirmWithOverride } from '../delivery-code.js';
 import { enqueueCustomerSms } from '../notify.js';
 import { enqueueRiderAssignedPush } from '../../../notifications/push/push.events.js';
 import { isPrepaidOnline, settleCod, type CodSettlement } from '../settlement.js';
+import { deliveryMethodOf } from '../../delivery-method.js';
 import { setOrderStatus } from '../status-writer.js';
 import type { ActionImpl, DeliveryRow, LockedState, OrderRow, Trx } from '../types.js';
 import { cancelOrder, closeDeliveryAsFailed, invalidTransition } from './shared.js';
@@ -48,6 +49,16 @@ export const assignRider: ActionImpl<DeliveryRow> = {
       throw new AppError('This rider has not been approved yet.', 409, 'RIDER_NOT_APPROVED');
     }
     if (!rider.is_active) throw new AppError('This rider is inactive.', 409, 'RIDER_INACTIVE');
+    // Bicycle delivery (2026-11-05): a bicycle order goes only to a rider on a bicycle (every path to a rider -
+    // manual, automatic and a replacement after a re-stage - comes through here). A motorbike order: any rider.
+    if (deliveryMethodOf(order) === 'BICYCLE' && rider.vehicle_type !== 'BICYCLE') {
+      throw new AppError(
+        'This is a bicycle delivery, so it can only be given to a rider who delivers by bicycle.',
+        409,
+        'RIDER_NOT_BICYCLE',
+        { delivery_method: 'BICYCLE', vehicle_type: rider.vehicle_type }
+      );
+    }
     // A rider whose account is disabled (Staff accounts) cannot take an order.
     const account = await trx
       .selectFrom('users')

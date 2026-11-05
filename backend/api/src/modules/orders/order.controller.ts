@@ -11,6 +11,7 @@ import {
   orderItemParamsSchema,
   waiveDeliveryFeeSchema,
   bundleQuoteSchema,
+  switchDeliveryMethodSchema,
 } from './order.schema.js';
 import { validateCouponSchema } from '../coupons/coupon.schema.js';
 import { z } from 'zod';
@@ -201,6 +202,25 @@ export class OrderController {
       const { id } = orderItemParamsSchema.parse(req.params);
       const input = waiveDeliveryFeeSchema.parse(req.body ?? {});
       const order = await orderService.waiveDeliveryFee(id, input.reason, {
+        actorId: req.user!.id,
+        ipAddress: req.ip ?? null,
+        userAgent: req.get('user-agent') ?? null,
+      });
+      res.status(200).json({ success: true, data: { order } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /orders/:id/delivery-method (also /admin/orders/:id/delivery-method) - Admin and Operations switch a bicycle
+   * order to motorbike (2026-11-05): see switch-delivery-method.ts.
+   */
+  async switchDeliveryMethod(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = orderItemParamsSchema.parse(req.params);
+      const input = switchDeliveryMethodSchema.parse(req.body ?? {});
+      const order = await orderService.switchDeliveryMethod(id, input.method, {
         actorId: req.user!.id,
         ipAddress: req.ip ?? null,
         userAgent: req.get('user-agent') ?? null,

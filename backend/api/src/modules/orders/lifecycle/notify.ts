@@ -10,7 +10,13 @@ import { langPayload, smsLanguageForUser } from '../../notifications/sms-languag
  * changed). Placed, rider assigned, delivered and cash received are shown in
  * the app instead - at most one SMS for an ordinary order, down from five.
  */
-export const CUSTOMER_ORDER_SMS: ReadonlySet<string> = new Set(['OUT_FOR_DELIVERY', 'ORDER_CANCELLED', 'ITEM_UNAVAILABLE']);
+export const CUSTOMER_ORDER_SMS: ReadonlySet<string> = new Set([
+  'OUT_FOR_DELIVERY',
+  'ORDER_CANCELLED',
+  'ITEM_UNAVAILABLE',
+  // Staff switched a bicycle order to motorbike (2026-11-05): the customer is told, as the total can change.
+  'DELIVERY_METHOD_CHANGED',
+]);
 
 /**
  * Order for someone else (owner, 2026-10-12: "so a Colombo child can

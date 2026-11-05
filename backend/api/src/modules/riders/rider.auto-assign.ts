@@ -57,6 +57,8 @@ export type ExcludedReason = 'NO_DROPOFF_PIN' | 'AT_CAPACITY' | 'NO_FRESH_POSITI
 export interface AutoAssignRider {
   id: string;
   name: string;
+  /** riders.vehicle_type (a BICYCLE order is only given to a BICYCLE rider). */
+  vehicle_type?: string;
   open_deliveries: number;
   /** Last GPS point and when it was captured (null: never seen). */
   position: Point | null;
@@ -160,6 +162,8 @@ interface Candidate {
   order_number: string;
   delivery_latitude: unknown;
   delivery_longitude: unknown;
+  /** Bicycle delivery (2026-11-05): 'MOTORBIKE' | 'BICYCLE' (MOTORBIKE before migration 067). */
+  delivery_method: string;
   scheduled_for: Date | null;
   packed_at: Date;
 }
@@ -168,6 +172,7 @@ interface Candidate {
 async function findCandidates(orderIds?: string[]): Promise<Candidate[]> {
   const { rows } = await sql<Candidate>`
     SELECT o.id, o.order_number, o.delivery_latitude, o.delivery_longitude, o.scheduled_for,
+           coalesce(to_jsonb(o)->>'delivery_method', 'MOTORBIKE') AS delivery_method,
            COALESCE(
              (SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.new_status = 'PACKED'),
              o.updated_at
@@ -192,6 +197,7 @@ async function loadRiders(): Promise<AutoAssignRider[]> {
     return {
       id: r.id,
       name: r.full_name ?? r.phone ?? 'Rider',
+      vehicle_type: r.vehicle_type,
       open_deliveries: Number(r.open_deliveries),
       position: last ? toPoint(last.current_latitude, last.current_longitude) : null,
       seen_at: last?.location_captured_at ?? null,
@@ -223,7 +229,14 @@ async function writeSystemAudit(
 }
 
 /** Riders the next candidate may be tried with when this one's attempt was refused by the trip rules. */
-const TRY_NEXT_RIDER = new Set(['RIDER_AT_CAPACITY', 'BATCH_DROPOFFS_TOO_FAR', 'RIDER_INACTIVE', 'RIDER_NOT_APPROVED', 'RIDER_NOT_FOUND']);
+const TRY_NEXT_RIDER = new Set([
+  'RIDER_AT_CAPACITY',
+  'BATCH_DROPOFFS_TOO_FAR',
+  'RIDER_INACTIVE',
+  'RIDER_NOT_APPROVED',
+  'RIDER_NOT_FOUND',
+  'RIDER_NOT_BICYCLE',
+]);
 
 async function tellStaffOnce(order: Candidate, waitedSeconds: number): Promise<boolean> {
   return await db.transaction().execute(async (trx) => {
@@ -255,7 +268,8 @@ async function processOrder(order: Candidate, setting: RiderAutoAssignSetting, n
   const ranking = rankAutoAssignRiders({
     store: store ? toPoint(store.store_latitude, store.store_longitude) : null,
     dropoff: toPoint(order.delivery_latitude, order.delivery_longitude),
-    riders,
+    // A bicycle order only qualifies riders on a bicycle (ASSIGN_RIDER would refuse the others anyway).
+    riders: order.delivery_method === 'BICYCLE' ? riders.filter((r) => r.vehicle_type === 'BICYCLE') : riders,
     rules,
     config: setting,
     now,

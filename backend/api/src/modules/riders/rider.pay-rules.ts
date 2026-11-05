@@ -13,6 +13,7 @@ import type { DBConnection } from '../orders/order.repository.js';
 import type { DeliveryRow, OrderRow } from '../orders/lifecycle/types.js';
 import { haversineM, roadDistanceM } from '../routing/index.js';
 import { kmTiersFrom, kmTiersSchema, priceByKmTiers, type KmTier } from '../pricing/km-tiers.js';
+import { readBicycleDelivery, type BicycleRiderPay } from '../configuration/bicycle-delivery.js';
 import { farthestPickupDistance, orderPickupPoints, type PickupPoint } from '../orders/pickup-points.js';
 
 /*
@@ -47,6 +48,13 @@ import { farthestPickupDistance, orderPickupPoints, type PickupPoint } from '../
  *     DAILY_TARGET  : each tier pays its amount ONCE when the rider's
  *                     delivered count that Colombo day reaches it (10 -> +200,
  *                     then 20 -> +500 more). A line with no delivery.
+ *
+ * BICYCLE orders (2026-11-05; setting 'bicycle_delivery'): a COMMISSION rider's base pay for an order delivered by
+ * bicycle comes from the bicycle rule instead of the rider's own / the store model (no petrol or maintenance, so lower):
+ *     FIXED   : fixed_lkr                              (recorded as rider_pay_model FIXED)
+ *     PER_KM  : base_lkr + per_km_lkr x road km, then the optional floor min_lkr   (recorded as DISTANCE)
+ *   the road km is the same distance as above. COMPANY riders stay salaried (base 0). The bonuses below are unchanged.
+ *   The snapshot inputs say delivery_method BICYCLE and which rule was used. Past deliveries never change.
  *
  * A rider's own model (riders.pay_model) or the store default; a rider's own
  * numbers override the default's one by one (null = the default's number).
@@ -488,6 +496,13 @@ export function basePay(p: PayParams, input: { standardFee: number; distanceKm: 
   return round2(v);
 }
 
+/** The base pay of a bicycle delivery (see the header: BICYCLE orders). The floor applies to PER_KM only. */
+export function bicycleBasePay(rule: BicycleRiderPay, distanceKm: number | null): number {
+  if (rule.mode === 'FIXED') return round2(rule.fixed_lkr);
+  const v = rule.base_lkr + rule.per_km_lkr * (distanceKm ?? 0);
+  return round2(rule.min_lkr !== null ? Math.max(v, rule.min_lkr) : v);
+}
+
 export function boostAmount(mode: BoostMode, amount: number, base: number): number {
   return round2(mode === 'PERCENT' ? (base * amount) / 100 : amount);
 }
@@ -581,7 +596,8 @@ export interface PaySnapshot {
 export async function computePaySnapshot(
   executor: DBConnection,
   delivery: Pick<DeliveryRow, 'rider_id'>,
-  order: Pick<OrderRow, 'id' | 'standard_delivery_fee' | 'delivery_fee' | 'dark_store_id' | 'delivery_latitude' | 'delivery_longitude'>,
+  order: Pick<OrderRow, 'id' | 'standard_delivery_fee' | 'delivery_fee' | 'dark_store_id' | 'delivery_latitude' | 'delivery_longitude'> &
+    Partial<Pick<OrderRow, 'delivery_method'>>,
   at: Date
 ): Promise<PaySnapshot> {
   const rider = await executor
@@ -604,10 +620,12 @@ export async function computePaySnapshot(
   const params = payType === 'COMMISSION' ? effectivePayParams(rider!, def) : null;
   const applies = bonusesApply(payType, rules);
   const fee = Number(order.standard_delivery_fee ?? order.delivery_fee ?? 0);
+  // Bicycle delivery (2026-11-05): a COMMISSION rider's base for a BICYCLE order comes from the bicycle rule.
+  const bicycle = order.delivery_method === 'BICYCLE' && payType === 'COMMISSION' ? (await readBicycleDelivery(executor)).rider_pay : null;
 
   let distance: { km: number; estimated: boolean } | null = null;
   let farthest: PickupPoint | null = null;
-  if (params?.model === 'DISTANCE' || (applies && rules.long_distance.enabled)) {
+  if (params?.model === 'DISTANCE' || bicycle?.mode === 'PER_KM' || (applies && rules.long_distance.enabled)) {
     // Owner, 2026-10-24: the same distance as the delivery fee - the LONGEST
     // road distance from any of the order's pickup points (the store for
     // Blynk's products, a seller's approved shop for theirs) to the drop-off.
@@ -624,12 +642,26 @@ export async function computePaySnapshot(
     }
   }
   const km = distance?.km ?? null;
-  const base = params ? basePay(params, { standardFee: fee, distanceKm: km }) : 0;
+  const base = bicycle ? bicycleBasePay(bicycle, km) : params ? basePay(params, { standardFee: fee, distanceKm: km }) : 0;
   const lines = applies ? deliveryBonuses(rules, rain, { base, distanceKm: km, at }) : [];
   const bonus = round2(lines.reduce((s, l) => s + l.amount, 0));
 
   let inputs: Record<string, unknown> | null = null;
-  if (params) {
+  if (bicycle) {
+    // Bicycle rule (2026-11-05): FIXED -> rider_pay_model FIXED, PER_KM -> DISTANCE, so the columns and exports keep working.
+    inputs = {
+      model: bicycle.mode === 'FIXED' ? 'FIXED' : 'DISTANCE',
+      delivery_method: 'BICYCLE',
+      rule: bicycle.mode === 'FIXED' ? 'BICYCLE_FIXED' : 'BICYCLE_PER_KM',
+      standard_fee: fee,
+      ...(bicycle.mode === 'FIXED'
+        ? { fixed_lkr: bicycle.fixed_lkr }
+        : { base_lkr: bicycle.base_lkr, per_km_lkr: bicycle.per_km_lkr, min_lkr: bicycle.min_lkr }),
+    };
+    if (km !== null && farthest?.kind === 'SELLER') {
+      inputs.distance_from = { kind: 'SELLER', seller_id: farthest.seller_id, shop_name: farthest.shop_name };
+    }
+  } else if (params) {
     inputs = { model: params.model, standard_fee: fee, min_lkr: params.min_lkr };
     if (params.model === 'PERCENT') inputs.percent = params.percent;
     if (params.model === 'FIXED') inputs.fixed_lkr = params.fixed_lkr;
@@ -649,9 +681,9 @@ export async function computePaySnapshot(
   return {
     columns: {
       rider_pay_type: payType,
-      rider_commission_percent: params?.model === 'PERCENT' ? params.percent : null,
+      rider_commission_percent: !bicycle && params?.model === 'PERCENT' ? params.percent : null,
       rider_earning_lkr: round2(base + bonus),
-      rider_pay_model: params?.model ?? null,
+      rider_pay_model: bicycle ? (bicycle.mode === 'FIXED' ? 'FIXED' : 'DISTANCE') : (params?.model ?? null),
       rider_pay_inputs: inputs ? JSON.stringify(inputs) : null,
       rider_distance_km: km,
       rider_distance_estimated: distance ? distance.estimated : null,

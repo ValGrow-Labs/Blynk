@@ -34,6 +34,7 @@ import { smallOrderFeeReady } from '../orders/small-order-fee.js';
 import { deliveryRadiusService, updateDeliveryRadiusSchema } from './delivery-radius.js';
 import { cartRulesService, updateCartRulesSchema } from './cart-rules.js';
 import { deliveryZonesService, updateDeliveryZonesSchema } from './delivery-zones.js';
+import { bicycleDeliveryService, updateBicycleDeliverySchema } from './bicycle-delivery.js';
 import { defaultMarkupSettings, updateDefaultMarkupSchema } from '../catalog/catalog.pricing.js';
 
 export const configurationRouter = Router();
@@ -132,6 +133,26 @@ adminSettingsRouter.put('/settings/delivery-zones', requireAuth, requireRoles(['
   try {
     const input = updateDeliveryZonesSchema.parse(req.body);
     res.json({ success: true, data: await deliveryZonesService.set(input, actorOf(req)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Bicycle delivery (team meeting 2026-11-04, owner 2026-11-05): a separate, cheaper delivery for short routes - OFF by default.
+// Admin and Operations set the longest trip, the customer fee and the rider pay. PUT takes any of enabled / max_km / fee /
+// rider_pay. Audited (BICYCLE_DELIVERY_UPDATED); orders already placed are untouched. See modules/configuration/bicycle-delivery.ts.
+adminSettingsRouter.get('/settings/bicycle-delivery', requireAuth, requireRoles(['ADMIN', 'OPERATIONS']), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await bicycleDeliveryService.get() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminSettingsRouter.put('/settings/bicycle-delivery', requireAuth, requireRoles(['ADMIN', 'OPERATIONS']), async (req, res, next) => {
+  try {
+    const input = updateBicycleDeliverySchema.parse(req.body);
+    res.json({ success: true, data: await bicycleDeliveryService.set(input, actorOf(req)) });
   } catch (err) {
     next(err);
   }

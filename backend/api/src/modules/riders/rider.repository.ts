@@ -117,6 +117,8 @@ export class RiderRepository {
         // buyer, and "needs help - knock and wait, carry items inside".
         'orders.ordered_for_someone_else',
         'orders.delivery_needs_help',
+        // Bicycle delivery (migration 067; 2026-11-05): MOTORBIKE or BICYCLE (the rider app's "Bicycle delivery" label), read as JSON so it works before 067.
+        sql<string>`coalesce(to_jsonb(orders)->>'delivery_method', 'MOTORBIKE')`.as('delivery_method'),
       ])
       .where('deliveries.rider_id', '=', riderId)
       .where((eb) =>
@@ -196,6 +198,8 @@ export class RiderRepository {
         // buyer, and "needs help - knock and wait, carry items inside".
         'orders.ordered_for_someone_else',
         'orders.delivery_needs_help',
+        // Bicycle delivery (migration 067; 2026-11-05): MOTORBIKE or BICYCLE (the rider app's "Bicycle delivery" label), read as JSON so it works before 067.
+        sql<string>`coalesce(to_jsonb(orders)->>'delivery_method', 'MOTORBIKE')`.as('delivery_method'),
       ])
       .where('deliveries.id', '=', deliveryId);
 
@@ -364,6 +368,8 @@ export class RiderRepository {
         'orders.delivery_longitude',
         'dark_stores.latitude as store_latitude',
         'dark_stores.longitude as store_longitude',
+        // Bicycle delivery (migration 067): read as JSON so the query still works before 067 has run.
+        sql<string>`coalesce(to_jsonb(orders)->>'delivery_method', 'MOTORBIKE')`.as('delivery_method'),
       ])
       .where('orders.id', '=', orderId)
       .executeTakeFirst();
