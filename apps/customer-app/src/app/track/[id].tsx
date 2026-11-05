@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '@/blynk/api/client';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
+import { deliveryMethodLabel } from '@/blynk/checkout/bicycle';
 import { appHidden } from '@/blynk/lib/visibility';
 import { getOrder } from '@/blynk/orders/api';
 import { TRACK_SCREEN as W } from '@/blynk/orders/screenWords';
@@ -94,6 +95,7 @@ export default function TrackOrder() {
         {!!order && (
           <View style={styles.badge}>
             <Text style={styles.badgeTxt}>{W.badge(order.order_number)}</Text>
+            {!!deliveryMethodLabel(order) && <Text style={styles.badgeSub}>{deliveryMethodLabel(order)}</Text>}
           </View>
         )}
       </View>
@@ -128,6 +130,7 @@ const styles = StyleSheet.create({
   back: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
   badge: { backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: C.line },
   badgeTxt: { fontFamily: F.semi, fontSize: 13, color: C.ink },
+  badgeSub: { fontFamily: F.regular, fontSize: 11, color: C.sub, marginTop: 1 },
   callWrap: { position: 'absolute', right: 16 },
   call: { height: 44, paddingHorizontal: 22, borderRadius: 22, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.brandDeep },
   callTxt: { fontFamily: F.semi, fontSize: 14, color: C.brandInk },

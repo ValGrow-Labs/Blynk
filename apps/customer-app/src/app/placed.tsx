@@ -19,6 +19,8 @@ import { getOrder } from '@/blynk/orders/api';
 import { placedFromMemory } from '@/blynk/orders/checkout';
 import { placedLayout } from '@/blynk/orders/placedLayout';
 import { slotWindowText } from '@/blynk/orders/status';
+import { deliveryMethodLabel } from '@/blynk/checkout/bicycle';
+import { BICYCLE_WORDS } from '@/blynk/checkout/bicycleWords';
 import { PAY } from '@/blynk/payments/copy';
 import { PLACED } from '@/blynk/ui/strings';
 import { appText } from '@/blynk/lib/appTexts';
@@ -135,6 +137,12 @@ export default function Placed() {
                 <View style={styles.factRow}>
                   <Text style={styles.factLabel}>{PLACED.deliveryTime}</Text>
                   <Text style={styles.factValue}>{slot}</Text>
+                </View>
+              )}
+              {!!deliveryMethodLabel(order) && (
+                <View style={styles.factRow}>
+                  <Text style={styles.factLabel}>{BICYCLE_WORDS.sectionTitle}</Text>
+                  <Text style={styles.factValue}>{deliveryMethodLabel(order)}</Text>
                 </View>
               )}
               {order.ordered_for_someone_else === true && !!order.delivery_recipient_name && (

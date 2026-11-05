@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { needsRegistration, useSession } from '@/blynk/auth/session';
+import { deliveryMethodLabel } from '@/blynk/checkout/bicycle';
 import { formatLkr } from '@/blynk/lib/money';
 import { listOrders } from '@/blynk/orders/api';
 import { setKnownOrders } from '@/blynk/orders/openOrders';
@@ -117,7 +118,7 @@ function OrderRow({ order: o, index }: { order: Order; index: number }) {
             <Text style={[styles.status, { color: tone }]}>{statusLabel(o.order_status)}</Text>
           </View>
           <Text style={styles.num}>{o.order_number}</Text>
-          <Text style={styles.meta}>{[orderTime(o.placed_at ?? o.created_at), itemCountText(o)].filter(Boolean).join('  ·  ')}</Text>
+          <Text style={styles.meta}>{[orderTime(o.placed_at ?? o.created_at), itemCountText(o), deliveryMethodLabel(o)].filter(Boolean).join('  ·  ')}</Text>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 8 }}>
           {/* the order's value: what is left to pay plus what the Blynk Wallet paid (a wallet-paid order is not "LKR 0") */}

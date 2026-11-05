@@ -28,6 +28,8 @@ export type PlaceErrorAction =
   | 'stock'
   /** "Pay online" was refused (switched off, or nothing to pay): back to cash on delivery. */
   | 'payment'
+  /** BICYCLE_UNAVAILABLE (2026-11-05): back to motorbike delivery, fresh checkout-info. */
+  | 'bicycle'
   | 'signin'
   | 'retry'
   /**
@@ -81,6 +83,8 @@ const ACTION: Record<string, PlaceErrorAction> = {
   // PayHere (docs/api/payhere.md): online payment switched off meanwhile, or the total is 0
   ONLINE_PAYMENT_UNAVAILABLE: 'payment',
   NOTHING_TO_PAY_ONLINE: 'payment',
+  // bicycle delivery (2026-11-05): not available any more (too far, or no bicycle rider)
+  BICYCLE_UNAVAILABLE: 'bicycle',
   POINTS_INSUFFICIENT: 'retry',
   TOO_MANY_REQUESTS: 'retry',
   RATE_LIMITED: 'retry',

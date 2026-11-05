@@ -110,3 +110,45 @@ test('cancelOrder sends a reason only when it is long enough', async () => {
   expect((f.mock.calls[0][1] as RequestInit).body).toBe('{}');
   expect((f.mock.calls[1][1] as RequestInit).body).toBe(JSON.stringify({ reason: 'Ordered by mistake' }));
 });
+
+test('checkout-info keeps the bicycle block (numbers parsed) and POST /orders sends delivery_method BICYCLE as given', async () => {
+  const { getCheckoutInfo, placeOrder, API_BASE_URL } = await load();
+  const f = vi.spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(json(200, { success: true, data: {
+      delivery_fee_lkr: 160, standard_delivery_fee_lkr: 160, delivery_fee_mode: 'DISTANCE_TIERS', delivery_distance_km: 1.6,
+      coupons_enabled: false, free_delivery: { applies: false },
+      bicycle: { available: true, fee_lkr: '80.00', charged_fee_lkr: '80.00', max_km: 3, distance_km: '1.50', distance_estimated: false },
+    } }))
+    .mockResolvedValueOnce(json(201, { success: true, data: { order: { ...order, delivery_method: 'BICYCLE' }, is_idempotent_replay: false } }));
+  const q = await getCheckoutInfo('a1', 800);
+  expect(q.bicycle).toEqual({ available: true, fee_lkr: 80, charged_fee_lkr: 80, max_km: 3, distance_km: 1.5, distance_estimated: false });
+  const body = { address_id: 'a1', items: [{ product_id: 'p1', quantity: 2 }], idempotency_key: 'app_abc', delivery_method: 'BICYCLE' as const };
+  const placed = await placeOrder(body);
+  expect(f.mock.calls[1][0]).toBe(`${API_BASE_URL}/orders`);
+  expect(JSON.parse((f.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({ delivery_method: 'BICYCLE' });
+  expect(placed.delivery_method).toBe('BICYCLE');
+});
+
+test('an older server (no bicycle block) leaves it off; a refusal with BICYCLE_UNAVAILABLE keeps its code', async () => {
+  const { getCheckoutInfo, placeOrder, placeErrorCopy } = await load();
+  vi.spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(json(200, { success: true, data: { delivery_fee_lkr: 150, standard_delivery_fee_lkr: 150, delivery_fee_mode: 'FLAT', coupons_enabled: false, free_delivery: { applies: false } } }))
+    .mockResolvedValueOnce(json(400, { success: false, error: { code: 'BICYCLE_UNAVAILABLE', message: 'No bicycle rider is available right now. Please choose motorbike delivery.' } }));
+  expect((await getCheckoutInfo('a1', 800)).bicycle).toBeUndefined();
+  const e = await placeOrder({ address_id: 'a1', items: [{ product_id: 'p1', quantity: 1 }], idempotency_key: 'k', delivery_method: 'BICYCLE' }).catch((x) => x);
+  expect(e.code).toBe('BICYCLE_UNAVAILABLE');
+  expect(placeErrorCopy(e).action).toBe('bicycle');
+});
+
+test('the coupon preview names the delivery method only for bicycle', async () => {
+  const { previewCoupon } = await load();
+  const f = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(200, { success: true, data: { coupon: { code: 'SAVE10', total: 1 } } }));
+  const items = [{ product_id: 'p1', quantity: 1 }];
+  await previewCoupon('SAVE10', items, 'a1', [], 'BICYCLE');
+  await previewCoupon('SAVE10', items, 'a1', [], 'MOTORBIKE');
+  await previewCoupon('SAVE10', items, 'a1');
+  const bodies = f.mock.calls.map((c) => JSON.parse((c[1] as RequestInit).body as string));
+  expect(bodies[0]).toMatchObject({ delivery_method: 'BICYCLE' });
+  expect(bodies[1]).not.toHaveProperty('delivery_method');
+  expect(bodies[2]).not.toHaveProperty('delivery_method');
+});

@@ -24,6 +24,13 @@ export function isPaidOnline(d: Pick<DeliverySummary, 'payment_method' | 'paymen
   return d.payment_method === 'ONLINE' && d.payment_status === 'PAID';
 }
 
+/** Bicycle delivery (2026-11-05): the job is a short trip by bicycle. */
+export function isBicycleDelivery(d: Pick<DeliverySummary, 'delivery_method'>): boolean {
+  return d.delivery_method === 'BICYCLE';
+}
+
+export const BICYCLE_DELIVERY_LABEL = 'Bicycle delivery';
+
 export const PAID_ONLINE_NOTE = 'Paid online — do not collect cash';
 
 /** What the Blynk Wallet paid (docs/api/wallet.md); total_amount is already less this. */

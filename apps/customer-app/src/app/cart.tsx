@@ -31,6 +31,9 @@ import { addressSummary } from '@/blynk/address/api';
 import { clearSelection, useDeliveryLocation, type DeliveryLocation } from '@/blynk/address/store';
 import { ComboAdd, comboHasSaving, ComboThumb, comboSummary } from '@/blynk/combos/ComboViews';
 import { couponAppliedNote, couponErrorText, couponInputError, discountLabel, normalizeCoupon } from '@/blynk/checkout/coupon';
+import { activeMethod, bicycleOffer, DEFAULT_METHOD, deliveryMethodBody, quoteForMethod } from '@/blynk/checkout/bicycle';
+import { BICYCLE_WORDS } from '@/blynk/checkout/bicycleWords';
+import { DeliveryMethodCard } from '@/blynk/checkout/DeliveryMethodCard';
 import { deliveryFormulaText, smallFeeFor, smallFeeNote, smallFeeRule } from '@/blynk/checkout/fees';
 import { FEE_WORDS } from '@/blynk/checkout/feeWords';
 import { BirthdayBanner, DeliveryDetailsCard, RewardsCard, SlotPickerCard } from '@/blynk/checkout/CheckoutSections';
@@ -51,7 +54,7 @@ import {
 } from '@/blynk/orders/checkout';
 import { SELLER_RULE_WORDS } from '@/blynk/cart/sellerWords';
 import { OUTSIDE_AREA, placeErrorCopy, refusedProduct, stockRefusal, stockRefusalNote, type PlaceErrorCopy } from '@/blynk/orders/errors';
-import type { CheckoutInfo, CouponPreview } from '@/blynk/orders/types';
+import type { CheckoutInfo, CouponPreview, DeliveryMethod } from '@/blynk/orders/types';
 import { openPolicy } from '@/blynk/legal/open';
 import { PolicyRow } from '@/blynk/legal/PolicyLinks';
 import { formatLkr } from '@/blynk/lib/money';
@@ -195,13 +198,18 @@ export default function Cart() {
   const [quoteTick, setQuoteTick] = useState(0);
   const [coupon, setCoupon] = useState<CouponPreview | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
+  // bicycle delivery (2026-11-05): always starts on Motorbike; nothing is remembered
+  const [methodChoice, setMethodChoice] = useState<DeliveryMethod>(DEFAULT_METHOD);
   const [placing, setPlacing] = useState(false);
   const placingRef = useRef(false);
   const [placeErrState, setPlaceErrState] = useState<{ copy: PlaceErrorCopy; for: string } | null>(null);
   const addrId = addr?.id ?? null;
   const quoteFor = quote && addrId && quote.delivery_fee_address_id === addrId ? quote : null;
   const walletInfo = checkoutWalletOf(quoteFor?.wallet);
-  const checkout: CheckoutBill | null = addrId ? checkoutBill(chargedTotal, quoteFor, coupon, usePoints, useWallet) : null;
+  // the bicycle card shows only while checkout-info offers it; the method that applies is Motorbike otherwise
+  const bicycle = bicycleOffer(quoteFor);
+  const method = activeMethod(methodChoice, quoteFor);
+  const checkout: CheckoutBill | null = addrId ? checkoutBill(chargedTotal, quoteForMethod(quoteFor, method), coupon, usePoints, useWallet) : null;
   // Blynk Points instead of free delivery (owner, 2026-10-14): "You'll earn N Blynk Points on this
   // order" (a guest: "Sign in to earn N ..."); hidden while points are off or N = 0
   const pointsLine = cartPointsLine({
@@ -260,15 +268,19 @@ export default function Cart() {
     return () => { clearTimeout(t); ctrl.abort(); };
   }, [addrId, itemsSig, quoteTick, chargedTotal]);
 
-  // an applied coupon is re-checked whenever the basket or the address changes
+  // a new address starts on Motorbike again; so does a quote that no longer offers bicycle
+  useEffect(() => { setMethodChoice(DEFAULT_METHOD); }, [addrId]);
+  useEffect(() => { if (quoteFor && !bicycleOffer(quoteFor)) setMethodChoice(DEFAULT_METHOD); }, [quoteFor]);
+
+  // an applied coupon is re-checked whenever the basket, the address or the delivery method changes
   useEffect(() => {
     if (DEMO || !coupon || !addrId || !hasLines) return;
     let alive = true;
-    previewCoupon(coupon.code, items, addrId, combos)
+    previewCoupon(coupon.code, items, addrId, combos, method)
       .then((c) => { if (alive) setCoupon(c); })
       .catch((e) => { if (alive) { setCoupon(null); setCouponErr(couponErrorText(e)); } });
     return () => { alive = false; };
-  }, [addrId, itemsSig]);
+  }, [addrId, itemsSig, method]);
 
   // a new address or a changed basket clears the last refusal (kept with the checkout it was for)
   const placeErr = placeErrState && placeErrState.for === `${addrId}|${itemsSig}` ? placeErrState.copy : null;
@@ -280,7 +292,7 @@ export default function Cart() {
     if (bad) { setCouponErr(bad); return; }
     setCouponErr(null);
     try {
-      setCoupon(await previewCoupon(normalizeCoupon(raw), items, addrId, combos));
+      setCoupon(await previewCoupon(normalizeCoupon(raw), items, addrId, combos, method));
     } catch (e) {
       setCoupon(null);
       setCouponErr(couponErrorText(e));
@@ -307,6 +319,7 @@ export default function Cart() {
       ...(walletOn ? { use_wallet: true } : {}),
       ...(more.for_someone_else ? { for_someone_else: true, recipient: more.recipient } : {}),
       ...methodBody(payMethod),
+      ...deliveryMethodBody(method),
       ...riderTip.body,
     };
     const note = more.delivery_note ?? '';
@@ -366,6 +379,8 @@ export default function Cart() {
       if (copy.action === 'slot' || copy.action === 'closed') setSlotsTick((n) => n + 1);
       // "Pay online" was refused (switched off / nothing to pay): back to cash, fresh checkout-info
       if (copy.action === 'payment') { setPayChoice('COD'); setQuoteTick((n) => n + 1); }
+      // bicycle delivery was refused (too far now, or no bicycle rider): back to motorbike, fresh checkout-info
+      if (copy.action === 'bicycle') { setMethodChoice(DEFAULT_METHOD); setQuoteTick((n) => n + 1); }
       // a refused rider tip comes off, so the order can go again without it
       riderTip.onPlaceError(e);
     } finally {
@@ -582,6 +597,11 @@ export default function Cart() {
           />
         ) : null}
 
+        {/* delivery method (2026-11-05): only while checkout-info offers bicycle delivery */}
+        {!DEMO && checkout && !!bicycle && (
+          <DeliveryMethodCard offer={bicycle} motorbikeFee={quoteFor ? quoteFor.delivery_fee_lkr : null} method={method} onChange={setMethodChoice} />
+        )}
+
         {/* bill */}
         {/* coupons: only while Admin has them switched on (checkout-info) */}
         {!DEMO && checkout && quoteFor?.coupons_enabled && (
@@ -607,7 +627,7 @@ export default function Cart() {
         {/* tip your rider (optional, cash with the order; hidden while tips are off or paying online) */}
         {!DEMO && checkout && <CheckoutTipRow ctl={riderTip} />}
 
-        {!DEMO ? <LiveBillCard bill={live} itemTotal={total} mrpTotal={mrpTotal} checkout={checkout} coupon={coupon} payMethod={payMethod} pointsLine={pointsLine} tip={riderTip.tip} bundleSaved={bundleSaved} /> : (
+        {!DEMO ? <LiveBillCard bill={live} itemTotal={total} mrpTotal={mrpTotal} checkout={checkout} coupon={coupon} payMethod={payMethod} pointsLine={pointsLine} tip={riderTip.tip} bundleSaved={bundleSaved} method={method} /> : (
         <Animated.View layout={LinearTransition.duration(220)} style={[styles.card, { paddingHorizontal: 0, overflow: 'hidden' }]}>
           <StampBadge size={78} style={{ position: 'absolute', right: -6, top: -4 }} />
           <View style={styles.billHead}>
@@ -1037,7 +1057,7 @@ function LiveBasket({ ready, products, inCart }: { ready: boolean; products: Pro
  * address (GET /orders/checkout-info: free deliveries, the basket amount, per-km distance);
  * otherwise it is what /store says. No taxes or invented savings.
  */
-function LiveBillCard({ bill, itemTotal, mrpTotal, checkout, coupon, payMethod, pointsLine, tip = 0, bundleSaved = 0 }: {
+function LiveBillCard({ bill, itemTotal, mrpTotal, checkout, coupon, payMethod, pointsLine, tip = 0, bundleSaved = 0, method = 'MOTORBIKE' }: {
   bill: LiveBill; itemTotal: number; mrpTotal: number; checkout: CheckoutBill | null; coupon: CouponPreview | null;
   payMethod: PayMethod;
   /** "You'll earn N Blynk Points on this order" (a guest: "Sign in to earn ..."), or null. */
@@ -1046,6 +1066,8 @@ function LiveBillCard({ bill, itemTotal, mrpTotal, checkout, coupon, payMethod, 
   tip?: number;
   /** Bundle offers: what free units and gifts save on this basket (the server's quote; 0 = none). */
   bundleSaved?: number;
+  /** Bicycle delivery (2026-11-05): the fee row already holds the bicycle fee; this words the note under it. */
+  method?: DeliveryMethod;
 }) {
   const store = useStore();
   const quoted = !!checkout && checkout.deliveryFee !== null;
@@ -1078,7 +1100,8 @@ function LiveBillCard({ bill, itemTotal, mrpTotal, checkout, coupon, payMethod, 
     <Text style={styles.billR}>{formatLkr(checkout.deliveryFee as number)}</Text>
   );
   // "LKR 120 up to 2 km, then LKR 40 for each extra km" (the base + per-km fee), under the fee row
-  const feeNote: string | null = deliveryFormulaText(store);
+  // (that formula is the motorbike fee, so a bicycle delivery says what it is instead)
+  const feeNote: string | null = method === 'BICYCLE' ? BICYCLE_WORDS.billNote : deliveryFormulaText(store);
   // the one discount used (coupon, birthday gift or referral reward), then the points
   const discountName = checkout ? discountLabel(checkout.discountKind, coupon?.code) : '';
   const estimated = !!checkout && !coupon && checkout.discount > 0;

@@ -33,7 +33,7 @@ export function checkoutSignature(args: {
   items: PlaceOrderBody['items']; addressId: string; coupon?: string | null; note?: string | null;
   combos?: PlaceOrderBody['combos'];
   /** The rest of the body that makes it a different order: slot, points, receiver, needs help. */
-  extra?: Pick<PlaceOrderBody, 'delivery_slot_start' | 'use_points' | 'use_wallet' | 'for_someone_else' | 'recipient' | 'needs_help' | 'payment_method' | 'rider_tip_lkr'>;
+  extra?: Pick<PlaceOrderBody, 'delivery_slot_start' | 'use_points' | 'use_wallet' | 'for_someone_else' | 'recipient' | 'needs_help' | 'payment_method' | 'rider_tip_lkr' | 'delivery_method'>;
 }): string {
   const itemKey = (i: PlaceOrderBody['items'][number]) => (i.variant_id ? `${i.product_id}:${i.variant_id}` : i.product_id);
   const items = [...args.items].sort((a, b) => itemKey(a).localeCompare(itemKey(b))).map((i) => `${itemKey(i)}x${i.quantity}`).join(',');
@@ -48,7 +48,9 @@ export function checkoutSignature(args: {
   const wallet = x?.use_wallet ? ['WALLET'] : [];
   // a rider tip (migration 055) makes it a different order too (appended likewise)
   const tip = x?.rider_tip_lkr && x.rider_tip_lkr > 0 ? [`TIP:${x.rider_tip_lkr}`] : [];
-  return [combos ? `${items}+${combos}` : items, args.addressId, args.coupon ?? '', (args.note ?? '').trim(), ...(more ? [more] : []), ...pay, ...wallet, ...tip].join('|');
+  // bicycle delivery (2026-11-05) is a different order from the same basket by motorbike (appended likewise)
+  const bike = x?.delivery_method === 'BICYCLE' ? ['BICYCLE'] : [];
+  return [combos ? `${items}+${combos}` : items, args.addressId, args.coupon ?? '', (args.note ?? '').trim(), ...(more ? [more] : []), ...pay, ...wallet, ...tip, ...bike].join('|');
 }
 
 /** 128 random bits as hex (the server allows up to 128 characters). */

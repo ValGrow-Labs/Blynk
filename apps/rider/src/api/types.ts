@@ -131,6 +131,11 @@ export interface DeliverySummary {
    * detail when the list leaves it out. Absent on an older API.
    */
   pickups?: PickupPoint[];
+  /**
+   * Bicycle delivery (2026-11-05): 'BICYCLE' for a short trip the customer chose to go by bicycle (only a
+   * bicycle rider is given it), else 'MOTORBIKE'. Absent on an older API (read as motorbike).
+   */
+  delivery_method?: 'MOTORBIKE' | 'BICYCLE';
 }
 
 export interface DeliveryItem {

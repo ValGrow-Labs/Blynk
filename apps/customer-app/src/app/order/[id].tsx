@@ -20,6 +20,7 @@ import {
   timelineLabel, type OrderTone,
 } from '@/blynk/orders/status';
 import { canReorder, reorderInto, reorderMessage } from '@/blynk/orders/reorder';
+import { deliveryMethodLabel } from '@/blynk/checkout/bicycle';
 import { FEE_WORDS } from '@/blynk/checkout/feeWords';
 import { ORDER_SCREEN as W } from '@/blynk/orders/screenWords';
 import { ORDER_WORDS } from '@/blynk/orders/words';
@@ -313,6 +314,8 @@ export default function OrderStatus() {
 
             <View style={styles.card}>
               <Text style={styles.section}>{W.deliveringTo}</Text>
+              {/* bicycle delivery (2026-11-05): a small label; a motorbike order has none */}
+              {!!deliveryMethodLabel(order) && <Text style={[styles.small, { fontFamily: F.semi, color: C.brandText, marginBottom: 6 }]}>{deliveryMethodLabel(order)}</Text>}
               {!!slotWindowText(order.scheduled_for, order.scheduled_until) && (
                 <Text style={[styles.body, { marginTop: 0, marginBottom: 6 }]}>{W.deliveryTime}{' '}<Text style={{ fontFamily: F.semi }}>{slotWindowText(order.scheduled_for, order.scheduled_until)}</Text></Text>
               )}

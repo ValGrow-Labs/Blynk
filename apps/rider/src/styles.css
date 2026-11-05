@@ -2655,3 +2655,17 @@ a {
 .pickup-line--ready {
   color: var(--green);
 }
+
+/* Bicycle delivery (2026-11-05): a small green-washed tag on the job. --ink-2 on
+   --green-wash is 9.19:1; the --green rule is 4.69:1 against the page. */
+.bike-tag {
+  align-self: flex-start;
+  display: inline-block;
+  padding: 3px 10px 3px 12px;
+  border-radius: 6px;
+  background: var(--green-wash);
+  box-shadow: inset 4px 0 0 var(--green);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 800;
+}

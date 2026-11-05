@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import { deliveriesApi } from '../api/resources';
 import { DELIVERY_CODE_LENGTH, type DeliveryDetail, type PickupPoint } from '../api/types';
 import { Banner } from '../components/Banner';
+import { BicycleTag } from '../components/BicycleTag';
 import { Header } from '../components/Header';
 import { Sheet } from '../components/Sheet';
 import { StatusRail } from '../components/StatusRail';
@@ -269,6 +270,7 @@ function Slip({
           <span className={`slip__state tone--${statusTone(d)}`}>{statusLabel(d)}</span>
         ) : null}
       </div>
+      <BicycleTag d={d} className="slip__bike" />
       {slot && !done && !closed ? <p className="slot">{slot}</p> : null}
       {closed || done ? null : <StatusRail stage={stage(d)} />}
       {/* Through ARRIVED_AT_CUSTOMER (plan §2.3, §13): tracking itself ends on arrival,

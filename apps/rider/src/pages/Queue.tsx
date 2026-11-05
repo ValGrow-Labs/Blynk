@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { deliveriesApi } from '../api/resources';
 import type { DeliverySummary, PickupPoint } from '../api/types';
 import { Banner } from '../components/Banner';
+import { BicycleTag } from '../components/BicycleTag';
 import { Header } from '../components/Header';
 import { HomeTipNotice } from '../components/TipNotice';
 import { isPaidByWallet, isPaidOnline, nextAction, PAID_BY_WALLET_NOTE, PAID_ONLINE_NOTE, splitQueue, statusLabel, statusTone } from '../lib/delivery';
@@ -101,6 +102,7 @@ export function Queue() {
                         <span className="row__where">
                           <span className="row__place">{d.delivery_address_line1}</span>
                           <span className={`row__status tone--${statusTone(d)}`}>{statusLabel(d)}</span>
+                          <BicycleTag d={d} className="row__bike" />
                           <PickupLine pickups={pickups.get(d.delivery_id)} className="row__pickup" />
                           {/* Scheduled slot, when the customer picked one (owner, 2026-10-10). */}
                           {formatScheduledSlot(d.scheduled_for, d.scheduled_until) ? (
@@ -171,6 +173,7 @@ function NowSlip({ delivery: d, pickups }: { delivery: DeliverySummary; pickups:
         </h2>
         <span className={`slip__state tone--${statusTone(d)}`}>{statusLabel(d)}</span>
       </div>
+      <BicycleTag d={d} className="slip__bike" />
       <PickupLine pickups={pickups} className="slip__pickup" />
       <p className="slip__dest">{d.delivery_address_line1}</p>
       {d.delivery_address_line2 ? <p className="slip__dest-2">{d.delivery_address_line2}</p> : null}
@@ -236,6 +239,7 @@ function TripView({ stops, pickups }: { stops: TripStop[]; pickups: Map<string, 
                 <span className="trip__n">Stop {i + 1}</span>
                 <span className={`slip__state tone--${statusTone(d)}`}>{statusLabel(d)}</span>
               </div>
+              <BicycleTag d={d} className="slip__bike" />
               <PickupLine pickups={pickups.get(d.delivery_id)} className="slip__pickup" />
               <p className="slip__dest">{d.delivery_address_line1}</p>
               <p className="slip__meta">

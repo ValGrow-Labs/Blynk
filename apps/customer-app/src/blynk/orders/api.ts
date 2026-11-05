@@ -2,8 +2,9 @@ import { apiGet, apiPost, ApiError } from '@/blynk/api/client';
 import { pick } from '@/blynk/i18n/localized';
 import { authed } from '@/blynk/auth/session';
 import { parseSlots, type DeliverySlots } from '@/blynk/checkout/slots';
+import { parseBicycle } from '@/blynk/checkout/bicycle';
 import { checkoutWalletOf, parseOrderWallet } from '@/blynk/wallet/models';
-import type { CheckoutInfo, CouponPreview, Order, OrderList, PlaceOrderBody } from './types';
+import type { CheckoutInfo, CouponPreview, DeliveryMethod, Order, OrderList, PlaceOrderBody } from './types';
 
 /*
  * Signed-in order calls (Bearer; authed() refreshes once on a 401). Never called in the
@@ -63,6 +64,7 @@ export function parseCheckoutInfo(raw: CheckoutInfo): CheckoutInfo {
       },
     } : {}),
     wallet: wallet ? { enabled: wallet.enabled, balance: wallet.balance, max_use_percent: wallet.maxUsePercent } : undefined,
+    ...(raw.bicycle !== undefined ? { bicycle: parseBicycle(raw.bicycle) } : {}),
   };
 }
 
@@ -84,9 +86,10 @@ export async function getCheckoutInfo(addressId: string, subtotal: number, signa
 
 /** POST /orders/validate-coupon: what the code takes off this cart, without using it. */
 export async function previewCoupon(
-  code: string, items: PlaceOrderBody['items'], addressId: string, combos: PlaceOrderBody['combos'] = [],
+  code: string, items: PlaceOrderBody['items'], addressId: string, combos: PlaceOrderBody['combos'] = [], deliveryMethod?: DeliveryMethod,
 ): Promise<CouponPreview> {
-  const body = { code, items, address_id: addressId, ...(combos?.length ? { combos } : {}) };
+  // bicycle delivery (2026-11-05): the preview prices the delivery fee for the chosen method (omitted = motorbike)
+  const body = { code, items, address_id: addressId, ...(combos?.length ? { combos } : {}), ...(deliveryMethod === 'BICYCLE' ? { delivery_method: 'BICYCLE' } : {}) };
   const { coupon } = await authed((t) => apiPost<{ coupon: CouponPreview }>('/orders/validate-coupon', body, t));
   return coupon;
 }

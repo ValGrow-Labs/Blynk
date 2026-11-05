@@ -25,6 +25,25 @@ export interface BasketFreeDeliveryStatus {
   remaining_lkr: number | null;
 }
 
+/** How an order is delivered (2026-11-05): staff switch bicycle delivery on in Admin / Ops. */
+export type DeliveryMethod = 'MOTORBIKE' | 'BICYCLE';
+
+/**
+ * GET /orders/checkout-info `bicycle` (absent on an older server = no bicycle delivery). When `available`
+ * is false the card is simply not shown; `reason` is a plain English sentence the app never shows.
+ */
+export interface BicycleQuote {
+  available: boolean;
+  reason?: string;
+  /** The standard bicycle fee, and what is charged after the free-delivery rules (0 when free). */
+  fee_lkr: number;
+  charged_fee_lkr: number;
+  /** Bicycle is for trips up to this many km. */
+  max_km: number;
+  distance_km: number | null;
+  distance_estimated: boolean | null;
+}
+
 /** GET /orders/checkout-info data. Advisory: placement decides again under locks. */
 export interface CheckoutInfo {
   /** What this order would be charged (0 when a free delivery applies). */
@@ -64,6 +83,8 @@ export interface CheckoutInfo {
   wallet?: { enabled: boolean; balance: number; max_use_percent: number };
   /** Migration 055: the rider tip chips ([50, 100, 200]); absent = tips not offered (src/blynk/ratings/model.ts). */
   tip_options?: number[];
+  /** 2026-11-05: bicycle delivery for short trips (src/blynk/checkout/bicycle.ts). */
+  bicycle?: BicycleQuote;
 }
 
 export interface DeliveryLead {
@@ -162,6 +183,8 @@ export interface Order {
   /** GET /orders/:id and POST /orders/:id/cancel: what the wallet paid and the refunds credited back to it. */
   wallet?: OrderWallet | null;
   free_delivery_reason?: 'BASKET_THRESHOLD' | 'NEW_CUSTOMER' | null;
+  /** 2026-11-05: 'BICYCLE' or 'MOTORBIKE' (absent on an older server = motorbike). */
+  delivery_method?: DeliveryMethod;
   /**
    * POST /orders and GET /orders/:id (owner, 2026-10-14): the Blynk Points this order earns once
    * delivered (what it earned, once delivered; 0 while the program is off or cancelled).
@@ -228,4 +251,6 @@ export interface PlaceOrderBody {
   payment_method?: 'COD' | 'ONLINE';
   /** Migration 055: a tip for the rider (0-1000 LKR), collected in cash with the order. Omitted = none. */
   rider_tip_lkr?: number;
+  /** 2026-11-05: omitted = MOTORBIKE. BICYCLE is checked again by the server (BICYCLE_UNAVAILABLE). */
+  delivery_method?: DeliveryMethod;
 }
