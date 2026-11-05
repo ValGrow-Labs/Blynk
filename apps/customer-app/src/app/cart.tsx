@@ -76,6 +76,7 @@ import { useStore } from '@/blynk/store/StoreContext';
 import { invalidateFreeClaim } from '@/blynk/store/useFreeClaim';
 import { cartEarn, cartPointsLine, pointsRuleOf } from '@/blynk/store/pointsPromo';
 import { ClosedBanner, useStoreClosed } from '@/components/ClosedBanner';
+import { testGate, testModeOf } from '@/blynk/checkout/testMode';
 import { FEE, FeeHeader } from '@/components/FeeHeader';
 import { BackIcon, ChevronIcon, CloseIcon, NavIcon, VegMark } from '@/components/icons';
 import { ProductImage } from '@/components/ProductImage';
@@ -142,7 +143,7 @@ export default function Cart() {
   const phone = DEMO ? cart.phone : (session && !midRegistration ? session.user.phone : null);
   const store = useStore();
   const { data: catalog, refresh } = useCatalog();
-  const closedNow = useStoreClosed() && !DEMO;
+  const storeClosed = useStoreClosed() && !DEMO;
   const live = liveBill(store, total, mrpTotal, count);
   const offerRows = DEMO ? [] : liveOfferRows(live);
   const [refreshFailed, setRefreshFailed] = useState(false);
@@ -205,11 +206,13 @@ export default function Cart() {
   const [placeErrState, setPlaceErrState] = useState<{ copy: PlaceErrorCopy; for: string } | null>(null);
   const addrId = addr?.id ?? null;
   const quoteFor = quote && addrId && quote.delivery_fee_address_id === addrId ? quote : null;
+  // the Google Play review account (the server says so in checkout-info): open at any hour, any address, cash only
+  const testMode = testModeOf(quoteFor);
   const walletInfo = checkoutWalletOf(quoteFor?.wallet);
   // the bicycle card shows only while checkout-info offers it; the method that applies is Motorbike otherwise
   const bicycle = bicycleOffer(quoteFor);
   const method = activeMethod(methodChoice, quoteFor);
-  const checkout: CheckoutBill | null = addrId ? checkoutBill(chargedTotal, quoteForMethod(quoteFor, method), coupon, usePoints, useWallet) : null;
+  const checkout: CheckoutBill | null = addrId ? checkoutBill(chargedTotal, quoteForMethod(quoteFor, method), coupon, usePoints && !testMode, useWallet && !testMode) : null;
   // Blynk Points instead of free delivery (owner, 2026-10-14): "You'll earn N Blynk Points on this
   // order" (a guest: "Sign in to earn N ..."); hidden while points are off or N = 0
   const pointsLine = cartPointsLine({
@@ -217,22 +220,25 @@ export default function Cart() {
     earn: cartEarn({ rule: pointsRuleOf(store), itemTotal: chargedTotal, quoted: quoteFor && checkout ? { earn: checkout.earn } : null }),
   });
   const payInfo = onlineInfo(store?.online_payment, quoteFor?.online_payment);
-  const payMethod = effectiveMethod(payChoice, payInfo, checkout?.toPay ?? null);
+  const payMethod = testMode ? 'COD' : effectiveMethod(payChoice, payInfo, checkout?.toPay ?? null);
   // "Tip your rider (optional)": cash with the order, on top of To Pay (migration 055; src/blynk/ratings/CheckoutTip.tsx)
   const riderTip = useCheckoutTip({ quote: quoteFor, store, cash: payMethod === 'COD' });
   // "For someone else" only while staff allow it (checkout-info; absent = off)
   const forOthers = quoteFor?.order_for_someone_else;
   const allowForOthers = forOthers?.enabled === true;
+  const closedNow = storeClosed && !testMode;
   const storeOpen = !closedNow;
   // slots are asked for once the store says they are on, while closed (a slot may still be booked),
   // or when the cart holds an item with a lead time (it can only go in a slot)
-  const slotsWanted = !DEMO && !!addrId && (store?.delivery_slots_enabled === true || closedNow || cartLeadNow.days > 0);
+  const slotsWanted = !DEMO && !!addrId && !testMode && (store?.delivery_slots_enabled === true || closedNow || cartLeadNow.days > 0);
   const lead = leadState({ cart: cartLeadNow, slots, quote: quoteFor });
   const shownSlots = slotsFromLead(slots, lead);
-  const slotsOn = shownSlots?.enabled === true;
+  const slotsOnRaw = shownSlots?.enabled === true;
   // a picked slot that filled up (or is no longer offered) is dropped: the customer picks again
   const pickedSlot = pickedRaw && shownSlots && !availableSlot(shownSlots, pickedRaw) ? null : pickedRaw;
-  const orderable = canOrderWithLead({ storeOpen, slots: slotsOn ? shownSlots : null, picked: pickedSlot, lead });
+  const orderableRaw = canOrderWithLead({ storeOpen, slots: slotsOnRaw ? shownSlots : null, picked: pickedSlot, lead });
+  // test mode: no store hours, delivery slots or lead days stand in the way (testMode.ts); everyone else: as computed above
+  const { slotsOn, orderable } = testGate(testMode, { closedNow, slotsOn: slotsOnRaw, orderable: orderableRaw });
   // GTM (src/blynk/analytics): the cart opened; checkout began (signed in with an address); the fee is known
   useTrackOnce(!DEMO && hasLines, 'view_cart', () => trackViewCart(getCartSnapshot()));
   useTrackOnce(!DEMO && !!addrId && hasLines, 'begin_checkout', () => trackBeginCheckout(getCartSnapshot()));
@@ -310,9 +316,9 @@ export default function Cart() {
     const more = detailsBody(details, allowForOthers);
     const slotStart = slotsOn ? slotForOrder(shownSlots, pickedSlot) : undefined;
     // the switch shows only while points can be used; the server decides how many
-    const pointsOn = usePoints && canRedeem(pointsOf(quoteFor));
+    const pointsOn = usePoints && !testMode && canRedeem(pointsOf(quoteFor));
     // likewise the wallet: the server decides the amount again (after the coupon and points)
-    const walletOn = useWallet && canUseWallet(walletInfo);
+    const walletOn = useWallet && !testMode && canUseWallet(walletInfo);
     const extra = {
       ...(slotStart ? { delivery_slot_start: slotStart } : {}),
       ...(pointsOn ? { use_points: true } : {}),
@@ -468,7 +474,8 @@ export default function Cart() {
         contentContainerStyle={{ paddingTop: insets.top + FEE.contentTop, paddingBottom: Math.max(200 + bottomPad, panelH + 24) }}
       >
         {!DEMO && <OfflineBanner onRetry={() => void refresh()} style={{ marginHorizontal: 15, marginBottom: 15 }} />}
-        {!DEMO && <ClosedBanner style={{ marginHorizontal: 15, marginBottom: 15 }} />}
+        {!DEMO && !testMode && <ClosedBanner style={{ marginHorizontal: 15, marginBottom: 15 }} />}
+        {!DEMO && testMode && <Text style={styles.testNote} accessibilityRole="alert">{CART.testNote}</Text>}
         {!DEMO && refreshFailed && <Text style={styles.warn}>{CART.refreshFailed}</Text>}
         {/* the birthday gift, while the server says it applies (signed in, with an address) */}
         {!DEMO && checkout && <BirthdayBanner birthday={birthdayOf(quoteFor)} />}
@@ -711,7 +718,7 @@ export default function Cart() {
             onRetryQuote={() => setQuoteTick((n) => n + 1)}
             closedNow={closedNow}
             orderable={orderable}
-            closedHint={lead.days > 0 && !lead.blocked ? (pickedSlot ? SLOT_COPY.slotPickedHint : LEAD_COPY.pickSlot(lead.dateLabel))
+            closedHint={testMode ? null : lead.days > 0 && !lead.blocked ? (pickedSlot ? SLOT_COPY.slotPickedHint : LEAD_COPY.pickSlot(lead.dateLabel))
               : !closedNow || !slotsOn ? null : pickedSlot ? SLOT_COPY.slotPickedHint : SLOT_COPY.pickSlotHint}
             blockedLabel={lead.blocked ? LEAD_COPY.blockedCta : lead.days > 0 ? LEAD_COPY.pickCta : null}
             canOrder={hasLines}
@@ -1598,6 +1605,7 @@ const styles = StyleSheet.create({
   toast: { position: 'absolute', left: 24, right: 24, backgroundColor: C.ink, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', zIndex: 60 },
   toastTxt: { color: '#fff', fontFamily: F.semi, fontSize: 13.5 },
   warn: { fontFamily: F.medium, fontSize: 12, color: C.problem, marginHorizontal: 23, marginBottom: 10 },
+  testNote: { fontFamily: F.medium, fontSize: 12.5, lineHeight: 18, color: C.text, backgroundColor: C.wash, borderRadius: 12, borderWidth: 1, borderColor: C.yellow, padding: 12, marginHorizontal: 15, marginBottom: 15 },
   comboInside: { fontFamily: F.regular, fontSize: 11, color: '#8A8A90', marginTop: 1, lineHeight: 14 },
   unavail: { fontFamily: F.semi, fontSize: 11, color: C.problem, marginTop: 1 },
   variantLabel: { fontFamily: F.medium, fontSize: 11.5, color: C.sub, marginTop: 1 },

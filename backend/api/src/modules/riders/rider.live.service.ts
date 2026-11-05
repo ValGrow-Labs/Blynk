@@ -4,6 +4,7 @@ import { orderRepository } from '../orders/order.repository.js';
 import { riderAutoAssignService, type RiderAutoAssignSetting } from '../configuration/rider-auto-assign.js';
 import { findOpenDeliveriesForRiders, getBatchingRules, toPoint, type BatchingRules } from './batching.js';
 import { riderRepository } from './rider.repository.js';
+import { notTestOrder } from '../orders/test-orders.js';
 
 /**
  * GET /admin/riders/live (ADMIN, OPERATIONS): the data behind the Rider map in Admin and Ops.
@@ -153,6 +154,7 @@ async function findWaitingOrders() {
            ) AS packed_at
       FROM orders o
      WHERE o.order_status = 'PACKED'
+       AND ${notTestOrder('o')}
        AND NOT EXISTS (
          SELECT 1 FROM deliveries d
           WHERE d.order_id = o.id AND d.assignment_status IN ('ASSIGNED', 'ACCEPTED', 'PICKED_UP', 'ARRIVED_AT_CUSTOMER')

@@ -97,6 +97,8 @@ export async function enqueueCustomerSms(
   idempotencyKey: string,
   payload: Record<string, unknown>
 ): Promise<void> {
+  // A test order (migration 068; the Google Play review account) sends no SMS to anyone.
+  if (order.is_test === true) return;
   const forSomeoneElse = order.ordered_for_someone_else === true;
   const toReceiver = CUSTOMER_ORDER_SMS.has(notificationType);
   const toBuyer = forSomeoneElse && BUYER_ORDER_SMS.has(notificationType);

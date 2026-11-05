@@ -127,6 +127,7 @@ export default function Placed() {
           <Animated.View entering={ENTER(reduced, T.stage)}>
             <Stages lines={scheduled ? PLACED.stagesScheduled : PLACED.stagesNow} live={focused && fg} reduced={reduced} />
           </Animated.View>
+          {!DEMO && order?.is_test === true && <Text style={styles.testNote}>{PLACED.testNote}</Text>}
           {!DEMO && order && (
             <Animated.View entering={ENTER(reduced, at(T.facts))} style={styles.facts}>
               <View style={styles.factRow}>
@@ -408,6 +409,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: F.display, color: C.brandInk, fontSize: 30, marginTop: 18, textAlign: 'center' },
   subRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', marginTop: 6 },
   sub: { fontFamily: F.medium, color: C.brandInk, fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  testNote: { fontFamily: F.medium, color: C.text, fontSize: 12.5, textAlign: 'center', lineHeight: 18, marginTop: 10 },
   stageBox: { height: 20, overflow: 'hidden', marginTop: 2, alignItems: 'center' },
   stage: { fontFamily: F.regular, color: 'rgba(26,29,46,0.72)', fontSize: 13, lineHeight: 20, textAlign: 'center' },
   facts: {

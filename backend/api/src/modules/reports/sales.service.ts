@@ -2,6 +2,8 @@ import { revenueOf } from './revenue-sql.js';
 import { sql } from 'kysely';
 import { DateTime } from 'luxon';
 import { db } from '../../database/connection.js';
+// Test orders (migration 068; the Google Play review account) are left out of every figure.
+import { notTestOrder } from '../orders/test-orders.js';
 
 /** The store's business day (business rules §4). */
 export const STORE_ZONE = 'Asia/Colombo';
@@ -71,6 +73,7 @@ export async function salesReport(range: DateRange) {
     ])
     .where('placed_at', '>=', start)
     .where('placed_at', '<', end)
+    .where(notTestOrder())
     .executeTakeFirstOrThrow();
 
   const hoursQ = db
@@ -81,6 +84,7 @@ export async function salesReport(range: DateRange) {
     ])
     .where('placed_at', '>=', start)
     .where('placed_at', '<', end)
+    .where(notTestOrder())
     .groupBy(sql`1`)
     .execute();
 
@@ -97,6 +101,7 @@ export async function salesReport(range: DateRange) {
       .where('o.placed_at', '>=', start)
       .where('o.placed_at', '<', end)
       .where('o.order_status', '=', 'DELIVERED')
+      .where(notTestOrder('o'))
       .where('i.item_status', '!=', 'UNAVAILABLE')
       .groupBy('i.product_id')
       .orderBy(by === 'quantity' ? sql`sum(i.quantity)` : sql`sum(i.subtotal)`, 'desc')

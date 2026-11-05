@@ -19,6 +19,8 @@ import {
   type Point,
 } from './batching.js';
 import { riderRepository } from './rider.repository.js';
+// Test orders (migration 068) are never given to a rider.
+import { notTestOrder } from '../orders/test-orders.js';
 
 /**
  * Automatic rider assignment (owner, 2026-10-25; setting configuration/rider-auto-assign.ts).
@@ -179,6 +181,7 @@ async function findCandidates(orderIds?: string[]): Promise<Candidate[]> {
            ) AS packed_at
       FROM orders o
      WHERE o.order_status = 'PACKED'
+       AND ${notTestOrder('o')}
        AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id)
        ${orderIds ? sql`AND o.id IN (${sql.join(orderIds.length ? orderIds.map((id) => sql`${id}::uuid`) : [sql`NULL::uuid`])})` : sql``}
      ORDER BY packed_at ASC, o.id ASC

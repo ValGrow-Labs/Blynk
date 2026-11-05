@@ -31,6 +31,8 @@ import { assertCartStock } from '../inventory/sellable.js';
 import { giftsThatFit } from './bundle-stock.js';
 // Blynk Wallet (owner, 2026-10-15; migration 049).
 import { decideWalletUse, recordWalletPayment } from '../wallet/wallet.service.js';
+// Test orders (migration 068): the Google Play review account's orders (test-orders.ts).
+import { assertTestOrderCaps, notTestOrder } from './test-orders.js';
 
 /**
  * Refuses (409 SLOT_FULL) when the slot starting at `start` already holds
@@ -176,6 +178,12 @@ export interface CreateOrderData {
    * placed this order from. Absent = an ordinary order (column not written).
    */
   repeat_basket_id?: string | null;
+  /**
+   * Test order (migration 068; the Google Play review account, test-orders.ts): marked is_test, with no staff / seller
+   * alerts and no coupon, birthday, referral, points or free-delivery use (the service also passes none of them in).
+   * Absent / false = an ordinary order (the column is not written, so it works before 068).
+   */
+  is_test?: boolean;
 }
 
 /** Migration 033: an order's combo lines as the API returns them. */
@@ -336,6 +344,8 @@ export class OrderRepository {
       // points): two racing checkouts must not both see "no earlier order"
       // (security audit 2026-10). The later steps re-take this same lock.
       await trx.selectFrom('users').select('id').where('id', '=', data.customer_id).forNoKeyUpdate().executeTakeFirst();
+      // Test orders: at most 5 open and 30 a day, counted under that same lock.
+      if (data.is_test) await assertTestOrderCaps(trx, data.customer_id);
 
       // 0'. Stock (migration 045; owner, 2026-10-14): customers can order a
       //     TRACKED product or variant until its sellable stock reaches 0.
@@ -398,12 +408,14 @@ export class OrderRepository {
       const couponOverBirthday = birthdayOverCoupon ? null : applied;
       // 0d. Referral reward (migration 037; owner, 2026-10-10): no stacking -
       //     used only when strictly larger than the coupon/gift chosen above.
-      const referral = await referralForOrder(trx, {
-        customerId: data.customer_id,
-        subtotal: data.subtotal_amount,
-        deliveryFee,
-        otherDiscount: birthdayOverCoupon?.discount_amount ?? couponOverBirthday?.discount_amount ?? null,
-      });
+      const referral = data.is_test
+        ? null
+        : await referralForOrder(trx, {
+            customerId: data.customer_id,
+            subtotal: data.subtotal_amount,
+            deliveryFee,
+            otherDiscount: birthdayOverCoupon?.discount_amount ?? couponOverBirthday?.discount_amount ?? null,
+          });
       const birthday = referral ? null : birthdayOverCoupon;
       const coupon = referral ? null : couponOverBirthday;
       const offerDiscount = referral?.discount_amount ?? birthday?.discount_amount ?? coupon?.discount_amount ?? 0;
@@ -479,6 +491,8 @@ export class OrderRepository {
           ...(data.repeat_basket_id ? { repeat_basket_id: data.repeat_basket_id } : {}),
           // Migration 067: written only for a bicycle order (the column defaults to MOTORBIKE).
           ...(data.delivery_method === 'BICYCLE' ? { delivery_method: 'BICYCLE' as const } : {}),
+          // Migration 068: written only for a test order (the column defaults to false).
+          ...(data.is_test ? { is_test: true } : {}),
           total_amount: collectAmount,
           scheduled_for: data.scheduled_for,
           scheduled_until: data.delivery_slot?.until ?? null,
@@ -569,7 +583,8 @@ export class OrderRepository {
       // 4. Record initial status in order_status_history (lifecycle PLACE_ORDER)
       await recordOrderPlaced(trx, order.id, data.customer_id, initialStatus);
       // Staff "New order" push (owner, 2026-10-19); an online order waits for its payment
-      if (initialStatus === 'PLACED') {
+      // (a test order makes no noise: nobody is told about it)
+      if (initialStatus === 'PLACED' && !data.is_test) {
         await enqueueNewOrderStaffPush(trx, order);
         // ... and for the sellers whose products are on it (seller portal, 2026-10-30)
         await enqueueSellerNewOrderPush(trx, order);
@@ -788,10 +803,12 @@ export class OrderRepository {
    * for the whole page, not one per order.
    */
   async findAdminOrders(
-    params: { statuses?: OrderStatus[]; since?: Date; limit: number; offset: number },
+    params: { statuses?: OrderStatus[]; since?: Date; limit: number; offset: number; excludeTest?: boolean },
     executor: DBConnection = db
   ) {
     let query = executor.selectFrom('orders').selectAll();
+    // The packing queue leaves test orders out (migration 068); every other staff list shows them, marked is_test.
+    if (params.excludeTest) query = query.where(notTestOrder('orders'));
     if (params.statuses?.length) query = query.where('order_status', 'in', params.statuses);
     if (params.since) query = query.where('updated_at', '>=', params.since);
 

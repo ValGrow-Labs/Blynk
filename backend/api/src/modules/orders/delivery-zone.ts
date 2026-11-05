@@ -45,3 +45,25 @@ export async function assertWithinServiceZone(latitude: number, longitude: numbe
   }
   return store;
 }
+
+/**
+ * assertWithinServiceZone for the Google Play review customer (test orders, migration 068): when
+ * `allowOutside` is true an address outside the zone is accepted instead of refused, and `outside` says so
+ * (the caller then measures the delivery fee from the store itself, not from the far-away address). Anyone
+ * else (allowOutside false) gets exactly assertWithinServiceZone.
+ */
+export async function checkServiceZone(
+  latitude: number,
+  longitude: number,
+  allowOutside: boolean,
+  executor: DBConnection = db
+): Promise<{ store: NonNullable<Awaited<ReturnType<typeof orderRepository.findActiveDarkStore>>>; outside: boolean }> {
+  try {
+    return { store: await assertWithinServiceZone(latitude, longitude, executor), outside: false };
+  } catch (err) {
+    if (!allowOutside || !(err instanceof AppError) || err.code !== 'DELIVERY_OUTSIDE_RADIUS') throw err;
+    const store = await orderRepository.findActiveDarkStore(executor);
+    if (!store) throw err;
+    return { store, outside: true };
+  }
+}

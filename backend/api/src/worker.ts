@@ -4,6 +4,7 @@ import { pool, checkDatabaseConnection } from './database/connection.js';
 import { notificationWorker, logPushStatus } from './modules/notifications/index.js';
 import { appointmentReminderJob } from './modules/dental/appointment-reminders.js';
 import { paymentExpiryJob } from './modules/payments/expiry-job.js';
+import { testOrderJob } from './modules/orders/test-orders.job.js';
 import { walletExpiryJob } from './modules/wallet/expiry-job.js';
 import { repeatBasketJob } from './modules/repeat-baskets/repeat.runner.js';
 import { smsCampaignJob } from './modules/sms-offers/campaigns.runner.js';
@@ -44,6 +45,8 @@ async function bootstrapWorker() {
     appointmentReminderJob.start();
     // PayHere (migration 047): unpaid online orders past their window are cancelled.
     paymentExpiryJob.start();
+    // Test orders (migration 068; the Google Play review account): still-open ones are cancelled after 10 minutes, every minute.
+    testOrderJob.start();
     // Blynk Wallet (migration 049): credits past their expiry date (expiry_months > 0).
     walletExpiryJob.start();
     // Repeat baskets (migration 054): due baskets are ordered as the customer, every minute.
@@ -70,6 +73,7 @@ async function bootstrapWorker() {
     try {
       await appointmentReminderJob.stop();
       await paymentExpiryJob.stop();
+      await testOrderJob.stop();
       await walletExpiryJob.stop();
       await repeatBasketJob.stop();
       await smsCampaignJob.stop();

@@ -489,6 +489,12 @@ export interface OrdersTable {
    * Absent before 067 - read as MOTORBIKE.
    */
   delivery_method: ColumnType<DeliveryMethod, DeliveryMethod | undefined, DeliveryMethod>;
+  /**
+   * Migration 068 (owner's brother, 2026-11-05): true = a test order placed by the Google Play review account
+   * (REVIEW_LOGIN_PHONE): cash on delivery, no alerts / riders / rewards / reports, cancelled automatically.
+   * Absent before 068 - read as false.
+   */
+  is_test: ColumnType<boolean, boolean | undefined, boolean>;
   scheduled_for: Date | null;
   /** Migration 036 (owner, 2026-10-10): end of the delivery slot the customer picked; scheduled_for is its start. */
   scheduled_until: ColumnType<Date | null, Date | null | undefined, Date | null>;

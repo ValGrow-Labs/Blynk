@@ -65,7 +65,8 @@ export async function setOrderStatus(
   }
   // A seller who was told about an order is told when it is cancelled. An online order that never
   // got paid (AWAITING_PAYMENT) was never announced to them, so it is not announced as cancelled.
-  if (to === 'CANCELLED' && order.order_status !== 'AWAITING_PAYMENT') await enqueueSellerOrderCancelledPush(trx, updated);
+  // (a test order, migration 068, never told them about it either)
+  if (to === 'CANCELLED' && order.order_status !== 'AWAITING_PAYMENT' && updated.is_test !== true) await enqueueSellerOrderCancelledPush(trx, updated);
 
   return updated;
 }

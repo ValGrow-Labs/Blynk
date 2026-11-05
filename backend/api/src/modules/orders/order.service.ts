@@ -5,7 +5,9 @@ import type { AuditActor } from '../audit/audit.writer.js';
 import { CreateOrderInput, OrderQueryInput } from './order.schema.js';
 import { impliedMarkupPercent, recordableMarkupPercent, resolveSellingPrice, resolveVariantPrice } from '../pricing/index.js';
 import { leadForCart, leadInfo, leadTimeRequiresSlotError, slotBeforeLeadTimeError, type CartLead } from './lead-time.js';
-import { assertWithinServiceZone } from './delivery-zone.js';
+import { checkServiceZone } from './delivery-zone.js';
+// Test orders (migration 068): the Google Play review account (test-orders.ts).
+import { isTestModeCustomer, TEST_ORDER_CASH_ONLY_MESSAGE } from './test-orders.js';
 import { orderingClock } from '../../utils/time.js';
 import { buildSlots, storeClosedMessage, storeStatusAt, STORE_TIMEZONE } from '../../utils/store-hours.js';
 import { storeSchedule } from '../configuration/store-schedule.js';
@@ -186,7 +188,12 @@ function appliedMarkup(price: { mrpCapped: boolean; purchaseCost: number; sellin
   return price.mrpCapped ? impliedMarkupPercent(price.purchaseCost, price.sellingPrice) : price.effectiveMarkupPercent;
 }
 
-export async function priceCart(items: CreateOrderInput['items'], comboLines: NonNullable<CreateOrderInput['combos']> = []) {
+export async function priceCart(
+  items: CreateOrderInput['items'],
+  comboLines: NonNullable<CreateOrderInput['combos']> = [],
+  // Test orders (migration 068): a product's own hours do not stop the Google Play review account.
+  opts: { ignoreHours?: boolean } = {}
+) {
   // Migration 045: two variants of one product are two lines of the same product.
   const productIds = [...new Set(items.map((it) => it.product_id))];
   const products = productIds.length ? await orderRepository.findProductsByIds(productIds) : [];
@@ -220,7 +227,7 @@ export async function priceCart(items: CreateOrderInput['items'], comboLines: No
     }
 
     // Time-limited products (owner, 2026-10-23): refused outside their hours
-    assertWithinHours(availability, { id: prod.id, name: prod.name, category_id: prod.category_id });
+    if (!opts.ignoreHours) assertWithinHours(availability, { id: prod.id, name: prod.name, category_id: prod.category_id });
 
     const catalogRow = categoryOffers.get(prod.id);
 
@@ -366,7 +373,8 @@ function bundlePreview(b: Awaited<ReturnType<typeof priceCart>>['bundle']) {
  * placed" can say so. The same rule the delivery applies (loyalty/points.service.ts).
  */
 async function withPointsPreview<T extends Record<string, any>>(order: T): Promise<T & { points_earn_preview: number }> {
-  return { ...order, points_earn_preview: await pointsEarnPreview(db, order as any) };
+  // A test order (migration 068) earns nothing.
+  return { ...order, points_earn_preview: order.is_test === true ? 0 : await pointsEarnPreview(db, order as any) };
 }
 
 export class OrderService {
@@ -398,6 +406,14 @@ export class OrderService {
     // nothing is reserved. After the replay check, so an order accepted earlier still replays.
     await assertSingleSource(input.items, input.combos ?? []);
 
+    // 1a'. The Google Play review account (migration 068; owner's brother, 2026-11-05): its orders are TEST orders -
+    // cash on delivery only, placed at any time from any address, cancelled automatically (test-orders.ts). Anyone
+    // else: testMode is false and nothing below changes.
+    const testMode = await isTestModeCustomer(customerId);
+    if (testMode && (input.payment_method === 'ONLINE' || input.use_wallet === true || input.use_points === true)) {
+      throw new AppError(TEST_ORDER_CASH_ONLY_MESSAGE, 422, 'TEST_ORDER_CASH_ONLY');
+    }
+
     // 1b. Store timing (owner, 2026-10-10: set by Ops and Admin - opening
     // hours, "close the store now", holidays, delivery slots). After the
     // replay check, so a retried order that was accepted in time still
@@ -407,9 +423,11 @@ export class OrderService {
     const status = storeStatusAt(schedule, now);
     // Delivery lead time (migration 045; owner, 2026-10-14): the longest of
     // the cart's items; with one, only a slot on/after today + N days.
-    const lead: CartLead = await leadForCart(input.items, input.combos ?? []);
+    const lead: CartLead = testMode ? { lead_days: 0, product_name: null } : await leadForCart(input.items, input.combos ?? []);
     let slot: { start: Date; until: Date; label: string } | null = null;
-    if (input.delivery_slot_start) {
+    if (testMode) {
+      // A test order is as soon as possible: no opening hours, lead days or slots apply to it.
+    } else if (input.delivery_slot_start) {
       // A chosen slot must be one GET /orders/slots offers right now (slots
       // on, an open day, past the lead time, not while closed by staff).
       // Capacity is re-checked under the slot lock in the transaction.
@@ -456,7 +474,11 @@ export class OrderService {
     }
 
     // 3. Geofence verification (4.00 km Haversine from Dharga Town hub)
-    const store = await assertWithinServiceZone(Number(address.latitude), Number(address.longitude));
+    // A test order may go to any address; its fee is then measured from the store (nobody delivers it).
+    const { store, outside: outsideZone } = await checkServiceZone(Number(address.latitude), Number(address.longitude), testMode);
+    const feePoint = outsideZone
+      ? { lat: Number(store.latitude), lng: Number(store.longitude) }
+      : { lat: Number(address.latitude), lng: Number(address.longitude) };
 
     // Checkout switches (owner, 2026-10-08; basket amount and "for someone
     // else" since 2026-10-12).
@@ -481,20 +503,20 @@ export class OrderService {
     }
     // 3d. Rider tip (owner, 2026-10-24; migration 055): paid in cash with the
     // order, so cash on delivery only. Ignored (0) until 055 exists.
-    const riderTip = await checkoutRiderTip(customerId, input.rider_tip_lkr, input.payment_method === 'ONLINE');
+    const riderTip = testMode ? 0 : await checkoutRiderTip(customerId, input.rider_tip_lkr, input.payment_method === 'ONLINE');
     const deliveryNote = input.delivery_note?.trim() ? input.delivery_note.trim() : null;
 
     // 4. Scheduled delivery: the slot's start, or null for as soon as possible.
     const scheduledFor = slot?.start ?? null;
 
     // 5. Products & Authoritative Pricing
-    const { items: orderItemsData, combos: orderCombos, subtotal: subtotalAmount } = await priceCart(input.items, input.combos ?? []);
+    const { items: orderItemsData, combos: orderCombos, subtotal: subtotalAmount } = await priceCart(input.items, input.combos ?? [], { ignoreHours: testMode });
     // The fee for THIS address (owner, 2026-10-10): flat, or per-km tiers on
     // the road distance from the hub. Server authoritative; snapshotted below.
     // Owner, 2026-10-24: from the farthest pickup point of the cart's items
     // (combo items included) - a seller's approved shop for their products.
     const motorbikeQuote = await quoteDeliveryFee(
-      { lat: Number(address.latitude), lng: Number(address.longitude) },
+      feePoint,
       { hub: store, productIds: orderItemsData.map((it) => it.product_id) }
     );
     // Bicycle delivery (2026-11-05): re-checked here, authoritatively (switched on, within max_km, a bicycle rider
@@ -503,7 +525,7 @@ export class OrderService {
     let feeQuote = motorbikeQuote;
     if (deliveryMethod === 'BICYCLE') {
       const bicycle = await quoteBicycleDelivery(
-        { lat: Number(address.latitude), lng: Number(address.longitude) },
+        feePoint,
         { hub: store, productIds: orderItemsData.map((it) => it.product_id), motorbike: motorbikeQuote }
       );
       assertBicycleAvailable(bicycle);
@@ -539,14 +561,15 @@ export class OrderService {
       small_order_fee: smallOrderFee,
       delivery_fee_quote: feeQuote,
       ...(deliveryMethod === 'BICYCLE' ? { delivery_method: deliveryMethod } : {}),
-      free_delivery: settings.new_customer_free_deliveries,
+      // A test order uses up no free delivery, coupon, birthday gift, referral or points.
+      free_delivery: testMode ? null : settings.new_customer_free_deliveries,
       // Owner, 2026-10-12: decided on the server-priced subtotal in the transaction.
-      basket_free_delivery: basketFreeDeliveryOf(settings),
+      basket_free_delivery: testMode ? null : basketFreeDeliveryOf(settings),
       ordered_for_someone_else: receiver !== null,
       delivery_needs_help: input.needs_help === true,
       total_amount: totalAmount,
-      coupon_code: settings.coupons_enabled ? input.coupon_code ?? null : null,
-      birthday_offer: birthdaySetting.enabled ? { setting: birthdaySetting, now } : null,
+      coupon_code: settings.coupons_enabled && !testMode ? input.coupon_code ?? null : null,
+      birthday_offer: birthdaySetting.enabled && !testMode ? { setting: birthdaySetting, now } : null,
       use_points: input.use_points === true,
       use_wallet: input.use_wallet === true,
       scheduled_for: scheduledFor,
@@ -570,6 +593,7 @@ export class OrderService {
       online_payment: onlinePayment,
       ...(riderTip > 0 ? { rider_tip: riderTip } : {}),
       ...(options.repeatBasketId ? { repeat_basket_id: options.repeatBasketId } : {}),
+      ...(testMode ? { is_test: true } : {}),
     };
 
     const createdOrder = await createWithUniqueNumber(orderData);
@@ -680,7 +704,12 @@ export class OrderService {
     productIds: readonly string[] = []
   ): Promise<{ quote: DeliveryFeeQuote; address_id: string | null; point: { lat: number; lng: number } | null }> {
     const address = await this.feeAddress(customerId, addressId);
-    const point = address ? { lat: Number(address.latitude), lng: Number(address.longitude) } : null;
+    let point = address ? { lat: Number(address.latitude), lng: Number(address.longitude) } : null;
+    // The Google Play review account (migration 068): an address outside the zone is priced from the store.
+    if (point && (await isTestModeCustomer(customerId))) {
+      const zone = await checkServiceZone(point.lat, point.lng, true);
+      if (zone.outside) point = { lat: Number(zone.store.latitude), lng: Number(zone.store.longitude) };
+    }
     const quote = await quoteDeliveryFee(point, { productIds });
     return { quote, address_id: address?.id ?? null, point };
   }
@@ -720,6 +749,10 @@ export class OrderService {
       birthdayOfferSettings.read(),
     ]);
     const standardFee = fee.quote.fee_lkr;
+    // The Google Play review account (migration 068): checkout-info says so (test_mode), and the app then treats
+    // checkout as open, the address as deliverable and the order as a test order. No lead days either.
+    const testMode = await isTestModeCustomer(customerId);
+    if (testMode) lead = { lead_days: 0, product_name: null };
     const free = await freeDeliveryStatus(db, customerId, settings.new_customer_free_deliveries);
     const birthday = await birthdayOfferStatus(db, customerId, birthdaySetting, orderingClock.now());
     // Free delivery above a basket amount (owner, 2026-10-12): with ?subtotal=
@@ -770,6 +803,8 @@ export class OrderService {
       // longest delivery lead time and its first delivery day; asap_allowed
       // false means the customer must pick a slot on/after that day.
       delivery_lead: leadInfo(orderingClock.now(), lead),
+      // Test account (migration 068): only present (true) for the Google Play review customer.
+      ...(testMode ? { test_mode: true } : {}),
       // Owner, 2026-10-10: referral_reward (applied automatically when it is
       // the larger discount) and points (balance + the program's numbers).
       ...(await checkoutRewardsInfo(db, customerId, charged)),
@@ -846,7 +881,7 @@ export class OrderService {
   // --------------------------------------------------------------------------
 
   async getPackingQueue() {
-    return await orderRepository.findAdminOrders({ statuses: ['PLACED'], limit: 100, offset: 0 });
+    return await orderRepository.findAdminOrders({ statuses: ['PLACED'], limit: 100, offset: 0, excludeTest: true });
   }
 
   async getAdminOrders(params: { status?: OrderStatus[]; since?: Date; page?: number; limit?: number }) {

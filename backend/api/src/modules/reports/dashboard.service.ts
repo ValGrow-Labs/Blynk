@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import { DateTime } from 'luxon';
 import { db } from '../../database/connection.js';
 import { STORE_ZONE, rangeBounds, salesReport, type DateRange } from './sales.service.js';
+import { notTestOrder } from '../orders/test-orders.js';
 
 /**
  * The sales dashboard on the phone (owner, 2026-10-10): Ops Home and the
@@ -63,6 +64,7 @@ async function statusAndCash(range: DateRange) {
       .select(['order_status', sql<number>`count(*)::int`.as('count')])
       .where('placed_at', '>=', start)
       .where('placed_at', '<', end)
+      .where(notTestOrder())
       .groupBy('order_status')
       .execute(),
     db

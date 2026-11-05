@@ -1,7 +1,8 @@
 import { addressRepository } from './address.repository.js';
 import { CreateAddressInput, UpdateAddressInput, UpdateProfileInput } from './address.schema.js';
 import { AppError } from '../../middleware/error.middleware.js';
-import { assertWithinServiceZone } from '../orders/delivery-zone.js';
+import { checkServiceZone } from '../orders/delivery-zone.js';
+import { isTestModeCustomer } from '../orders/test-orders.js';
 import { db } from '../../database/connection.js';
 import { birthdayOfferSettings } from '../configuration/settings.service.js';
 import { birthdayOfferStatus, publicBirthdayStatus } from '../birthday/birthday.offer.js';
@@ -38,7 +39,8 @@ export class AddressService {
     assertAlternateDiffers(input.recipient_phone, input.alternate_phone);
     // Same service-zone rule as checkout: an address outside it could never
     // be ordered to, so it is refused when saved rather than at the cart.
-    await assertWithinServiceZone(input.latitude, input.longitude);
+    // (the Google Play review account may save any address - migration 068, orders/test-orders.ts)
+    await checkServiceZone(input.latitude, input.longitude, await isTestModeCustomer(userId));
     return await addressRepository.createAddress(userId, input);
   }
 
@@ -56,9 +58,10 @@ export class AddressService {
         input.alternate_phone !== undefined ? input.alternate_phone : existing.alternate_phone
       );
       if (pinMoves) {
-        await assertWithinServiceZone(
+        await checkServiceZone(
           input.latitude ?? Number(existing.latitude),
-          input.longitude ?? Number(existing.longitude)
+          input.longitude ?? Number(existing.longitude),
+          await isTestModeCustomer(userId)
         );
       }
     }

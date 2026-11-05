@@ -85,6 +85,8 @@ export interface CheckoutInfo {
   tip_options?: number[];
   /** 2026-11-05: bicycle delivery for short trips (src/blynk/checkout/bicycle.ts). */
   bicycle?: BicycleQuote;
+  /** The Google Play review account only (src/blynk/checkout/testMode.ts): its orders are test orders. Absent = an ordinary customer. */
+  test_mode?: boolean;
 }
 
 export interface DeliveryLead {
@@ -185,6 +187,8 @@ export interface Order {
   free_delivery_reason?: 'BASKET_THRESHOLD' | 'NEW_CUSTOMER' | null;
   /** 2026-11-05: 'BICYCLE' or 'MOTORBIKE' (absent on an older server = motorbike). */
   delivery_method?: DeliveryMethod;
+  /** The Google Play review account's test order (cancelled automatically after about 10 minutes); absent / false = an ordinary order. */
+  is_test?: boolean;
   /**
    * POST /orders and GET /orders/:id (owner, 2026-10-14): the Blynk Points this order earns once
    * delivered (what it earned, once delivered; 0 while the program is off or cancelled).

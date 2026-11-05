@@ -6,6 +6,7 @@ import { AppError } from '../../middleware/error.middleware.js';
 import { STORE_ZONE, rangeBounds, type DateRange } from './sales.service.js';
 import { resolveDashboardRange, type DashboardRange } from './dashboard.service.js';
 import { deliveryZonesService } from '../configuration/delivery-zones.js';
+import { notTestOrder } from '../orders/test-orders.js';
 
 /**
  * Delivery heat map (owner, 2026-10-10): where orders come from, so the
@@ -103,7 +104,8 @@ export async function orderMap(range: OrderMapRange, status: 'delivered' | 'all'
     ])
     .where('dark_store_id', '=', store.id)
     .where('placed_at', '>=', start)
-    .where('placed_at', '<', end);
+    .where('placed_at', '<', end)
+    .where(notTestOrder());
   if (status === 'delivered') base = base.where('order_status', '=', 'DELIVERED');
 
   const cellsQ = db
@@ -220,6 +222,7 @@ export async function orderMapCell(
     .where('o.dark_store_id', '=', store.id)
     .where('o.placed_at', '>=', start)
     .where('o.placed_at', '<', end)
+    .where(notTestOrder('o'))
     .where(sql<boolean>`floor(o.delivery_latitude / ${CELL_DEG})::int = ${cell.cy}`)
     .where(sql<boolean>`floor(o.delivery_longitude / ${CELL_DEG})::int = ${cell.cx}`);
   if (status === 'delivered') base = base.where('o.order_status', '=', 'DELIVERED');

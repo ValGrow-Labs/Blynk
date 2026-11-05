@@ -5,6 +5,8 @@ import type { OrderStatus } from '../../database/types.js';
 import { AppError } from '../../middleware/error.middleware.js';
 import { runTransition } from '../orders/lifecycle/engine.js';
 import { sellerService } from './seller.service.js';
+// A seller never sees a test order (migration 068; the Google Play review account).
+import { notTestOrder } from '../orders/test-orders.js';
 
 /**
  * A seller's orders and the "Order is ready" button (seller portal, 2026-10-30, owner's brother:
@@ -109,6 +111,7 @@ async function sellerOrderDtos(
                 WHERE oi.order_id = o.id AND p.seller_id = ${sellerId}::uuid
              )
          AND o.order_status IN (${sql.join(states.map((s) => sql`${s}`))})
+         AND ${notTestOrder('o')}
          AND EXISTS (SELECT 1 FROM order_status_history h WHERE h.order_id = o.id AND h.new_status = 'PLACED')
          ${ids ? sql`AND o.id IN (${ids})` : sql`AND COALESCE(o.placed_at, o.created_at) >= now() - ${SELLER_ORDER_WINDOW_DAYS} * interval '1 day'`}
        ORDER BY COALESCE(o.placed_at, o.created_at) DESC, o.id DESC
@@ -168,6 +171,7 @@ export async function markSellerOrderReady(userId: string, orderId: string): Pro
     .selectFrom('orders as o')
     .select(['o.id', 'o.order_status'])
     .where('o.id', '=', orderId)
+    .where(notTestOrder('o'))
     .where((eb) =>
       eb.exists(
         eb

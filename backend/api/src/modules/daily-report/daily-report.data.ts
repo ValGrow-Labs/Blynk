@@ -6,6 +6,7 @@ import { expiryDigest } from '../expiry/index.js';
 import { ratingsReady } from '../ratings/ratings.ready.js';
 import { rangeBounds, salesReport } from '../reports/sales.service.js';
 import type { DailyReportSnapshot } from './daily-report.builder.js';
+import { notTestOrder } from '../orders/test-orders.js';
 
 const money = (v: unknown) => Number(Number(v ?? 0).toFixed(2));
 
@@ -58,6 +59,7 @@ export async function gatherDailyReportData(date: string): Promise<DailyReportSn
     ])
     .where('placed_at', '>=', start)
     .where('placed_at', '<', end)
+    .where(notTestOrder())
     .executeTakeFirstOrThrow();
 
   const ratingQ = async () => {
