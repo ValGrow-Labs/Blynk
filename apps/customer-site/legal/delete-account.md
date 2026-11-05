@@ -11,10 +11,8 @@ Your account is deleted straight away and you are signed out.
 
 ### 2. Ask us to delete it
 
-If you cannot use the app (for example you no longer have it, or you cannot receive our SMS code), send us a deletion request from the mobile number registered on your account:
+If you cannot use the app (for example you no longer have it, or you cannot receive our SMS code), email us a deletion request. It must come from the owner of the mobile number registered on your account, so include that number in your email:
 
-- WhatsApp us: {{whatsappLink}}
-- Call us: {{phoneLink}}
 - Email: {{privacyEmail}} - include your registered mobile number
 
 We confirm that the request comes from the account holder, then delete the account within **7 days** and tell you when it is done.

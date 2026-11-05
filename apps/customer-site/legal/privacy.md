@@ -112,6 +112,6 @@ We may update this policy. The new version will be posted here with a new date, 
 Data protection contact: {{?dataProtectionContact}}
 
 - Email: {{?privacyEmail}}
-- Phone / WhatsApp: {{callUs}} or {{whatsappUs}}
+- Phone / WhatsApp: {{?phoneWhatsappUs}}
 - Address: {{?registeredAddress}}
 - Hours: {{hours}}

@@ -34,7 +34,7 @@ export function setSellerApplicationsTableForTests(value: boolean | null): void 
 
 export const sellerApplicationsNotReady = () =>
   new AppError(
-    'Seller applications are not open yet. Please call or WhatsApp us to apply.',
+    'Seller applications are not open yet. Please email support@blynk.lk to apply.',
     503,
     'SELLER_APPLICATIONS_NOT_READY'
   );

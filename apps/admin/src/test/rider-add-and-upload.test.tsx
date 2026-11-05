@@ -137,7 +137,8 @@ describe('Settings -> Rider documents switches (owner, 2026-10-11)', () => {
     const approval = screen.getByRole('switch', { name: 'Documents needed before approval' });
     expect(uploads).toHaveAttribute('aria-checked', 'false');
     expect(approval).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('uploads-explainer')).toHaveTextContent(/WhatsApp \(\+94 71 710 7374\)/);
+    expect(screen.getByTestId('uploads-explainer')).toHaveTextContent(/Applicants send their details only and Blynk contacts them to collect the documents/);
+    expect(screen.getByTestId('uploads-explainer')).not.toHaveTextContent(/whatsapp|\d{3}/i);
     expect(screen.getByTestId('approval-explainer')).toHaveTextContent(/Approve anyway/);
     // The site's own switches, not native checkboxes.
     expect(document.querySelector('input[type="checkbox"]')).toBeNull();

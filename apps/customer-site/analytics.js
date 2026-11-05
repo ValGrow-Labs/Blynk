@@ -62,8 +62,10 @@
     var link = target.closest('a[href]');
     if (!link) return;
     var href = link.getAttribute('href') || '';
-    // The method only, never the number.
-    if (href.indexOf('tel:') === 0) track('contact_click', { method: 'call', link_location: where(link) });
+    // The method only, never the address or number. "Email us" (support email) is the contact link now
+    // that Blynk gives no phone or WhatsApp number (owner, 2026-11-05).
+    if (href.indexOf('mailto:') === 0) track('contact_click', { method: 'email', link_location: where(link) });
+    else if (href.indexOf('tel:') === 0) track('contact_click', { method: 'call', link_location: where(link) });
     else if (/^https:\/\/(wa\.me|api\.whatsapp\.com)\//.test(href)) track('contact_click', { method: 'whatsapp', link_location: where(link) });
   }, true);
 })();

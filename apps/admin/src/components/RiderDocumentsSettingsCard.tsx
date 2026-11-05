@@ -198,7 +198,7 @@ export function RiderDocumentsSettingsCard() {
                   <p data-testid="uploads-explainer">
                     {switches.applicant_uploads_enabled
                       ? 'On: applicants photograph and upload each document in the Rider app.'
-                      : 'Off: the Rider app application has no Documents step. Applicants send their details only and are told to send their documents to Blynk on WhatsApp (+94 71 710 7374); you upload them under Rider requests.'}
+                      : 'Off: the Rider app application has no Documents step. Applicants send their details only and Blynk contacts them to collect the documents; you upload them under Rider requests.'}
                   </p>
                 </div>
               ) : null}

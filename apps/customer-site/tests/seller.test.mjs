@@ -79,15 +79,15 @@ test('the form has the API fields, the right requirements and limits, and a hidd
   assert.match(form, /onsubmit="return false"/);
 });
 
-test('success, error and fallback states are in the page; the phone and WhatsApp links come from the generator', () => {
+test('success, error and fallback states are in the page; the email fallback comes from the generator', () => {
   assert.match(html, /<div class="seller-success" data-seller-success[^>]*hidden>[\s\S]*?Thanks! We received your application and will call you soon\./);
   assert.match(html, /<p class="seller-status" data-seller-status role="alert" hidden><\/p>/);
   const fallback = html.match(/<p class="seller-fallback" data-seller-fallback hidden>[\s\S]*?<\/p>/)[0];
-  assert.match(fallback, /Please <a href="tel:\+94717107374">phone<\/a> or <a href="https:\/\/wa\.me\/94717107374" target="_blank" rel="noopener">WhatsApp<\/a> us to apply\./);
+  assert.match(fallback, /Please <a href="mailto:support@blynk\.lk">email<\/a> us to apply\./);
   const noscript = html.match(/<noscript>[\s\S]*?<\/noscript>/)[0];
   assert.match(noscript, /This form needs JavaScript/);
-  assert.match(noscript, /href="tel:\+94717107374"/);
-  assert.match(noscript, /href="https:\/\/wa\.me\/94717107374"/);
+  assert.match(noscript, /href="mailto:support@blynk\.lk"/);
+  assert.doesNotMatch(html, /href="tel:|wa\.me/);
 });
 
 test('owner rules: no tracking, only seller.js, no number as text, no opening hours, no pictures but the logo', () => {

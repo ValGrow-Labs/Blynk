@@ -3,7 +3,7 @@
     "The owner's details for the Terms, Privacy and Refund pages (/terms, /privacy, /refunds).",
     "Fill in a value, then run: node apps/customer-site/scripts/build-legal-pages.mjs",
     "An empty value is left out of the pages cleanly (no [brackets] are ever shown).",
-    "The phone number is used only inside the Call us / WhatsApp us links, never shown as text (owner, 2026-10-15).",
+    "phone and whatsappUrl are empty on purpose (owner, 2026-11-05: Blynk gives no phone or WhatsApp number). Fill both in to bring the Call us / WhatsApp us links back; the pages give supportEmail while they are empty.",
     "lastUpdated is the date shown on all three pages and in sitemap.xml (YYYY-MM-DD)."
   ],
   "lastUpdated": "2026-11-03",
@@ -13,7 +13,7 @@
   "supportEmail": "support@blynk.lk",
   "privacyEmail": "help@blynk.lk",
   "dataProtectionContact": "",
-  "phone": "+94717107374",
-  "whatsappUrl": "https://wa.me/94717107374",
+  "phone": "",
+  "whatsappUrl": "",
   "hours": "8:00 am – 9:00 pm, daily"
 }

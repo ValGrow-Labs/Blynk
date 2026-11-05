@@ -4,13 +4,13 @@
 // footer as the legal pages and writes seller.html; seller.js posts the form to the API's public
 // POST /seller-applications (field names and limits: backend/api/src/modules/sellers/seller-applications.ts).
 //
-// Rules (owner): the phone number is never shown as text, only in the Call us / WhatsApp us links
-// (the tokens of build-legal-pages.mjs); no typed-in opening hours; no photos of people.
+// Rules (owner): no Blynk phone or WhatsApp number anywhere (2026-11-05), so the fallback lines send people
+// to the support email (the contactUs token of build-legal-pages.mjs); no typed-in opening hours; no photos of people.
 
 /** Field limits the form states; the API enforces the same ones. */
 export const SELLER_FORM_LIMITS = { shop_name: 80, owner_name: 80, town: 60, what_they_sell: 500, email: 120, message: 1000 };
 
-/** @param tok the build-legal-pages.mjs tokens ({ phoneLink, whatsappLink, ... } as HTML). */
+/** @param tok the build-legal-pages.mjs tokens ({ contactUs, ... } as HTML). */
 export function sellerMain(tok) {
   const L = SELLER_FORM_LIMITS;
   const field = (name, label, control, { hint = '', optional = false } = {}) => `
@@ -37,7 +37,7 @@ export function sellerMain(tok) {
         </ol>
 
         <noscript>
-          <p class="seller-noscript">This form needs JavaScript. To apply, please ${tok.phoneLink} or ${tok.whatsappLink} us.</p>
+          <p class="seller-noscript">This form needs JavaScript. To apply, please ${tok.contactUs}.</p>
         </noscript>
 
         <section class="seller-card" aria-labelledby="seller-form-h">
@@ -50,7 +50,7 @@ export function sellerMain(tok) {
           </div>
 
           <p class="seller-status" data-seller-status role="alert" hidden></p>
-          <p class="seller-fallback" data-seller-fallback hidden>Please ${tok.phoneLink} or ${tok.whatsappLink} us to apply.</p>
+          <p class="seller-fallback" data-seller-fallback hidden>Please ${tok.contactUs} to apply.</p>
 
           <p class="seller-consent">We will call you on this number about your application. See our <a href="/privacy">Privacy Policy</a>.</p>
           <button type="submit" class="btn btn--ink btn--pill seller-submit">Send application</button>

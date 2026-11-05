@@ -199,9 +199,8 @@ test('JSON-LD parses everywhere; the home page is a GroceryStore with the brief\
   assert.equal(store.url, `${SITE}/`);
   assert.match(store.logo, /^https:\/\/blynk\.lk\/assets\/.+\.png$/);
   assert.ok(existsSync(join(site, urlToPath(store.logo))), 'logo file');
-  // The support number the footer shows.
-  const tel = home.match(/href="tel:(\+\d+)"/)[1];
-  assert.equal(store.telephone, tel);
+  // No phone number in the structured data (owner, 2026-11-05: Blynk gives no phone or WhatsApp number).
+  assert.equal(store.telephone, undefined);
   assert.equal(store.address['@type'], 'PostalAddress');
   assert.equal(store.address.addressLocality, 'Dharga Town');
   assert.match(store.address.streetAddress, /Clock Tower/);

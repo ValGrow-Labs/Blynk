@@ -33,12 +33,13 @@ const outDir = join(siteDir, 'pages');
 export const SITE = 'https://blynk.lk';
 export const LASTMOD = '2026-11-01';
 const YEAR = '2026';
-const PHONE = '+94717107374';
-const WHATSAPP = 'https://wa.me/94717107374';
+// No Blynk phone or WhatsApp number anywhere (owner, 2026-11-05): the footer's help line links the published
+// support email from legal/legal-config.json (the same one the legal pages use).
+const SUPPORT_EMAIL = JSON.parse(readFileSync(join(siteDir, 'legal', 'legal-config.json'), 'utf8')).supportEmail;
 const OG_IMAGE = `${SITE}/assets/og-image.jpg`;
 const CSS = '/styles.css?v=20261103a';
 const PAGES_CSS = '/pages.css?v=20261015c';
-const ANALYTICS = '/analytics.js?v=20261015a';
+const ANALYTICS = '/analytics.js?v=20261105a';
 const STORE_HOURS = '/store-hours.js?v=20261101a';
 const LANGS = ['en', 'si', 'ta'];
 
@@ -129,7 +130,7 @@ const T = {
     stPts: 'Blynk Points', stPtsT: 'point for every LKR 100 you spend',
     areasH2: 'Other areas we deliver to', popularH2: 'Popular in {area}',
     bandKicker: 'Blynk', bandH2: 'Ready when you are.', bandP: 'Open Blynk, fill your basket and pay at your door.',
-    help: 'Need help?', call: 'Call us', wa: 'WhatsApp us',
+    help: 'Need help?', email: 'Email us',
     areasNav: 'Areas we deliver to', langNav: 'Language', legalNav: 'Legal',
     privacy: 'Privacy Policy', terms: 'Terms and Conditions', refunds: 'Return, Refund and Cancellation Policy',
     footerPlace: 'Dharga Town, Aluthgama & Beruwala, Sri Lanka',
@@ -156,7 +157,7 @@ const T = {
     stPts: 'Blynk Points', stPtsT: 'ඔබ වියදම් කරන සෑම LKR 100කටම ලකුණු',
     areasH2: 'අප බෙදාහරින අනෙක් ප්‍රදේශ', popularH2: '',
     bandKicker: 'Blynk', bandH2: 'ඔබ සූදානම් නම්, අපිත් සූදානම්.', bandP: 'Blynk විවෘත කර, කූඩය පුරවා, දොරකඩදී ගෙවන්න.',
-    help: 'උදව් අවශ්‍යද?', call: 'අපට අමතන්න', wa: 'WhatsApp කරන්න',
+    help: 'උදව් අවශ්‍යද?', email: 'අපට ඊමේල් කරන්න',
     areasNav: 'බෙදාහැරීමේ ප්‍රදේශ', langNav: 'භාෂාව', legalNav: 'නීතිමය',
     privacy: 'රහස්‍යතා ප්‍රතිපත්තිය (English)', terms: 'නියම සහ කොන්දේසි (English)', refunds: 'ආපසු භාරදීම්, මුදල් ආපසු ගෙවීම් සහ අවලංගු කිරීමේ ප්‍රතිපත්තිය (English)',
     footerPlace: 'දර්ගා නගරය, අළුත්ගම සහ බේරුවල, ශ්‍රී ලංකාව',
@@ -183,7 +184,7 @@ const T = {
     stPts: 'Blynk Points', stPtsT: 'நீங்கள் செலவிடும் ஒவ்வொரு LKR 100க்கும் புள்ளி',
     areasH2: 'நாங்கள் டெலிவரி செய்யும் பிற பகுதிகள்', popularH2: '',
     bandKicker: 'Blynk', bandH2: 'நீங்கள் தயாரானதும் நாங்களும் தயார்.', bandP: 'Blynk-ஐத் திறந்து, கூடையை நிரப்பி, வாசலில் பணம் செலுத்துங்கள்.',
-    help: 'உதவி தேவையா?', call: 'எங்களை அழையுங்கள்', wa: 'WhatsApp செய்யுங்கள்',
+    help: 'உதவி தேவையா?', email: 'எங்களுக்கு மின்னஞ்சல் அனுப்புங்கள்',
     areasNav: 'டெலிவரி பகுதிகள்', langNav: 'மொழி', legalNav: 'சட்டம்',
     privacy: 'தனியுரிமைக் கொள்கை (English)', terms: 'விதிமுறைகள் மற்றும் நிபந்தனைகள் (English)', refunds: 'திருப்பி அனுப்புதல், பணத்திருப்பம் மற்றும் ரத்துக் கொள்கை (English)',
     footerPlace: 'தர்கா நகர், அளுத்கம மற்றும் பேருவளை, இலங்கை',
@@ -489,8 +490,7 @@ function footer(lang, alternates) {
       <nav aria-label="${esc(t.areasNav)}">
         ${areas}
       </nav>
-      <p class="footer__help">${esc(t.help)} <a href="tel:${PHONE}">${esc(t.call)}</a>
-        <a href="${WHATSAPP}" target="_blank" rel="noopener">${esc(t.wa)}</a></p>
+      <p class="footer__help">${esc(t.help)} <a href="mailto:${SUPPORT_EMAIL}">${esc(t.email)}</a></p>
       <small>© ${YEAR} Blynk · ${esc(t.footerPlace)}</small>
       <nav class="footer__legal" aria-label="${esc(t.legalNav)}">
         <a href="/privacy">${esc(t.privacy)}</a>

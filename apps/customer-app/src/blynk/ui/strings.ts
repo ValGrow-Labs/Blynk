@@ -277,6 +277,7 @@ export const PLACED = localized(
     amount: 'Amount',
     track: 'Track order',
     home: 'Back to home',
+    testNote: 'Test account: this order is cancelled automatically after about 10 minutes.',
   } as const,
   {
     si: {
@@ -292,6 +293,7 @@ export const PLACED = localized(
       amount: 'මුදල',
       track: 'ඇණවුම සොයා බලන්න',
       home: 'මුල් පිටුවට',
+      testNote: 'පරීක්ෂණ ගිණුම: මෙම ඇණවුම මිනිත්තු 10ක් පමණ ගිය පසු ස්වයංක්‍රීයව අවලංගු වේ.',
     },
     ta: {
       title: 'ஆர்டர் பெறப்பட்டது!',
@@ -306,6 +308,7 @@ export const PLACED = localized(
       amount: 'தொகை',
       track: 'ஆர்டரைக் கண்காணி',
       home: 'முகப்புக்குச் செல்',
+      testNote: 'சோதனைக் கணக்கு: இந்த ஆர்டர் சுமார் 10 நிமிடங்களில் தானாகவே ரத்து செய்யப்படும்.',
     },
   },
   'ui.PLACED',
@@ -419,13 +422,10 @@ export const HELP_HERO = localized(
     opensTomorrow: (time: string) => `Opens tomorrow at ${time}`,
     opensOn: (weekday: string, time: string) => `Opens ${weekday} at ${time}`,
     closedNow: 'Closed right now',
-    call: 'Call us',
-    whatsApp: 'WhatsApp us',
+    emailUs: 'Email us',
     feedback: 'Send feedback',
-    /** Where the dialler cannot open: the number goes to the clipboard, never onto the screen. */
-    copied: 'Number copied',
-    /** Screen reader: the pulsing dot beside Call / WhatsApp while the store is open. */
-    liveHint: 'The store is open now',
+    /** Where no mail app can open: the support address goes to the clipboard. */
+    copied: 'Email address copied',
   } as const,
   {
     si: {
@@ -437,11 +437,9 @@ export const HELP_HERO = localized(
       opensTomorrow: (time: string) => `හෙට ${time} ට විවෘත වේ`,
       opensOn: (weekday: string, time: string) => `${weekday} ${time} ට විවෘත වේ`,
       closedNow: 'දැන් වසා ඇත',
-      call: 'අපට අමතන්න',
-      whatsApp: 'WhatsApp කරන්න',
+      emailUs: 'අපට ඊමේල් කරන්න',
       feedback: 'ප්‍රතිචාර එවන්න',
-      copied: 'අංකය පිටපත් කළා',
-      liveHint: 'සාප්පුව දැන් විවෘතයි',
+      copied: 'ඊමේල් ලිපිනය පිටපත් කළා',
     },
     ta: {
       title: 'உதவி வேண்டுமா?',
@@ -452,11 +450,9 @@ export const HELP_HERO = localized(
       opensTomorrow: (time: string) => `நாளை ${time} க்குத் திறக்கும்`,
       opensOn: (weekday: string, time: string) => `${weekday} ${time} க்குத் திறக்கும்`,
       closedNow: 'இப்போது மூடப்பட்டுள்ளது',
-      call: 'எங்களை அழையுங்கள்',
-      whatsApp: 'WhatsApp செய்யுங்கள்',
+      emailUs: 'எங்களுக்கு மின்னஞ்சல் அனுப்புங்கள்',
       feedback: 'கருத்தை அனுப்புங்கள்',
-      copied: 'எண் நகலெடுக்கப்பட்டது',
-      liveHint: 'கடை இப்போது திறந்திருக்கிறது',
+      copied: 'மின்னஞ்சல் முகவரி நகலெடுக்கப்பட்டது',
     },
   },
   'ui.HELP_HERO',

@@ -66,7 +66,7 @@ export function Enter({ slot, rise = 10, children }: { slot: number; rise?: numb
 }
 
 /**
- * A small green dot that pulses while `on` (the store is open), beside Call / WhatsApp. The pulse
+ * A small green dot that pulses while `on` (the store is open), beside a contact row. The pulse
  * runs only while its screen is showing; reduced motion: a still dot.
  */
 export function LiveDot({ on, size = 8, label }: { on: boolean; size?: number; label?: string }) {
@@ -93,7 +93,7 @@ export function LiveDot({ on, size = 8, label }: { on: boolean; size?: number; l
 /**
  * One row: icon tile, title, optional line under it, chevron. On press the emoji gives a small
  * hop and the chevron nudges right (no hop under reduced motion). `live`: a pulsing green dot
- * before the chevron (Help's Call / WhatsApp while the store is open).
+ * before the chevron (a contact row while the store is open).
  */
 export function Row({
   icon, title, sub, onPress, last, danger, right, live, liveLabel,

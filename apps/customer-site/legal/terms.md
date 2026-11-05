@@ -1,6 +1,6 @@
 ### 1. About us
 
-Blynk.lk ("Blynk", "we", "us") is a quick commerce and delivery service operated by **{{business}}**{{regClause}}, Sri Lanka. These Terms apply to the website blynk.lk, the Blynk app at blynk.lk/app, and any order placed by phone or WhatsApp (together, the "Platform"). By using the Platform or placing an order, you agree to these Terms.
+Blynk.lk ("Blynk", "we", "us") is a quick commerce and delivery service operated by **{{business}}**{{regClause}}, Sri Lanka. These Terms apply to the website blynk.lk, the Blynk app at blynk.lk/app, and any order placed through them (together, the "Platform"). By using the Platform or placing an order, you agree to these Terms.
 
 ### 2. Service area
 
@@ -27,7 +27,7 @@ We do not sell alcohol, tobacco, prescription medicines or any item restricted b
 
 ### 6. Orders
 
-1. Your order is an offer to buy. It is accepted when we confirm it in the app, by SMS, by WhatsApp or by phone.
+1. Your order is an offer to buy. It is accepted when we confirm it in the app, in the app or by SMS.
 2. We may refuse or cancel an order for reasons including stock problems, pricing errors, an address outside our area, or suspected fraud. If you have already paid, the full amount will be refunded to your Blynk Wallet.
 3. Unusually large quantities may be limited so that items stay available to all customers.
 
@@ -93,7 +93,7 @@ These Terms are governed by the laws of the Democratic Socialist Republic of Sri
 
 ### 18. Contact us
 
-- Phone / WhatsApp: {{callUs}} or {{whatsappUs}}
+- Phone / WhatsApp: {{?phoneWhatsappUs}}
 - Email: {{?supportEmail}}
 - Address: {{?registeredAddress}}
 - Hours: {{hours}}

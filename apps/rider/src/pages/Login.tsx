@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { applicantApi } from '../api/applicant';
-import { WhatsAppDocs } from '../components/WhatsAppDocs';
+import { DocumentsNote } from '../components/DocumentsNote';
 import { WRONG_ROLE_MESSAGE, useAuth } from '../auth/AuthContext';
 import { CodeField, PendingNotice, RejectedNotice } from '../components/ApplicationNotice';
 import { errorCode, errorMessage } from '../lib/errors';
@@ -47,7 +47,7 @@ export function Login() {
   const resend = useResendTimer();
   /**
    * (owner, 2026-10-11) "See my documents" only while "Riders upload
-   * documents in the app" is on (default off: they send them on WhatsApp).
+   * documents in the app" is on (default off: Blynk contacts them to collect the documents).
    * Unknown (not loaded / offline) counts as off.
    */
   const [uploadsOn, setUploadsOn] = useState(false);
@@ -183,7 +183,7 @@ export function Login() {
             See my documents
           </button>
         ) : null}
-        {uploadsOn ? null : <WhatsAppDocs />}
+        {uploadsOn ? null : <DocumentsNote />}
         <button type="button" className="secondary" onClick={startOver}>
           Back to sign in
         </button>

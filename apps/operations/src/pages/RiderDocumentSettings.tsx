@@ -26,8 +26,6 @@ import '../components/rider-documents.css';
 const MAX_CUSTOM = 10;
 const LABEL_MIN = 2;
 const LABEL_MAX = 80;
-/** Blynk's WhatsApp number riders send their documents to (owner, 2026-10-11). */
-export const BLYNK_WHATSAPP = '+94 71 710 7374';
 
 /** A row being edited; `tempId` names a new custom document until it is saved. */
 interface Draft extends Omit<RiderDocumentType, 'key'> {
@@ -196,7 +194,7 @@ export function RiderDocumentSettings() {
                 <em>
                   {appUploads
                     ? 'On: applicants photograph and upload each document in the Rider app.'
-                    : `Off: the Rider app's application has no Documents step. Applicants send their details only and are told to send their documents to Blynk on WhatsApp ${BLYNK_WHATSAPP}; you upload them under Rider requests or Riders.`}
+                    : `Off: the Rider app's application has no Documents step. Applicants send their details only and Blynk contacts them to collect the documents; you upload them under Rider requests or Riders.`}
                 </em>
               </span>
               <Switch

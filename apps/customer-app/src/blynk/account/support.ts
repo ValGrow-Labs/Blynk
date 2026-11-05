@@ -5,9 +5,8 @@ import { localized } from '@/blynk/i18n/localized';
  * owner 2026-10-08). The delivery fee is never quoted: the cart shows the one that applies.
  */
 export const SUPPORT = {
-  phone: '+94717107374',
-  phoneLabel: '+94 71 710 7374',
-  whatsAppUrl: 'https://wa.me/94717107374',
+  // Blynk gives no phone or WhatsApp number (owner, 2026-11-05): customers reach support by email.
+  email: 'support@blynk.lk',
   hubName: 'Dharga Town',
   country: 'Sri Lanka',
   serviceRadiusKm: 4,

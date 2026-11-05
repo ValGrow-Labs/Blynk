@@ -61,8 +61,8 @@ describe('QR links', () => {
     expect(scan.body.data.url).toBe('https://blynk.lk/?utm_source=jersey');
     expect(scan.headers['cache-control']).toBe('no-store');
     // changed again: the same printed code now leads somewhere else
-    await putLinks({ links: [{ code: 'j', label: 'Jersey', url: 'https://wa.me/94717107374' }] });
-    expect((await go('j')).body.data.url).toBe('https://wa.me/94717107374');
+    await putLinks({ links: [{ code: 'j', label: 'Jersey', url: 'https://wa.me/94771234567' }] });
+    expect((await go('j')).body.data.url).toBe('https://wa.me/94771234567');
     const audits = await pool.query(`SELECT count(*)::int n FROM audit_logs WHERE action = 'QR_LINKS_UPDATED' AND created_at >= $1`, [testStart]);
     expect(audits.rows[0].n).toBeGreaterThanOrEqual(2);
   });

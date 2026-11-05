@@ -60,24 +60,36 @@ test('no [placeholder] text on any page, and no {{detail}} left unfilled', () =>
   assert.doesNotMatch(pages.terms, /placeholder|template prepared/i);
 });
 
-test('the phone number is never shown as text on the legal pages, only in the Call us / WhatsApp us links', () => {
+test('Blynk gives no phone or WhatsApp number on the legal pages (owner, 2026-11-05): the support email is the contact route', () => {
+  assert.equal(readConfig().phone, '');
+  assert.equal(readConfig().whatsappUrl, '');
   for (const n of NAMES) {
     const text = visible(pages[n]);
     assert.ok(!text.replace(/[\s\-()+.]/g, '').includes('717107374'), `${n}: the number is visible`);
-    assert.ok(!text.includes('71 710 7374'), `${n}: the number is visible`);
-    assert.match(pages[n], /<a href="tel:\+94717107374">Call us<\/a>/, `${n}: Call us link`);
-    assert.match(pages[n], /<a href="https:\/\/wa\.me\/94717107374" target="_blank" rel="noopener">WhatsApp us<\/a>/, `${n}: WhatsApp us link`);
+    assert.doesNotMatch(pages[n], /href="tel:|wa\.me|api\.whatsapp\.com/, `${n}: a Call / WhatsApp link`);
+    assert.doesNotMatch(text, /Call us|WhatsApp us|Phone \/ WhatsApp/, `${n}: Call us / WhatsApp us text`);
+    assert.match(pages[n], /<p class="footer__help">Need help\? <a href="mailto:support@blynk\.lk">Email us<\/a><\/p>/, `${n}: footer Email us link`);
     // the hours are live (store-hours.js fills them from the API; owner 2026-10-20): the written words are only the fallback
     assert.match(text, /Hours:\s+8 AM – 9 PM\s*, every day/, `${n}: hours`);
     assert.match(pages[n], /<span data-hours="dash">/, `${n}: live hours marker`);
   }
-  // The same number as the home page's support links.
-  const home = read('index.html');
-  assert.equal(home.match(/href="tel:(\+\d+)"/)[1], readConfig().phone);
-  assert.match(home, /href="https:\/\/wa\.me\/94717107374"/);
+  // The home page offers the same email.
+  assert.match(read('index.html'), /<a href="mailto:support@blynk\.lk">Email us<\/a>/);
 });
 
-test('the phone number is not shown as text anywhere on the site (owner, 2026-10-15)', () => {
+test('phone and WhatsApp are optional in the config: filled in, the Call us / WhatsApp us links come back; empty, they are left out cleanly', () => {
+  const c = { ...readConfig(), phone: '+94112223333', whatsappUrl: 'https://wa.me/94112223333' };
+  const withLinks = build(c);
+  assert.match(withLinks.get('terms.html'), /href="tel:\+94112223333">Call us<\/a>/);
+  assert.match(withLinks.get('terms.html'), /href="https:\/\/wa\.me\/94112223333"[^>]*>WhatsApp us<\/a>/);
+  assert.match(withLinks.get('seller.html'), /Please <a href="tel:\+94112223333">phone<\/a>, <a [^>]*>WhatsApp<\/a> or <a href="mailto:support@blynk\.lk">email<\/a> us to apply\./);
+  const without = build({ ...readConfig(), phone: '', whatsappUrl: '' });
+  for (const [name, html] of without) assert.doesNotMatch(html, /tel:|wa\.me|Call us|WhatsApp us|Phone \/ WhatsApp|undefined/, name);
+  assert.match(without.get('seller.html'), /Please <a href="mailto:support@blynk\.lk">email<\/a> us to apply\./);
+  assert.match(without.get('refunds.html'), /contact us by <a href="mailto:support@blynk\.lk">email<\/a>, or through the app/);
+});
+
+test('no Blynk phone number or WhatsApp / Call link anywhere on the site (owner, 2026-11-05)', () => {
   const files = [...NAMES.map((n) => `${n}.html`), 'index.html',
     ...walk(join(site, 'pages')).filter((f) => f.endsWith('.html')).map((f) => f.slice(site.length + 1))];
   assert.ok(files.length >= 25, `${files.length} pages`);
@@ -85,15 +97,16 @@ test('the phone number is not shown as text anywhere on the site (owner, 2026-10
     const html = read(f);
     const text = visible(html);
     assert.ok(!text.replace(/[\s\-()+.]/g, '').includes('717107374'), `${f}: the number is visible`);
-    // The footer still offers the call, as a link.
-    assert.match(html, /<p class="footer__help">[^<]*<a href="tel:\+94717107374">[^<0-9]+<\/a>/, `${f}: footer Call us link`);
+    assert.doesNotMatch(html, /href="tel:|wa\.me|api\.whatsapp\.com/, `${f}: a Call / WhatsApp link`);
+    // The footer offers the support email instead.
+    assert.match(html, /<p class="footer__help">[^<]*<a href="mailto:support@blynk\.lk">[^<]+<\/a><\/p>/, `${f}: footer Email us link`);
   }
   // Nor in the scripts that write text into the pages.
   for (const f of ['app.js', 'walkthrough.js', 'analytics.js']) {
     assert.ok(!read(f).replace(/[\s\-()+.]/g, '').includes('717107374'), `${f} carries the number`);
   }
-  // The structured data keeps it (search engines, not visitors).
-  assert.match(read('index.html'), /"telephone": "\+94717107374"/);
+  // Nor in the structured data.
+  assert.doesNotMatch(read('index.html'), /"telephone"/);
 });
 
 test('footer legal links use the owner\'s titles on every page', () => {
@@ -132,7 +145,7 @@ test('the owner\'s choices are filled in', () => {
     assert.ok(p.includes(s), `privacy: "${s}"`);
   }
   const r = visible(pages.refunds);
-  for (const s of ['credited within 24 hours', 'contact us by phone or WhatsApp , or through the app']) assert.ok(r.includes(s), `refunds: "${s}"`);
+  for (const s of ['credited within 24 hours', 'contact us by email , or through the app']) assert.ok(r.includes(s), `refunds: "${s}"`);
 });
 
 test('the privacy policy has an "Advertising and measurement" section (2026-11-03)', () => {

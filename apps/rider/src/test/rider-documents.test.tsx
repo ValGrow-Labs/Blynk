@@ -335,7 +335,7 @@ describe('rider documents - after applying', () => {
 });
 
 describe('rider documents - uploads off (owner, 2026-10-11)', () => {
-  it('from sign-in, a waiting applicant is asked to send documents on WhatsApp - no "See my documents"', async () => {
+  it('from sign-in, a waiting applicant is told Blynk will contact them for the documents - no "See my documents"', async () => {
     const user = userEvent.setup();
     const { api } = renderAs(null, '/login', {
       'POST /auth/otp/request': () => ok({ dev_otp: '654321' }),
@@ -348,12 +348,12 @@ describe('rider documents - uploads off (owner, 2026-10-11)', () => {
     await user.click(screen.getByRole('button', { name: 'Verify and continue' }));
     expect(await screen.findByRole('heading', { name: 'Waiting for approval' })).toBeInTheDocument();
     await waitFor(() => expect(api.find('GET', '/riders/applications/settings')).toHaveLength(1));
-    expect(screen.getByRole('note')).toHaveTextContent('Send your documents to Blynk on WhatsApp +94 71 710 7374');
-    expect(screen.getByRole('link', { name: 'Open WhatsApp' })).toHaveAttribute('href', 'https://wa.me/94717107374');
+    expect(screen.getByRole('note')).toHaveTextContent('Documents are not uploaded in the app. Blynk will contact you to collect them.');
+    expect(screen.queryByRole('link', { name: /whatsapp/i })).toBeNull();
     expect(screen.queryByRole('button', { name: 'See my documents' })).toBeNull();
   });
 
-  it('a waiting applicant opening the application sees no document cards, only the WhatsApp line', async () => {
+  it('a waiting applicant opening the application sees no document cards, only the note', async () => {
     const user = userEvent.setup();
     renderApply({
       'POST /riders/applications/session': () =>
@@ -364,7 +364,7 @@ describe('rider documents - uploads off (owner, 2026-10-11)', () => {
     await user.type(await screen.findByLabelText('6-digit code'), '123456');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('heading', { name: 'Waiting for approval' })).toBeInTheDocument();
-    expect(screen.getByRole('note')).toHaveTextContent('WhatsApp +94 71 710 7374');
+    expect(screen.getByRole('note')).toHaveTextContent('Documents are not uploaded in the app. Blynk will contact you to collect them.');
     expect(screen.queryByRole('heading', { name: 'Your documents' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Vehicle book (CR)' })).toBeNull();
   });

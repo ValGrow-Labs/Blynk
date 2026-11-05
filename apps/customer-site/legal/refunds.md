@@ -11,7 +11,7 @@ If something is wrong with your Blynk order, tell us quickly and we will replace
 | Unopened non-food item, changed mind | 3 days of delivery | Refund the item price, minus a pickup fee |
 | Defective electronic or household item | 7 days of delivery | Replace, repair or refund, per supplier warranty |
 
-To report, contact us by {{phoneLink}} or {{whatsappLink}}, or through the app, with your order number and a photo of the item.
+To report, contact us by {{contactRoutes}}, or through the app, with your order number and a photo of the item.
 
 ### 2. Items we cannot take back
 
@@ -51,6 +51,6 @@ This policy does not affect your rights under the Consumer Affairs Authority Act
 
 ### 7. Contact
 
-- Phone / WhatsApp: {{callUs}} or {{whatsappUs}}
+- Phone / WhatsApp: {{?phoneWhatsappUs}}
 - Email: {{?supportEmail}}
 - Hours: {{hours}}

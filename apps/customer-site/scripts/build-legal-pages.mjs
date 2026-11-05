@@ -17,11 +17,12 @@
 // the pages never show a [placeholder].
 //
 // It also writes seller.html, the seller application form at /seller (owner's brother,
-// 2026-10-27), from the words in scripts/seller-page.mjs, so its phone and WhatsApp
-// links come from the same legal-config.json.
+// 2026-10-27), from the words in scripts/seller-page.mjs, so its contact links
+// come from the same legal-config.json.
 //
-// Rules (owner): no tracking scripts on these pages; the phone number is never
-// shown as text, only inside the Call us / WhatsApp us links (2026-10-15).
+// Rules (owner): no tracking scripts on these pages. Blynk has no phone or WhatsApp number on the pages
+// (owner, 2026-11-05): "phone" and "whatsappUrl" in legal-config.json are optional and empty, so the pages
+// give the support email as the contact route. Fill them in again and the Call us / WhatsApp us links return.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +35,7 @@ const SITE = 'https://blynk.lk';
 const CSS = '/styles.css?v=20261103a';
 const OG_IMAGE = `${SITE}/assets/og-image.jpg`;
 // blynk.lk/seller (owner's brother, 2026-10-27): the seller application form, built here so it shares the legal
-// pages' header, footer and phone / WhatsApp links (the number lives only in legal-config.json).
+// pages' header, footer and contact links (they come from legal-config.json).
 const SELLER_CSS = '/seller.css?v=20261027a';
 const SELLER_JS = '/seller.js?v=20261027a';
 export const SELLER_PAGE = {
@@ -87,7 +88,7 @@ export const readConfig = () => JSON.parse(readFileSync(join(legalDir, 'legal-co
 
 function checkConfig(c) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(c.lastUpdated || '')) throw new Error('legal-config.json: lastUpdated must be YYYY-MM-DD');
-  for (const k of ['businessName', 'phone', 'whatsappUrl', 'hours']) if (!c[k]) throw new Error(`legal-config.json: ${k} is required`);
+  for (const k of ['businessName', 'supportEmail', 'hours']) if (!c[k]) throw new Error(`legal-config.json: ${k} is required`);
   for (const [k, v] of Object.entries(c)) {
     if (typeof v === 'string' && /\[[^\]]*\]/.test(v)) throw new Error(`legal-config.json: ${k} still holds a [placeholder]`);
   }
@@ -96,17 +97,25 @@ function checkConfig(c) {
 /** The {{tokens}} as HTML. An empty string means "not given yet". */
 function tokens(c) {
   const mail = (addr) => (addr ? `<a href="mailto:${esc(addr)}">${esc(addr)}</a>` : '');
-  const tel = (text) => `<a href="tel:${esc(c.phone)}">${text}</a>`;
-  const wa = (text) => `<a href="${esc(c.whatsappUrl)}" target="_blank" rel="noopener">${text}</a>`;
+  const tel = (text) => (c.phone ? `<a href="tel:${esc(c.phone)}">${text}</a>` : '');
+  const wa = (text) => (c.whatsappUrl ? `<a href="${esc(c.whatsappUrl)}" target="_blank" rel="noopener">${text}</a>` : '');
   const privacyEmail = c.privacyEmail || c.supportEmail;
+  const mailLink = (text) => (c.supportEmail ? `<a href="mailto:${esc(c.supportEmail)}">${text}</a>` : '');
+  // The ways to reach Blynk that are filled in: "email", "phone or email", "phone, WhatsApp or email".
+  const routeList = [tel('phone'), wa('WhatsApp'), mailLink('email')].filter(Boolean);
+  const routes = routeList.length > 1 ? `${routeList.slice(0, -1).join(', ')} or ${routeList.at(-1)}` : routeList[0] || '';
   return {
     business: esc(c.businessName),
     regClause: (c.businessRegistrationNo ? `, business registration no. <strong>${esc(c.businessRegistrationNo)}</strong>` : '')
       + (c.registeredAddress ? `, of <strong>${esc(c.registeredAddress)}</strong>` : ''),
+    // Empty (and a {{?...}} line is dropped) when no phone / WhatsApp is set.
     callUs: tel('Call us'),
     whatsappUs: wa('WhatsApp us'),
-    phoneLink: tel('phone'),
-    whatsappLink: wa('WhatsApp'),
+    phoneWhatsappUs: [tel('Call us'), wa('WhatsApp us')].filter(Boolean).join(' or '),
+    // The "Need help?" line of the footer: the support email, plus Call us / WhatsApp us when they are set.
+    helpLinks: [tel('Call us'), wa('WhatsApp us'), mailLink('Email us')].filter(Boolean).join('\n        '),
+    contactRoutes: routes,
+    contactUs: `${routes} us`,
     // The hours come from the API Admin / Ops control (store-hours.js fills the data-hours spans in; owner,
     // 2026-10-20: no typed-in opening hours). The words written here only show if that script cannot run.
     hours: '<span data-hours="dash">8 AM – 9 PM</span>, <span data-hours="days-lower">every day</span>',
@@ -116,7 +125,7 @@ function tokens(c) {
     privacyEmail: mail(privacyEmail),
     registeredAddress: esc(c.registeredAddress || ''),
     dataProtectionContact: c.dataProtectionContact ? `<strong>${esc(c.dataProtectionContact)}</strong>` : '',
-    privacyRequestsTo: privacyEmail ? `<strong>${mail(privacyEmail)}</strong>` : `us by ${tel('phone')} or ${wa('WhatsApp')}`,
+    privacyRequestsTo: privacyEmail ? `<strong>${mail(privacyEmail)}</strong>` : `us by ${routes}`,
   };
 }
 
@@ -247,8 +256,7 @@ ${main}
         <a href="/#about">About</a>
         <a href="/seller"${current === 'seller' ? ' aria-current="page"' : ''}>Become a seller</a>
       </nav>
-      <p class="footer__help">Need help? ${tok.callUs}
-        ${tok.whatsappUs}</p>
+      <p class="footer__help">Need help? ${tok.helpLinks}</p>
       <small>© ${c.lastUpdated.slice(0, 4)} Blynk · Dharga Town, Aluthgama &amp; Beruwala, Sri Lanka</small>
       <nav class="footer__legal" aria-label="Legal">
         ${[LEGAL_PAGES[1], LEGAL_PAGES[0], LEGAL_PAGES[2], LEGAL_PAGES[3]].map(footerLink).join('\n        ')}

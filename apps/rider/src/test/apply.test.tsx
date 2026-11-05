@@ -221,9 +221,9 @@ describe('apply to deliver', () => {
     await user.type(screen.getByLabelText('6-digit code'), '123456');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('heading', { name: 'Waiting for approval' })).toBeInTheDocument();
-    // (owner, 2026-10-11) uploads off by default: the WhatsApp line instead of the document cards.
+    // (owner, 2026-10-11) uploads off by default: the 'Blynk will contact you' note instead of the document cards.
     expect(screen.queryByRole('heading', { name: 'Your documents' })).toBeNull();
-    expect(screen.getByRole('note')).toHaveTextContent('WhatsApp +94 71 710 7374');
+    expect(screen.getByRole('note')).toHaveTextContent('Documents are not uploaded in the app. Blynk will contact you to collect them.');
   });
 
   it('a pending rider asking for a code goes straight to the waiting screen', async () => {
@@ -236,17 +236,19 @@ describe('apply to deliver', () => {
     expect(await screen.findByRole('heading', { name: 'Waiting for approval' })).toBeInTheDocument();
   });
 
-  it('uploads off: the details step says to send documents on WhatsApp and sends the application', async () => {
+  it('uploads off: the details step says Blynk will contact the applicant for the documents and sends the application', async () => {
     const user = userEvent.setup();
     const { api } = renderApply();
     await toDetails(user);
     expect(screen.queryByRole('button', { name: 'Next: your documents' })).toBeNull();
-    expect(screen.getByRole('note')).toHaveTextContent('Send your documents to Blynk on WhatsApp +94 71 710 7374');
-    expect(screen.getByRole('link', { name: 'Open WhatsApp' })).toHaveAttribute('href', 'https://wa.me/94717107374');
+    expect(screen.getByRole('note')).toHaveTextContent('Documents are not uploaded in the app. Blynk will contact you to collect them.');
+    // owner, 2026-11-05: no Blynk number and no WhatsApp link or button
+    expect(screen.getByRole('note')).not.toHaveTextContent(/whatsapp|\d{3}/i);
+    expect(screen.queryByRole('link', { name: /whatsapp/i })).toBeNull();
     await fillDetails(user);
     await send(user);
     expect(await screen.findByRole('heading', { name: 'Application sent' })).toBeInTheDocument();
-    expect(screen.getByRole('note')).toHaveTextContent('WhatsApp +94 71 710 7374');
+    expect(screen.getByRole('note')).toHaveTextContent('Documents are not uploaded in the app. Blynk will contact you to collect them.');
     expect(api.find('POST', '/riders/applications/submit')).toHaveLength(1);
   });
 

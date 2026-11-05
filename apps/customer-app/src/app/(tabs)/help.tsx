@@ -18,13 +18,12 @@ import { C, F } from '@/lib/theme';
 
 /*
  * Help (Flutter's HelpScreen): the questions customers ask most, with the live delivery hours,
- * then "Call us", "WhatsApp us" (the store's support number) and "Send feedback". The number
- * itself is never shown (owner 2026-10-15: "just 'Call us' is enough"): the rows dial and open
- * WhatsApp; where neither can open, the number is copied to paste into the phone app.
+ * then "Email us" (the published support address, mailto:) and "Send feedback". Blynk gives no phone
+ * or WhatsApp number (owner, 2026-11-05: "we don't need to give a number"), so there is no Call or
+ * WhatsApp row; where no mail app can open, the support address is copied.
  *
  * On top, the yellow hero (src/components/TabHero.tsx) with the store's open-now chip; the
- * questions and contact rows slide in one after another on the first visit, and Call / WhatsApp
- * carry a pulsing green dot while the store is open.
+ * questions and contact rows slide in one after another on the first visit.
  */
 export default function Help() {
   const insets = useSafeAreaInsets();
@@ -36,7 +35,6 @@ export default function Help() {
   const faqs = faqsWithHours(hoursLabel);
   const [open, setOpen] = useState<number | null>(null);
   const status = openStatus(store);
-  const live = status?.open === true;
 
   const contact = async (url: string) => {
     try {
@@ -44,18 +42,18 @@ export default function Help() {
         const w = (globalThis as { open?: (u: string, t?: string) => unknown }).open;
         if (w) { w(url, url.startsWith('http') ? '_blank' : '_self'); return; }
       } else {
-        // openURL itself, not canOpenURL: on Android 11+ canOpenURL says false for tel: / https: links
+        // openURL itself, not canOpenURL: on Android 11+ canOpenURL says false for mailto: / https: links
         // unless the manifest declares <queries>, though openURL opens them fine
         await Linking.openURL(url);
         return;
       }
     } catch { /* fall through to copying */ }
     if (Platform.OS !== 'web') {
-      // no dialler or browser took it: share the number so it is not lost (no clipboard module in the app)
-      try { await Share.share({ message: SUPPORT.phone }); } catch { /* ignore */ }
+      // no mail app took it: share the address so it is not lost (no clipboard module in the app)
+      try { await Share.share({ message: SUPPORT.email }); } catch { /* ignore */ }
       return;
     }
-    try { await (globalThis as { navigator?: Navigator }).navigator?.clipboard?.writeText(SUPPORT.phone); } catch { /* ignore */ }
+    try { await (globalThis as { navigator?: Navigator }).navigator?.clipboard?.writeText(SUPPORT.email); } catch { /* ignore */ }
     showNotice(HELP_HERO.copied);
   };
 
@@ -79,8 +77,7 @@ export default function Help() {
         ))}
 
         <Card style={{ marginTop: 8 }} tone={C.greenTint} stagger={faqs.length}>
-          <Row icon="📞" title={HELP_HERO.call} live={live} liveLabel={HELP_HERO.liveHint} onPress={() => contact(`tel:${SUPPORT.phone}`)} />
-          <Row icon="💬" title={HELP_HERO.whatsApp} live={live} liveLabel={HELP_HERO.liveHint} onPress={() => contact(SUPPORT.whatsAppUrl)} />
+          <Row icon="✉️" title={HELP_HERO.emailUs} onPress={() => contact(`mailto:${SUPPORT.email}`)} />
           <Row icon="✍️" title={HELP_HERO.feedback} onPress={() => router.push(signedIn ? '/feedback' : '/login')} last />
         </Card>
 

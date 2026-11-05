@@ -194,7 +194,7 @@ describe('Rider onboarding by staff (owner, 2026-10-11)', () => {
       expect(got.body.data.settings).toMatchObject({ applicant_uploads_enabled: false, require_documents_for_approval: true });
       const pub = await request(app).get('/api/v1/riders/applications/settings');
       expect(pub.status).toBe(200);
-      expect(pub.body.data).toEqual({ applicant_uploads_enabled: false, whatsapp: '+94 71 710 7374' });
+      expect(pub.body.data).toEqual({ applicant_uploads_enabled: false });
     });
 
     it('a switch is saved alone (documents kept), validated, ADMIN/OPERATIONS only, audited', async () => {
@@ -247,7 +247,7 @@ describe('Rider onboarding by staff (owner, 2026-10-11)', () => {
         .attach('file', PLAIN_JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
       expect(up.status).toBe(403);
       expect(up.body.error.code).toBe('APPLICANT_UPLOADS_OFF');
-      expect(up.body.error.message).toContain('+94 71 710 7374');
+      expect(up.body.error.message).toBe('Documents are not uploaded in the app. Blynk will contact you to collect them.');
       const exp = await request(app).patch('/api/v1/riders/applications/documents/INSURANCE').set(auth(token)).send({ expiry_date: inFuture(100) });
       expect(exp.status).toBe(403);
 

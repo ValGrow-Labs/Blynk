@@ -13,7 +13,7 @@ import type { VehicleType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { CodeField, PendingNotice, RejectedNotice } from '../components/ApplicationNotice';
 import { DocumentCard } from '../components/DocumentCard';
-import { WhatsAppDocs } from '../components/WhatsAppDocs';
+import { DocumentsNote } from '../components/DocumentsNote';
 import { MESSAGES, errorCode, errorMessage } from '../lib/errors';
 import {
   CODE_SPENT,
@@ -96,9 +96,9 @@ type Step = 'phone' | 'code' | 'details' | 'documents' | 'status' | 'sent' | 'pe
  * never sees this page's status / documents screen - the API refuses the
  * applicant session (ALREADY_APPROVED) without spending the code, and the
  * same code signs them straight in to their deliveries.
- * "They will send docs on WhatsApp": while "Riders upload documents in the
- * app" is off (the default) there is no Documents step - step 2 sends the
- * application, and the rider is asked to send the documents on WhatsApp.
+ * While "Riders upload documents in the app" is off (the default) there is no
+ * Documents step - step 2 sends the application, and a note says Blynk will
+ * contact the rider to collect the documents.
  */
 export function Apply() {
   const { status, requestOtp, verifyOtp } = useAuth();
@@ -408,7 +408,7 @@ export function Apply() {
         <p className="apply-status__text" role="status">
           Ops will review it; you'll get an SMS when you're approved.
         </p>
-        {uploadsOn ? null : <WhatsAppDocs />}
+        {uploadsOn ? null : <DocumentsNote />}
         <div className="login__form">
           <button type="button" className="primary" onClick={() => toSignIn()}>
             Back to sign in
@@ -429,7 +429,7 @@ export function Apply() {
     const rejectedDocs = state.documents.filter((d) => d.status === 'REJECTED');
     const docs = !uploadsOn ? (
       <>
-        <WhatsAppDocs />
+        <DocumentsNote />
         {errorLine}
       </>
     ) : (
@@ -639,7 +639,7 @@ export function Apply() {
               />
             </label>
 
-            {uploadsOn ? null : <WhatsAppDocs />}
+            {uploadsOn ? null : <DocumentsNote />}
 
             <button type="submit" className="primary" disabled={busy}>
               {uploadsOn ? 'Next: your documents' : busy ? 'Sending application…' : 'Send application'}

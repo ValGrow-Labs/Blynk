@@ -477,11 +477,10 @@ const docNotFound = () => new AppError('Document not found.', 404, 'DOCUMENT_NOT
 /** (owner, 2026-10-11) an approved rider signs in; they never use the application again. */
 export const alreadyApproved = () =>
   new AppError('This number is already an approved rider. Sign in instead.', 409, 'ALREADY_APPROVED');
-/** (owner, 2026-10-11) "they will send docs on WhatsApp". */
-export const BLYNK_WHATSAPP = '+94 71 710 7374';
+/** Owner, 2026-11-05: Blynk gives no phone or WhatsApp number, so the message only says Blynk makes the contact. */
 export const applicantUploadsOff = () =>
   new AppError(
-    `Documents are not uploaded in the app. Send them to Blynk on WhatsApp ${BLYNK_WHATSAPP}.`,
+    'Documents are not uploaded in the app. Blynk will contact you to collect them.',
     403,
     'APPLICANT_UPLOADS_OFF'
   );
@@ -543,7 +542,7 @@ export class RiderDocumentService {
     return {
       phone: publicPhone(phone),
       application: owner.application,
-      // (owner, 2026-10-11) off: no Documents step; send them on WhatsApp.
+      // (owner, 2026-10-11) off: no Documents step; Blynk contacts the applicant to collect them.
       uploads_enabled: settings.applicant_uploads_enabled,
       document_types: settings.documents
         .filter((d) => d.enabled)
@@ -766,7 +765,7 @@ export class RiderDocumentService {
     }
     const settings = await riderDocumentSettings.read();
     // (owner, 2026-10-11) uploads off: the application is sent with details
-    // only; the documents come on WhatsApp and staff upload them.
+    // only; Blynk collects the documents from the applicant and staff upload them.
     if (!settings.applicant_uploads_enabled) return replaced;
     const rows = await riderDocuments(trx, [riderId]);
     const missing = missingForSubmission(settings, vehicle, rows);
@@ -1239,7 +1238,7 @@ riderApplicantDocumentsRouter.post(
 /**
  * Public (owner, 2026-10-11): whether applicants upload documents in the app.
  * The Rider app reads it to show the Documents step / "See my documents", or
- * the "send your documents on WhatsApp" line instead.
+ * the "Blynk will contact you to collect them" line instead.
  */
 riderApplicantDocumentsRouter.get(
   '/applications/settings',
@@ -1248,7 +1247,7 @@ riderApplicantDocumentsRouter.get(
     res.set('Cache-Control', 'no-store');
     res.status(200).json({
       success: true,
-      data: { applicant_uploads_enabled: settings.applicant_uploads_enabled, whatsapp: BLYNK_WHATSAPP },
+      data: { applicant_uploads_enabled: settings.applicant_uploads_enabled },
     });
   })
 );

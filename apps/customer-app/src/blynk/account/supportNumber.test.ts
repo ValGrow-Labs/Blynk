@@ -6,9 +6,10 @@ import { SUPPORT } from './support';
 import { HELP_HERO } from '../ui/strings';
 
 /*
- * Owner 2026-10-15: the support number is never shown ("just 'Call us' is enough"). It lives only
- * in support.ts for the tel: / wa.me links and the clipboard; no screen, notice or error may
- * print SUPPORT.phoneLabel or the number itself.
+ * Owner 2026-11-05: Blynk gives no phone or WhatsApp number anywhere ("the current Blynk WhatsApp
+ * number is not working ... we don't need to give a number"). Customers reach support by email
+ * (SUPPORT.email), so no app code may carry the old number or a Call / WhatsApp link to Blynk.
+ * (A rider's number on an order, tel: links to the rider, is another thing.)
  */
 const SRC = fileURLToPath(new URL('../../', import.meta.url));
 const files = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
@@ -18,25 +19,30 @@ const files = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
 });
 const rel = (f: string) => relative(SRC, f).split(sep).join('/');
 
-test('no app code uses SUPPORT.phoneLabel', () => {
-  // SUPPORT.phoneLabel, or phoneLabel taken out of SUPPORT (checkout's own "Receiver's mobile" label is another thing)
-  const uses = /SUPPORT\s*\??\.\s*phoneLabel|SUPPORT\s*\[|\bphoneLabel\b[^;]*\}\s*=\s*SUPPORT/;
-  const hits = files(SRC).filter((f) => uses.test(readFileSync(f, 'utf8'))).map(rel);
+test('support is an email address and there is no phone or WhatsApp in SUPPORT', () => {
+  expect(SUPPORT.email).toBe('support@blynk.lk');
+  expect(Object.keys(SUPPORT).filter((k) => /phone|whats/i.test(k))).toEqual([]);
+});
+
+test('the old Blynk number and a Blynk wa.me link are written nowhere in the app code', () => {
+  const old = ['717107374', '71 710 7374', '071 710 7374'];
+  const hits = files(SRC).filter((f) => {
+    const t = readFileSync(f, 'utf8');
+    return old.some((n) => t.includes(n)) || /wa\.me|api\.whatsapp\.com/.test(t);
+  }).map(rel);
   expect(hits).toEqual([]);
 }, 30_000);
 
-test('the number is written nowhere but support.ts (links only)', () => {
-  const digits = SUPPORT.phone.replace(/\D/g, '').slice(-7); // 7107374
-  const spaced = SUPPORT.phoneLabel.slice(-8); // "710 7374"
-  const hits = files(SRC).filter((f) => {
-    const t = readFileSync(f, 'utf8');
-    return t.includes(digits) || t.includes(spaced);
-  }).map(rel);
-  expect(hits).toEqual(['blynk/account/support.ts']);
-}, 30_000);
+test('Help has one Email us row and no Call us / WhatsApp us row', () => {
+  expect(HELP_HERO.emailUs).toBe('Email us');
+  expect(HELP_HERO.copied).toBe('Email address copied');
+  expect(HELP_HERO).not.toHaveProperty('call');
+  expect(HELP_HERO).not.toHaveProperty('whatsApp');
+  for (const s of [HELP_HERO.copied, HELP_HERO.emailUs]) expect(s).not.toMatch(/\d{3}/);
+});
 
-test('the copied notice and the contact rows carry no number', () => {
-  for (const s of [HELP_HERO.copied, HELP_HERO.call, HELP_HERO.whatsApp]) expect(s).not.toMatch(/\d{3}/);
-  expect(HELP_HERO.copied).toBe('Number copied');
-  expect(HELP_HERO.call).toBe('Call us');
+test('the Help screen links mailto: the support address and never tel: / wa.me', () => {
+  const help = readFileSync(join(SRC, 'app', '(tabs)', 'help.tsx'), 'utf8');
+  expect(help).toContain('mailto:${SUPPORT.email}');
+  expect(help).not.toMatch(/tel:|wa\.me|SUPPORT\.phone|whatsAppUrl/);
 });

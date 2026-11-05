@@ -126,7 +126,7 @@ describe('Settings -> Rider documents: the two switches (owner, 2026-10-11)', ()
     const needDocs = screen.getByRole('switch', { name: 'Documents needed before approval' });
     expect(uploads).toHaveAttribute('aria-checked', 'false');
     expect(needDocs).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByText(/send their documents to Blynk on WhatsApp \+94 71 710 7374/)).toBeInTheDocument();
+    expect(screen.getByText(/Applicants send their details only and Blynk contacts them to collect the documents/)).toBeInTheDocument();
     expect(screen.getByText(/Documents you upload count as verified at once/)).toBeInTheDocument();
 
     await user.click(uploads);

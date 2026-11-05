@@ -220,7 +220,7 @@ Data types. "Collected" = sent off the phone to Blynk. "Shared" = sent to a thir
 | App activity > **App interactions** | Yes | **Yes** (Analytics, Advertising or marketing) | Required | Analytics | Page views, add to cart, checkout events via Google Tag Manager |
 | App activity > **In-app search history** | Yes | **Yes** (Analytics, Advertising or marketing) | Optional | App functionality, Analytics | Search terms (the GA4 `search` event) |
 | App activity > **Other user-generated content** | Yes | No | Optional | App functionality | Product ratings and reviews, feedback, product requests ("Ask us") |
-| Messages > **Other in-app messages** | No | No | | | No customer-to-customer messaging (support is by phone/WhatsApp outside the app) |
+| Messages > **Other in-app messages** | No | No | | | No customer-to-customer messaging (support is by email, support@blynk.lk, outside the app) |
 | Device or other IDs | Yes | **Yes** (Analytics, Advertising or marketing) | Required | App functionality, Analytics | Firebase push token (for order notifications); cookie IDs used by GA4, Google Ads and Meta |
 | App info and performance (crash logs, diagnostics) | No | No | | | The shop sends no crash reports |
 | Photos, videos, audio, files, contacts, calendar, web browsing | No | No | | | |
