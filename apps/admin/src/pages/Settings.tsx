@@ -17,6 +17,7 @@ import type {
   SmsLanguageCode,
 } from '../api/types';
 import { BasePerKmEditor, type BasePerKmDrafts, type BasePerKmErrors } from '../components/BasePerKmEditor';
+import { BicycleDeliveryCard } from '../components/BicycleDeliveryCard';
 import { DeliveryRadiusCard } from '../components/DeliveryRadiusCard';
 import { DeliveryZonesCard } from '../components/DeliveryZonesCard';
 import { SmallOrderFeeCard } from '../components/SmallOrderFeeCard';
@@ -189,6 +190,7 @@ const SETTINGS_CATEGORIES: SettingsCategory[] = [
       'small-order-fee',
       'delivery-radius',
       'delivery-zones',
+      'bicycle-delivery',
       'rider-auto-assign',
     ],
     cards: [
@@ -200,6 +202,8 @@ const SETTINGS_CATEGORIES: SettingsCategory[] = [
       { key: 'delivery-radius', render: () => <DeliveryRadiusCard /> },
       // Extra delivery areas (2026-11-01): Beruwala etc. as separate circles.
       { key: 'delivery-zones', render: () => <DeliveryZonesCard /> },
+      // Bicycle delivery (2026-11-05): a cheaper option for short flat trips; off by default; needs migration 067.
+      { key: 'bicycle-delivery', render: () => <BicycleDeliveryCard /> },
       { key: 'rider-trips', render: () => <RiderTripsPanel /> },
       // Automatic rider assignment (owner, 2026-10-25): off by default.
       { key: 'rider-auto-assign', render: () => <RiderAutoAssignCard /> },

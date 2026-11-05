@@ -6,6 +6,7 @@ import { PageHeader } from '../components/Layout';
 import { AssignRiderDialog, MarkDeliveredDialog, NoteDialog, needsNote } from '../components/OrderDialogs';
 import { OrderPanel } from '../components/OrderPanel';
 import { RepeatTag } from '../components/OrderRatingTip';
+import { BicycleTag } from '../components/OrderDeliveryMethod';
 import { ConfirmDialog, Spinner } from '../components/ui';
 import {
   ACTION_LABEL,
@@ -270,6 +271,7 @@ export function Orders() {
           busy={busyId === openOrder.id}
           onAction={(action) => act(openOrder, action)}
           onMarkItemUnavailable={(item) => setPendingItem({ order: openOrder, item })}
+          onChanged={() => void load()}
           onClose={() => setOpenId(null)}
         />
       ) : null}
@@ -370,6 +372,7 @@ function OrderRow({
           ) : null}
           {payment ? <span className={`pay-chip pay-chip--${payment.tone}`}>{payment.text}</span> : null}
           <RepeatTag basketId={order.repeat_basket_id} />
+          <BicycleTag method={order.delivery_method} />
           {walletUsed(order) > 0 ? (
             <span className="pay-chip wallet-chip">{paidByWalletOnly(order) ? 'Paid by wallet' : `Wallet ${formatMoney(walletUsed(order))}`}</span>
           ) : null}

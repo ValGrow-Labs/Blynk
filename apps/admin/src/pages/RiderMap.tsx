@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import { orders as ordersApi, riders as ridersApi } from '../api/resources';
 import type { LiveRider, LiveRiderMap, LiveWaitingOrder } from '../api/types';
 import { PageHeader } from '../components/Layout';
+import { BicycleTag } from '../components/OrderDeliveryMethod';
 import { RiderMapView, type MapSelection } from '../components/RiderMapView';
 import { Spinner } from '../components/ui';
 import { errorMessage } from '../lib/apiErrors';
@@ -186,7 +187,10 @@ export function RiderMap() {
                       onClick={() => select({ kind: 'order', id: o.order_id })}
                     >
                       <span className="rmap__row-main">
-                        <span className="rmap__row-title">Order {shortNumber(o.order_number)}</span>
+                        <span className="rmap__row-title">
+                          Order {shortNumber(o.order_number)}
+                          <BicycleTag method={o.delivery_method} />
+                        </span>
                         <span className="rmap__row-meta">
                           {o.address || 'No address'} · waiting {waitText(o.waiting_seconds)}
                           {o.dropoff ? '' : ' · no map pin'}
@@ -361,7 +365,10 @@ function RiderSheet({
           {options.map(({ order, km }) => (
             <li key={order.order_id} className="rmap__row">
               <span className="rmap__row-main">
-                <span className="rmap__row-title">Order {shortNumber(order.order_number)}</span>
+                <span className="rmap__row-title">
+                  Order {shortNumber(order.order_number)}
+                  <BicycleTag method={order.delivery_method} />
+                </span>
                 <span className="rmap__row-meta">
                   {order.address || 'No address'} · waiting {waitText(order.waiting_seconds)}
                   {km !== null ? ` · ${kmText(km)} from ${riderName(rider).split(' ')[0]}` : ''}
@@ -405,7 +412,10 @@ function OrderSheet({
     <section className="rmap__sheet" role="dialog" aria-label={`Order ${shortNumber(order.order_number)}`}>
       <div className="rmap__sheet-head">
         <div>
-          <h2 className="rmap__sheet-title">Order {shortNumber(order.order_number)}</h2>
+          <h2 className="rmap__sheet-title">
+            Order {shortNumber(order.order_number)}
+            <BicycleTag method={order.delivery_method} />
+          </h2>
           <p className="rmap__row-meta">
             Waiting {waitText(order.waiting_seconds)} for a rider · {order.address || 'No address'}
           </p>
@@ -421,7 +431,7 @@ function OrderSheet({
       </p>
       <h3 className="section-label">Riders</h3>
       {options.length === 0 ? (
-        <p className="quiet">No active riders.</p>
+        <p className="quiet">{order.delivery_method === 'BICYCLE' ? 'No active bicycle riders.' : 'No active riders.'}</p>
       ) : (
         <ul className="rmap__list">
           {options.map(({ rider, tone, km, canTake }) => (

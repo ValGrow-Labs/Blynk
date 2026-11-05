@@ -9,6 +9,7 @@ import { PaymentStatus } from '../components/PaymentStatus';
 import { refundNeeded } from '../lib/payments';
 import { OrderWalletRefund } from '../components/Wallet';
 import { OrderFreeDelivery } from '../components/OrderFreeDelivery';
+import { BicycleTag, OrderSwitchToMotorbike } from '../components/OrderDeliveryMethod';
 import { cashToCollectText, mayRefundToWallet, walletPaidLine } from '../lib/wallet';
 import {
   ACTION_LABEL,
@@ -216,6 +217,7 @@ export function OrderDetail() {
               Repeat
             </span>
           ) : null}
+          <BicycleTag method={detail.delivery_method} />
         </div>
         <Link className="button button--ghost button--sm" to={`/orders/${detail.id}/slip`}>
           Print packing slip
@@ -255,6 +257,8 @@ export function OrderDetail() {
 
       {/* Make delivery free (owner, 2026-10-21): open cash-on-delivery orders. */}
       <OrderFreeDelivery order={detail} onChanged={() => void load()} />
+      {/* Switch a bicycle order to motorbike (2026-11-05): before pick-up. */}
+      <OrderSwitchToMotorbike order={detail} onChanged={() => void load()} />
 
       <section className="order-detail__section" aria-label="Customer">
         <h2 className="order-detail__label">Customer</h2>

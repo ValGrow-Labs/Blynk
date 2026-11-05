@@ -84,9 +84,15 @@ export interface RiderOrderOption {
   canTake: boolean;
 }
 
+/** A BICYCLE order goes only to a rider who delivers by bicycle; any rider can take a motorbike order. */
+export const canRideFor = (order: Pick<LiveWaitingOrder, 'delivery_method'>, rider: Pick<LiveRider, 'vehicle_type'>) =>
+  order.delivery_method !== 'BICYCLE' || rider.vehicle_type === 'BICYCLE';
+
 /** Riders for one order, those who can take it first, then the nearest. */
 export function ridersForOrder(order: LiveWaitingOrder, riders: LiveRider[]): RiderOrderOption[] {
   return riders
+    // A bicycle order (2026-11-05) can only be given to a bicycle rider.
+    .filter((rider) => canRideFor(order, rider))
     .map((rider) => {
       const at = riderPoint(rider);
       return {
@@ -108,6 +114,7 @@ export function ridersForOrder(order: LiveWaitingOrder, riders: LiveRider[]): Ri
 export function ordersForRider(rider: LiveRider, orders: LiveWaitingOrder[]): { order: LiveWaitingOrder; km: number | null }[] {
   const at = riderPoint(rider);
   return orders
+    .filter((order) => canRideFor(order, rider))
     .map((order) => ({ order, km: at && order.dropoff ? kmBetween(at, order.dropoff) : null }))
     .sort((a, b) => (a.km ?? Number.POSITIVE_INFINITY) - (b.km ?? Number.POSITIVE_INFINITY) || b.order.waiting_seconds - a.order.waiting_seconds);
 }

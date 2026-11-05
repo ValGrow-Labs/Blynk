@@ -59,6 +59,8 @@ import type {
   DeliveryFeeInput,
   DeliveryFeeSetting,
   DeliveryRadiusSetting,
+  BicycleDeliveryInput,
+  BicycleDeliverySetting,
   DeliveryZone,
   DeliveryZonesSetting,
   CartRulesSetting,
@@ -493,6 +495,12 @@ export const settings = {
   }) =>
     apiRequest<CheckoutSettings>('/admin/settings/checkout', { method: 'PATCH', body }),
 
+  /** Bicycle delivery (2026-11-05): switch, distance, customer fee and rider pay. PUT replaces each section sent whole. */
+  getBicycleDelivery: () => apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery'),
+
+  setBicycleDelivery: (body: BicycleDeliveryInput) =>
+    apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery', { method: 'PUT', body: { ...body } }),
+
   /** Delivery radius (owner, 2026-10-25): the active store's service radius in km. */
   getDeliveryRadius: () => apiRequest<DeliveryRadiusSetting>('/admin/settings/delivery-radius'),
 
@@ -802,6 +810,17 @@ export const orders = {
       body: { item_id: itemId, item_status: 'UNAVAILABLE' },
     }),
 
+  /**
+   * "Switch to motorbike" (2026-11-05): ADMIN and OPERATIONS, a BICYCLE order that has not been picked up
+   * (PLACED, ITEM_UNAVAILABLE, PACKED) and is cash on delivery. The API works the motorbike fee and total out
+   * again, releases an assigned bicycle rider and texts the customer. Refusals are 409s with a plain message.
+   */
+  switchToMotorbike: (id: string) =>
+    apiRequest<{ order: OrderDetail }>(`/admin/orders/${id}/delivery-method`, {
+      method: 'POST',
+      body: { method: 'MOTORBIKE' },
+    }).then((d) => d.order),
+
   assignRider: (id: string, riderId: string, confirmFarBatch = false) =>
     apiRequest<{ delivery: unknown }>(`/admin/orders/${id}/assign-rider`, {
       method: 'POST',
@@ -812,7 +831,10 @@ export const orders = {
 
 export const riders = {
   /** Active riders only (the API filters); no availability flag exists. */
-  listActive: () => apiRequest<{ riders: RiderOption[] }>('/admin/riders').then((d) => d.riders),
+  listActive: (orderId?: string) =>
+    apiRequest<{ riders: RiderOption[] }>(
+      orderId ? `/admin/riders?order_id=${encodeURIComponent(orderId)}` : '/admin/riders'
+    ).then((d) => d.riders),
   /**
    * Every rider profile, inactive ones too (each row's `is_active` says
    * which) - the cash hand-in picker, since a rider switched off may still

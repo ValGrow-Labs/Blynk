@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { riders as ridersApi } from '../api/resources';
-import type { RiderSuggestions } from '../api/types';
+import type { DeliveryMethod, RiderSuggestions } from '../api/types';
 import { formatMoney, orderErrorMessage, shortNumber, type FarBatchRefusal, type OrderAction } from '../lib/orders';
 import { DeliveryCodeField, isCompleteDeliveryCode } from './DeliveryCodeField';
+import { BicycleTag } from './OrderDeliveryMethod';
 import { distanceText, fromRoster, loadText, riderName, tripText } from '../lib/riderSuggestions';
 import { PAID_BY_WALLET, paidByWallet } from '../lib/wallet';
 
@@ -27,6 +28,8 @@ interface OrderSummary {
   total_amount: number;
   /** Blynk Wallet (docs/api/wallet.md): already taken off total_amount. */
   wallet_amount_used?: number;
+  /** Bicycle delivery (2026-11-05): a BICYCLE order lists only bicycle riders. */
+  delivery_method?: DeliveryMethod;
 }
 
 /**
@@ -39,7 +42,9 @@ interface OrderSummary {
  * join and how far apart the two drop-offs are; a far one needs a
  * deliberate "Add to trip anyway". A full trip cannot be picked. If the
  * suggestions cannot be loaded, the plain roster (`GET /admin/riders`) is
- * offered instead so dispatch never stops.
+ * offered instead so dispatch never stops. A bicycle order (2026-11-05) lists only
+ * bicycle riders: the API filters both lists, and the plain roster is asked with
+ * `?order_id=` for the same reason.
  */
 export function AssignRiderDialog({
   order,
@@ -68,7 +73,7 @@ export function AssignRiderDialog({
       .then((data) => !cancelled && setList({ data, ranked: true }))
       .catch(() =>
         ridersApi
-          .listActive()
+          .listActive(order.id)
           .then((roster) => !cancelled && setList({ data: fromRoster(roster), ranked: false }))
           .catch((err) => !cancelled && setError(orderErrorMessage(err)))
       );
@@ -91,8 +96,11 @@ export function AssignRiderDialog({
     <div className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="modal__panel">
         <h2 className="modal__title" id={titleId}>
-          Assign a rider to #{shortNumber(order.order_number)}
+          Assign a rider to #{shortNumber(order.order_number)} <BicycleTag method={order.delivery_method} />
         </h2>
+        {order.delivery_method === 'BICYCLE' ? (
+          <p className="modal__message">Bicycle delivery: only riders who deliver by bicycle are listed.</p>
+        ) : null}
         <p className="modal__message">
           {order.delivery_address_line1}, {order.delivery_city} ·{' '}
           {paidByWallet(order) ? PAID_BY_WALLET : `${formatMoney(order.total_amount)} cash on delivery`}

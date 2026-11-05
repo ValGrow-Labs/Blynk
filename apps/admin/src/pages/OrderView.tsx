@@ -92,5 +92,6 @@ function asBoardOrder(d: OrderDetail): BoardOrder {
     payment_method: d.payment_method,
     payment_status: d.payment_status,
     repeat_basket_id: d.repeat_basket_id ?? null,
+    delivery_method: d.delivery_method,
   };
 }

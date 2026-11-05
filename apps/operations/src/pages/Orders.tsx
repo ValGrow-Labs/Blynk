@@ -5,6 +5,7 @@ import type { BoardOrder } from '../api/types';
 import { PageHeader } from '../components/Layout';
 import { PaymentStatus } from '../components/PaymentStatus';
 import { AssignRiderDialog, NoteDialog, needsNote } from '../components/OrderDialogs';
+import { BicycleTag } from '../components/OrderDeliveryMethod';
 import {
   ACTION_LABEL,
   LANES,
@@ -424,6 +425,8 @@ function OrderRow({
           {exception ? <span className="ticket__flag">{STATUS_LABEL[order.order_status]}</span> : null}
           {/* Placed by a repeat basket (2026-10-24). */}
           {order.repeat_basket_id ? <span className="repeat-tag">Repeat</span> : null}
+          {/* Bicycle delivery (2026-11-05): only a bicycle order is tagged. */}
+          <BicycleTag method={order.delivery_method} />
           <span className="ticket__age">{formatAge(order.placed_at)}</span>
         </span>
         <span className="ticket__where">

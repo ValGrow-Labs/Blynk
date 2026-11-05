@@ -3,6 +3,7 @@ import { riders as ridersApi } from '../api/resources';
 import type { BoardOrder, RiderSuggestions } from '../api/types';
 import { formatMoney, orderErrorMessage, shortNumber, type OrderAction } from '../lib/orders';
 import { Spinner } from './ui';
+import { BicycleTag } from './OrderDeliveryMethod';
 import { distanceText, fromRoster, loadText, riderName, tripText } from '../lib/riderSuggestions';
 
 /**
@@ -12,7 +13,8 @@ import { distanceText, fromRoster, loadText, riderName, tripText } from '../lib/
  * away", or "location unknown" past 15 minutes). The best is marked
  * "Suggested" but never chosen for the operator. A rider already carrying an
  * order shows the trip it would join; a far one needs "Add to trip anyway";
- * a full trip cannot be picked. Without suggestions, the plain roster.
+ * a full trip cannot be picked. Without suggestions, the plain roster. A bicycle order (2026-11-05) lists only
+ * bicycle riders: the API filters both lists, and the plain roster is asked with ?order_id= for the same reason.
  */
 export function AssignRiderDialog({
   order,
@@ -37,7 +39,7 @@ export function AssignRiderDialog({
       .then((data) => !cancelled && setList({ data, ranked: true }))
       .catch(() =>
         ridersApi
-          .listActive()
+          .listActive(order.id)
           .then((roster) => !cancelled && setList({ data: fromRoster(roster), ranked: false }))
           .catch((err) => !cancelled && setError(orderErrorMessage(err)))
       );
@@ -57,7 +59,11 @@ export function AssignRiderDialog({
       <div className="modal__panel">
         <h2 className="modal__title" id={titleId}>
           Assign a rider to #{shortNumber(order.order_number)}
+          <BicycleTag method={order.delivery_method} />
         </h2>
+        {order.delivery_method === 'BICYCLE' ? (
+          <p className="modal__message">Bicycle delivery: only riders who deliver by bicycle are listed.</p>
+        ) : null}
         <p className="modal__message">
           {order.delivery_address_line1}, {order.delivery_city} · {formatMoney(order.total_amount)} cash on delivery
         </p>

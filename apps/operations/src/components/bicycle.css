@@ -1,0 +1,18 @@
+/* Bicycle delivery (2026-11-05): the order badge and the worked example line. */
+
+.bicycle-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--green, #1f7a4d);
+  color: var(--green, #1f7a4d);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bicycle-example {
+  margin: 4px 0;
+  font-weight: 700;
+}

@@ -112,7 +112,12 @@ export interface BoardOrder {
   payment_expires_at?: string | null;
   /** Repeat baskets (migration 054): the basket this order came from; shows a "Repeat" tag. */
   repeat_basket_id?: string | null;
+  /** Bicycle delivery (migration 067): absent on an older API = MOTORBIKE. */
+  delivery_method?: DeliveryMethod;
 }
+
+/** How the order is delivered: BICYCLE is the short, cheaper trip (bicycle riders only); MOTORBIKE is any other rider. */
+export type DeliveryMethod = 'MOTORBIKE' | 'BICYCLE';
 
 export type PaymentMethod = 'COD' | 'ONLINE';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
@@ -257,6 +262,8 @@ export interface OrderDetail {
   rider_tip?: number | string | null;
   /** The customer's rating (migration 055) when the API sends it; null = not rated. */
   rating?: { stars: number; tags?: string[]; comment?: string | null; created_at?: string } | null;
+  /** Bicycle delivery (migration 067): absent on an older API = MOTORBIKE. */
+  delivery_method?: DeliveryMethod;
 }
 
 // ------------------------------------------------------------------ riders
@@ -323,6 +330,8 @@ export interface RiderSuggestion extends RiderOption {
 
 export interface RiderSuggestions {
   order_id: string;
+  /** Bicycle delivery (migration 067): a BICYCLE order lists only bicycle riders. */
+  delivery_method?: DeliveryMethod;
   rules: { max_active_deliveries: number; max_dropoff_distance_km: number; location_fresh_minutes: number };
   riders: RiderSuggestion[];
 }
@@ -2788,6 +2797,8 @@ export interface LiveWaitingOrder {
   order_id: string;
   order_number: string;
   order_status: string;
+  /** Bicycle delivery (migration 067): a BICYCLE order can only go to a bicycle rider. */
+  delivery_method?: DeliveryMethod;
   waiting_seconds: number;
   address: string;
   dropoff: { lat: number; lng: number } | null;
@@ -2808,3 +2819,35 @@ export interface RiderAutoAssignSetting {
   max_distance_km: number;
   updated_at: string | null;
 }
+
+/**
+ * Bicycle delivery (2026-11-05): `GET|PUT /admin/settings/bicycle-delivery` (ADMIN, OPERATIONS). A separate, cheaper
+ * delivery for short flat trips. Off by default; staff set the distance and the money. A PUT takes any subset of
+ * enabled / max_km / fee / rider_pay and replaces a section whole.
+ */
+export interface BicycleFeeSetting {
+  base_lkr: number;
+  base_km: number;
+  per_km_lkr: number;
+  /** null = no maximum. */
+  max_fee_lkr: number | null;
+}
+export type BicycleRiderPayMode = 'FIXED' | 'PER_KM';
+export interface BicycleRiderPaySetting {
+  mode: BicycleRiderPayMode;
+  fixed_lkr: number;
+  base_lkr: number;
+  per_km_lkr: number;
+  /** PER_KM only; null = no minimum. */
+  min_lkr: number | null;
+}
+export interface BicycleDeliverySetting {
+  enabled: boolean;
+  max_km: number;
+  fee: BicycleFeeSetting;
+  rider_pay: BicycleRiderPaySetting;
+  updated_at: string | null;
+  /** false until migration 067 has been run by the owner in Coolify. */
+  ready: boolean;
+}
+export type BicycleDeliveryInput = Partial<Pick<BicycleDeliverySetting, 'enabled' | 'max_km' | 'fee' | 'rider_pay'>>;

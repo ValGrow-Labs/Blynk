@@ -48,11 +48,11 @@ describe('Settings categories', () => {
     renderAt('/settings');
     expect(screen.getByRole('tablist', { name: 'Settings categories' })).toBeInTheDocument();
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Deliveries7', 'Riders2', 'Orders and payments4', 'Customers and rewards6', 'App1']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Deliveries8', 'Riders2', 'Orders and payments4', 'Customers and rewards6', 'App1']);
     expect(NAMES.every((n, i) => tabs[i].textContent?.startsWith(n))).toBe(true);
   });
 
-  it('opens Deliveries by default, with its one-line description and its seven cards, and no other category', async () => {
+  it('opens Deliveries by default, with its one-line description and its eight cards, and no other category', async () => {
     mockApi(() => undefined);
     renderAt('/settings');
     expect(selectedTab()).toBe(tab('Deliveries'));
@@ -67,6 +67,7 @@ describe('Settings categories', () => {
       'Small-order fee',
       'Delivery radius',
       'Extra delivery areas',
+      'Bicycle delivery',
       'Rider trips',
       'Automatic rider assignment',
     ]) {

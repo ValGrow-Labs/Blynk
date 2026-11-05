@@ -22,6 +22,7 @@ import { checkoutExtrasPatch, parseBasketAmount } from '../lib/checkoutExtras';
 import { basePerKmOf, basePerKmText, basketFreeDeliveryText, parseBasePerKm } from '../lib/deliveryFee';
 import { BasePerKmFields } from '../components/BasePerKmFields';
 import { SmallOrderFeeCard } from '../components/SmallOrderFeeCard';
+import { BicycleDeliveryCard } from '../components/BicycleDeliveryCard';
 import { DeliveryRadiusCard } from '../components/DeliveryRadiusCard';
 import { DeliveryZonesCard } from '../components/DeliveryZonesCard';
 import { CartRulesCard } from '../components/CartRulesCard';
@@ -177,6 +178,8 @@ const MORE_CATEGORIES: readonly SettingsCategory[] = [
       { key: 'delivery-radius', anchors: ['delivery-radius'], node: <DeliveryRadiusCard /> },
       // Extra delivery areas (2026-11-01): separate circles such as Beruwala, added to the radius.
       { key: 'delivery-zones', anchors: ['delivery-zones'], node: <DeliveryZonesCard /> },
+      // Bicycle delivery (2026-11-05): a cheaper option for short flat trips; off by default; needs migration 067.
+      { key: 'bicycle-delivery', anchors: ['bicycle-delivery'], node: <BicycleDeliveryCard /> },
       { key: 'rider-trips', anchors: ['rider-trips-title'], node: <RiderTripsCard /> },
       // Automatic rider assignment (owner, 2026-10-25): off by default.
       { key: 'rider-auto-assign', anchors: ['rider-auto-assign'], node: <RiderAutoAssignCard /> },

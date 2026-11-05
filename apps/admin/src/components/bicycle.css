@@ -1,0 +1,13 @@
+/* Bicycle delivery (2026-11-05): the order badge and the "Switch to motorbike" step. */
+
+.bicycle-chip {
+  margin-left: 6px;
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.switch-motorbike {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}

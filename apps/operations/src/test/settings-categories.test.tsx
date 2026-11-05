@@ -27,7 +27,7 @@ afterEach(() => {
 
 const NAMES = ['Deliveries', 'Riders', 'Orders and payments', 'Customers and rewards', 'Sellers', 'Team and app'] as const;
 // tiles + cards
-const COUNTS = [10, 7, 7, 11, 3, 3];
+const COUNTS = [11, 7, 7, 11, 3, 3];
 
 /** Every link tile of More: category -> [title, href]. 26 tiles, each in exactly one category. */
 const TILES: Record<(typeof NAMES)[number], Array<[string, string]>> = {

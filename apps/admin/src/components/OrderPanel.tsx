@@ -22,6 +22,7 @@ import { OrderBill } from './OrderBill';
 import { OrderItems } from './OrderItems';
 import { OrderWalletRefund } from './OrderWalletRefund';
 import { OrderFreeDelivery } from './OrderFreeDelivery';
+import { BicycleTag, OrderSwitchToMotorbike } from './OrderDeliveryMethod';
 import { OrderRatingTip, RepeatTag } from './OrderRatingTip';
 import { walletUsed } from '../lib/wallet';
 
@@ -37,6 +38,7 @@ export function OrderPanel({
   busy,
   onAction,
   onMarkItemUnavailable,
+  onChanged,
   onClose,
 }: {
   order: BoardOrder;
@@ -47,6 +49,8 @@ export function OrderPanel({
   onAction(action: OrderAction): void;
   /** Asks (with a confirmation) to mark one pending item unavailable. */
   onMarkItemUnavailable?(item: OrderItemRow): void;
+  /** A change made inside the panel (Switch to motorbike) that the board should reload. */
+  onChanged?(): void;
   onClose(): void;
 }) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -89,6 +93,8 @@ export function OrderPanel({
             {STATUS_LABEL[order.order_status]}
             {/* Placed from a repeat basket (migration 054). */}
             <RepeatTag basketId={detail?.repeat_basket_id ?? order.repeat_basket_id} />
+            {/* Bicycle delivery (2026-11-05): only a bicycle order is tagged. */}
+            <BicycleTag method={detail?.delivery_method ?? order.delivery_method} />
           </p>
         </div>
         <button type="button" className="button button--ghost button--sm" onClick={onClose}>
@@ -131,6 +137,15 @@ export function OrderPanel({
             <OrderBill order={detail} />
             {/* Make delivery free (owner, 2026-10-21): ADMIN and OPERATIONS. */}
             <OrderFreeDelivery order={detail} role={role} onChanged={() => setLocalVersion((v) => v + 1)} />
+            {/* Switch a bicycle order to motorbike (2026-11-05): ADMIN and OPERATIONS, before pick-up. */}
+            <OrderSwitchToMotorbike
+              order={detail}
+              role={role}
+              onChanged={() => {
+                setLocalVersion((v) => v + 1);
+                onChanged?.();
+              }}
+            />
           </section>
 
           <PaymentSection detail={detail} canRefund={role === 'ADMIN' || role === 'OPERATIONS'} />

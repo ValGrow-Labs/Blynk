@@ -58,6 +58,8 @@ import type {
   BasketFreeDeliverySetting,
   SmallOrderFeeSetting,
   DeliveryRadiusSetting,
+  BicycleDeliveryInput,
+  BicycleDeliverySetting,
   CartRulesSetting,
   OrderForSomeoneElseSetting,
   CustomerSmsLanguageMode,
@@ -378,6 +380,15 @@ export const orders = {
       body: reason ? { reason } : {},
     }).then((d) => d.order),
 
+  /** "Switch to motorbike" (2026-11-05): a BICYCLE order that has not been picked up (PLACED,
+   * ITEM_UNAVAILABLE, PACKED) and is cash on delivery. The API works the motorbike fee and total out again,
+   * releases an assigned bicycle rider and texts the customer. Refusals are 409s with a plain message. */
+  switchToMotorbike: (id: string) =>
+    apiRequest<{ order: OrderDetail }>(`/admin/orders/${id}/delivery-method`, {
+      method: 'POST',
+      body: { method: 'MOTORBIKE' },
+    }).then((d) => d.order),
+
   /** An item that is not on the shelf (lifecycle RESOLVE_ITEM): the API
    * removes it from the bill, recalculates the total and tells the customer. */
   markItemUnavailable: (orderId: string, itemId: string) =>
@@ -406,7 +417,8 @@ export const riders = {
    * F3 (the assign-rider dialog needs name/phone/vehicle/open-deliveries);
    * Home (F2) only ever read `.length`, so this is a compatible superset,
    * not a breaking change. */
-  listActive: () => apiRequest<{ riders: RiderOption[] }>('/admin/riders').then((d) => d.riders),
+  listActive: (orderId?: string) =>
+    apiRequest<{ riders: RiderOption[] }>('/admin/riders', orderId ? { query: { order_id: orderId } } : {}).then((d) => d.riders),
 
   /** `GET /admin/riders?include_inactive=true` - every rider profile, inactive
    * ones too (each row's `is_active` says which): the cash hand-in picker,
@@ -1195,6 +1207,12 @@ export const settings = {
       small_order_fee?: SmallOrderFeeSetting;
     }) =>
       apiRequest<CheckoutSettings>('/admin/settings/checkout', { method: 'PATCH', body }),
+  },
+  /** Bicycle delivery (2026-11-05): switch, distance, customer fee and rider pay. PUT replaces each section sent whole. */
+  bicycleDelivery: {
+    get: () => apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery'),
+    update: (body: BicycleDeliveryInput) =>
+      apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery', { method: 'PUT', body: { ...body } }),
   },
   /** Delivery radius (2026-10-25): how far from the active store orders are accepted. */
   deliveryRadius: {
