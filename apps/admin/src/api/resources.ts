@@ -61,6 +61,7 @@ import type {
   DeliveryRadiusSetting,
   BicycleDeliveryInput,
   BicycleDeliverySetting,
+  TestCustomersSetting,
   DeliveryZone,
   DeliveryZonesSetting,
   CartRulesSetting,
@@ -500,6 +501,12 @@ export const settings = {
 
   setBicycleDelivery: (body: BicycleDeliveryInput) =>
     apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery', { method: 'PUT', body: { ...body } }),
+
+  /** Test customers (Google Play testers, 2026-11-06): PUT replaces the whole list of phone numbers. */
+  getTestCustomers: () => apiRequest<TestCustomersSetting>('/admin/settings/test-customers'),
+
+  setTestCustomers: (phones: string[]) =>
+    apiRequest<TestCustomersSetting>('/admin/settings/test-customers', { method: 'PUT', body: { phones } }),
 
   /** Delivery radius (owner, 2026-10-25): the active store's service radius in km. */
   getDeliveryRadius: () => apiRequest<DeliveryRadiusSetting>('/admin/settings/delivery-radius'),

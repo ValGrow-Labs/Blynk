@@ -18,6 +18,7 @@ import type {
 } from '../api/types';
 import { BasePerKmEditor, type BasePerKmDrafts, type BasePerKmErrors } from '../components/BasePerKmEditor';
 import { BicycleDeliveryCard } from '../components/BicycleDeliveryCard';
+import { TestCustomersCard } from '../components/TestCustomersCard';
 import { DeliveryRadiusCard } from '../components/DeliveryRadiusCard';
 import { DeliveryZonesCard } from '../components/DeliveryZonesCard';
 import { SmallOrderFeeCard } from '../components/SmallOrderFeeCard';
@@ -242,7 +243,7 @@ const SETTINGS_CATEGORIES: SettingsCategory[] = [
     slug: 'customers',
     label: 'Customers and rewards',
     description: 'Offers, rewards and messages for customers: birthdays, referrals, points, wallet, SMS language and SMS sending rules.',
-    anchors: ['wallet', 'sms-sending-rules'],
+    anchors: ['wallet', 'sms-sending-rules', 'test-customers'],
     cards: [
       { key: 'birthday-offer', render: () => <BirthdayOfferPanel /> },
       // Refer a friend and Blynk Points (owner, 2026-10-10).
@@ -254,6 +255,8 @@ const SETTINGS_CATEGORIES: SettingsCategory[] = [
       { key: 'sms-language', render: () => <CustomerSmsLanguagePanel /> },
       // SMS sending rules (owner's brother, 2026-11-03): any time or quiet hours, a cap per customer, a monthly budget.
       { key: 'sms-sending-rules', render: () => <SmsSendingRulesCard /> },
+      // Test customers (2026-11-06): Google Play testers get test orders (cash only, any time, cancelled after ~10 minutes).
+      { key: 'test-customers', render: () => <TestCustomersCard /> },
     ],
   },
   {

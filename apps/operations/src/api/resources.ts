@@ -60,6 +60,7 @@ import type {
   DeliveryRadiusSetting,
   BicycleDeliveryInput,
   BicycleDeliverySetting,
+  TestCustomersSetting,
   CartRulesSetting,
   OrderForSomeoneElseSetting,
   CustomerSmsLanguageMode,
@@ -1213,6 +1214,12 @@ export const settings = {
     get: () => apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery'),
     update: (body: BicycleDeliveryInput) =>
       apiRequest<BicycleDeliverySetting>('/admin/settings/bicycle-delivery', { method: 'PUT', body: { ...body } }),
+  },
+  /** Test customers (Google Play testers, 2026-11-06): PUT replaces the whole list of phone numbers. */
+  testCustomers: {
+    get: () => apiRequest<TestCustomersSetting>('/admin/settings/test-customers'),
+    update: (phones: string[]) =>
+      apiRequest<TestCustomersSetting>('/admin/settings/test-customers', { method: 'PUT', body: { phones } }),
   },
   /** Delivery radius (2026-10-25): how far from the active store orders are accepted. */
   deliveryRadius: {

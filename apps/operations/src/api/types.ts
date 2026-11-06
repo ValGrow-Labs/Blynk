@@ -2851,3 +2851,11 @@ export interface BicycleDeliverySetting {
   ready: boolean;
 }
 export type BicycleDeliveryInput = Partial<Pick<BicycleDeliverySetting, 'enabled' | 'max_km' | 'fee' | 'rider_pay'>>;
+
+/** Test customers (Google Play testers, 2026-11-06): GET|PUT /admin/settings/test-customers. phones are +947XXXXXXXX. */
+export interface TestCustomersSetting {
+  phones: string[];
+  count: number;
+  max: number;
+  updated_at: string | null;
+}

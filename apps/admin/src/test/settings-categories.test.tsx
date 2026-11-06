@@ -48,7 +48,7 @@ describe('Settings categories', () => {
     renderAt('/settings');
     expect(screen.getByRole('tablist', { name: 'Settings categories' })).toBeInTheDocument();
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Deliveries8', 'Riders2', 'Orders and payments4', 'Customers and rewards6', 'App1']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Deliveries8', 'Riders2', 'Orders and payments4', 'Customers and rewards7', 'App1']);
     expect(NAMES.every((n, i) => tabs[i].textContent?.startsWith(n))).toBe(true);
   });
 
@@ -97,7 +97,7 @@ describe('Settings categories', () => {
 
     await user.click(tab('Customers and rewards'));
     expect(screen.getByTestId('where')).toHaveTextContent('/settings#customers');
-    for (const name of ['Birthday offer', 'Refer a friend', 'Blynk Points', 'Blynk Wallet', 'Customer SMS language', 'SMS sending rules']) {
+    for (const name of ['Birthday offer', 'Refer a friend', 'Blynk Points', 'Blynk Wallet', 'Customer SMS language', 'SMS sending rules', 'Test customers (Play testers)']) {
       expect(await regionNow(name)).toBeInTheDocument();
     }
 

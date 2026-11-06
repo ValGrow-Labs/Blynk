@@ -1,0 +1,17 @@
+/* Test customers (Play testers, 2026-11-06): the saved, masked numbers with a Remove each. */
+
+.test-customers__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.test-customers__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}

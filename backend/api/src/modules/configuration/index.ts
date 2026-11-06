@@ -35,6 +35,7 @@ import { deliveryRadiusService, updateDeliveryRadiusSchema } from './delivery-ra
 import { cartRulesService, updateCartRulesSchema } from './cart-rules.js';
 import { deliveryZonesService, updateDeliveryZonesSchema } from './delivery-zones.js';
 import { bicycleDeliveryService, updateBicycleDeliverySchema } from './bicycle-delivery.js';
+import { testCustomersService, updateTestCustomersSchema } from './test-customers.js';
 import { defaultMarkupSettings, updateDefaultMarkupSchema } from '../catalog/catalog.pricing.js';
 
 export const configurationRouter = Router();
@@ -153,6 +154,26 @@ adminSettingsRouter.put('/settings/bicycle-delivery', requireAuth, requireRoles(
   try {
     const input = updateBicycleDeliverySchema.parse(req.body);
     res.json({ success: true, data: await bicycleDeliveryService.set(input, actorOf(req)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Test customers (Google Play testers, owner's brother 2026-11-06): numbers whose orders are test orders - cash on delivery,
+// any time, any address, no alerts, cancelled after about 10 minutes. PUT replaces the whole list (at most 50 Sri Lankan
+// mobile numbers). Audited (TEST_CUSTOMERS_UPDATED, counts and last 3 digits only). See modules/configuration/test-customers.ts.
+adminSettingsRouter.get('/settings/test-customers', requireAuth, requireRoles(['ADMIN', 'OPERATIONS']), async (_req, res, next) => {
+  try {
+    res.json({ success: true, data: await testCustomersService.get() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminSettingsRouter.put('/settings/test-customers', requireAuth, requireRoles(['ADMIN', 'OPERATIONS']), async (req, res, next) => {
+  try {
+    const input = updateTestCustomersSchema.parse(req.body);
+    res.json({ success: true, data: await testCustomersService.set(input, actorOf(req)) });
   } catch (err) {
     next(err);
   }

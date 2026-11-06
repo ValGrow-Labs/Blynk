@@ -4,6 +4,7 @@ import { db } from '../../database/connection.js';
 import { AppError } from '../../middleware/error.middleware.js';
 import { CLOSED_ORDER_STATUSES } from './lifecycle/catalogue.js';
 import type { DBConnection } from './order.repository.js';
+import { isTestCustomer, noTestCustomersConfigured } from '../configuration/test-customers.js';
 
 /*
  * TEST ORDERS - the Google Play review account (owner's brother, 2026-11-05).
@@ -23,7 +24,9 @@ import type { DBConnection } from './order.repository.js';
  *    ordinary cancel (lifecycle CUSTOMER_CANCEL as the order's own customer), so stock, history and the
  *    customer's status behave exactly like a normal cancel.
  *
- * Every other customer is untouched. Until migration 068 has been run, the review number is treated
+ * The same treatment goes to the Google Play TESTERS (owner's brother, 2026-11-06): numbers staff put on the
+ * 'Test customers' list (Admin / Ops, configuration/test-customers.ts) - they sign in with their own numbers and real
+ * SMS codes. Every other customer is untouched. Until migration 068 has been run, the review number is treated
  * like any other customer (testOrdersReady).
  */
 export const TEST_ORDER_AUTO_CANCEL_MINUTES = 10;
@@ -65,13 +68,15 @@ export function setTestOrdersReadyForTests(value: boolean | null): void {
 }
 
 /**
- * Whether this customer's orders are test orders right now: they are the review customer AND migration 068
- * exists. The one question every rule asks; false for everybody else without touching the database.
+ * Whether this customer's orders are test orders right now: they are a test customer (the review number in
+ * REVIEW_LOGIN_PHONE, or a number on the staff-editable Play testers list - configuration/test-customers.ts) AND
+ * migration 068 exists. The one question every rule asks; false for everybody else - without a user lookup at all
+ * while there is no review number and the list is empty.
  */
 export async function isTestModeCustomer(customerId: string, executor: DBConnection = db): Promise<boolean> {
-  if (!env.REVIEW_LOGIN_PHONE) return false;
+  if (await noTestCustomersConfigured(executor)) return false;
   const row = await executor.selectFrom('users').select('phone').where('id', '=', customerId).executeTakeFirst();
-  return isReviewCustomer(row?.phone) && (await testOrdersReady());
+  return (await isTestCustomer(row?.phone, executor)) && (await testOrdersReady());
 }
 
 /**

@@ -23,6 +23,7 @@ import { basePerKmOf, basePerKmText, basketFreeDeliveryText, parseBasePerKm } fr
 import { BasePerKmFields } from '../components/BasePerKmFields';
 import { SmallOrderFeeCard } from '../components/SmallOrderFeeCard';
 import { BicycleDeliveryCard } from '../components/BicycleDeliveryCard';
+import { TestCustomersCard } from '../components/TestCustomersCard';
 import { DeliveryRadiusCard } from '../components/DeliveryRadiusCard';
 import { DeliveryZonesCard } from '../components/DeliveryZonesCard';
 import { CartRulesCard } from '../components/CartRulesCard';
@@ -251,6 +252,8 @@ const MORE_CATEGORIES: readonly SettingsCategory[] = [
       { key: 'sms-language', anchors: ['customer-sms-language-title'], node: <CustomerSmsLanguageCard /> },
       // SMS sending rules (owner's brother, 2026-11-03): any time, quiet hours, per-customer cap, monthly budget.
       { key: 'sms-sending-rules', anchors: ['sms-sending-rules', 'sms-sending-rules-title'], node: <SmsSendingRulesCard /> },
+      // Test customers (2026-11-06): Google Play testers get test orders (cash only, any time, cancelled after ~10 minutes).
+      { key: 'test-customers', anchors: ['test-customers', 'test-customers-title'], node: <TestCustomersCard /> },
     ],
   },
   {
