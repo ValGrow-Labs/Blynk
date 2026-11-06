@@ -20,7 +20,7 @@ const files = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
 const rel = (f: string) => relative(SRC, f).split(sep).join('/');
 
 test('support is an email address and there is no phone or WhatsApp in SUPPORT', () => {
-  expect(SUPPORT.email).toBe('support@blynk.lk');
+  expect(SUPPORT.email).toBe('blynkquickc@gmail.com');
   expect(Object.keys(SUPPORT).filter((k) => /phone|whats/i.test(k))).toEqual([]);
 });
 

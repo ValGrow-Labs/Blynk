@@ -68,13 +68,13 @@ test('Blynk gives no phone or WhatsApp number on the legal pages (owner, 2026-11
     assert.ok(!text.replace(/[\s\-()+.]/g, '').includes('717107374'), `${n}: the number is visible`);
     assert.doesNotMatch(pages[n], /href="tel:|wa\.me|api\.whatsapp\.com/, `${n}: a Call / WhatsApp link`);
     assert.doesNotMatch(text, /Call us|WhatsApp us|Phone \/ WhatsApp/, `${n}: Call us / WhatsApp us text`);
-    assert.match(pages[n], /<p class="footer__help">Need help\? <a href="mailto:support@blynk\.lk">Email us<\/a><\/p>/, `${n}: footer Email us link`);
+    assert.match(pages[n], /<p class="footer__help">Need help\? <a href="mailto:blynkquickc@gmail\.com">Email us<\/a><\/p>/, `${n}: footer Email us link`);
     // the hours are live (store-hours.js fills them from the API; owner 2026-10-20): the written words are only the fallback
     assert.match(text, /Hours:\s+8 AM – 9 PM\s*, every day/, `${n}: hours`);
     assert.match(pages[n], /<span data-hours="dash">/, `${n}: live hours marker`);
   }
   // The home page offers the same email.
-  assert.match(read('index.html'), /<a href="mailto:support@blynk\.lk">Email us<\/a>/);
+  assert.match(read('index.html'), /<a href="mailto:blynkquickc@gmail\.com">Email us<\/a>/);
 });
 
 test('phone and WhatsApp are optional in the config: filled in, the Call us / WhatsApp us links come back; empty, they are left out cleanly', () => {
@@ -82,11 +82,11 @@ test('phone and WhatsApp are optional in the config: filled in, the Call us / Wh
   const withLinks = build(c);
   assert.match(withLinks.get('terms.html'), /href="tel:\+94112223333">Call us<\/a>/);
   assert.match(withLinks.get('terms.html'), /href="https:\/\/wa\.me\/94112223333"[^>]*>WhatsApp us<\/a>/);
-  assert.match(withLinks.get('seller.html'), /Please <a href="tel:\+94112223333">phone<\/a>, <a [^>]*>WhatsApp<\/a> or <a href="mailto:support@blynk\.lk">email<\/a> us to apply\./);
+  assert.match(withLinks.get('seller.html'), /Please <a href="tel:\+94112223333">phone<\/a>, <a [^>]*>WhatsApp<\/a> or <a href="mailto:blynkquickc@gmail\.com">email<\/a> us to apply\./);
   const without = build({ ...readConfig(), phone: '', whatsappUrl: '' });
   for (const [name, html] of without) assert.doesNotMatch(html, /tel:|wa\.me|Call us|WhatsApp us|Phone \/ WhatsApp|undefined/, name);
-  assert.match(without.get('seller.html'), /Please <a href="mailto:support@blynk\.lk">email<\/a> us to apply\./);
-  assert.match(without.get('refunds.html'), /contact us by <a href="mailto:support@blynk\.lk">email<\/a>, or through the app/);
+  assert.match(without.get('seller.html'), /Please <a href="mailto:blynkquickc@gmail\.com">email<\/a> us to apply\./);
+  assert.match(without.get('refunds.html'), /contact us by <a href="mailto:blynkquickc@gmail\.com">email<\/a>, or through the app/);
 });
 
 test('no Blynk phone number or WhatsApp / Call link anywhere on the site (owner, 2026-11-05)', () => {
@@ -99,7 +99,7 @@ test('no Blynk phone number or WhatsApp / Call link anywhere on the site (owner,
     assert.ok(!text.replace(/[\s\-()+.]/g, '').includes('717107374'), `${f}: the number is visible`);
     assert.doesNotMatch(html, /href="tel:|wa\.me|api\.whatsapp\.com/, `${f}: a Call / WhatsApp link`);
     // The footer offers the support email instead.
-    assert.match(html, /<p class="footer__help">[^<]*<a href="mailto:support@blynk\.lk">[^<]+<\/a><\/p>/, `${f}: footer Email us link`);
+    assert.match(html, /<p class="footer__help">[^<]*<a href="mailto:blynkquickc@gmail\.com">[^<]+<\/a><\/p>/, `${f}: footer Email us link`);
   }
   // Nor in the scripts that write text into the pages.
   for (const f of ['app.js', 'walkthrough.js', 'analytics.js']) {
@@ -141,7 +141,7 @@ test('the owner\'s choices are filled in', () => {
   ]) assert.ok(t.includes(s), `terms: "${s}"`);
   const p = visible(pages.privacy);
   for (const s of ['up to 12 months after you close it', 'up to 6 years for tax', 'up to 6 months', 'respond within 21 working days',
-    'Send requests to help@blynk.lk .']) {
+    'Send requests to blynkquickc@gmail.com .']) {
     assert.ok(p.includes(s), `privacy: "${s}"`);
   }
   const r = visible(pages.refunds);

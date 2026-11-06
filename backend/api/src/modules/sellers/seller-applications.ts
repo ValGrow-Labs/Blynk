@@ -146,7 +146,7 @@ export async function submitSellerApplication(raw: unknown, ip: string | null): 
       key: `seller_application_ip:${ip ?? 'unknown'}`,
       max: SELLER_APPLICATION_LIMITS.perIpPerHour,
       windowMs: 60 * 60 * 1000,
-      message: 'Too many applications from this device. Please try again later, or email support@blynk.lk.',
+      message: 'Too many applications from this device. Please try again later, or email blynkquickc@gmail.com.',
     },
   ]);
 

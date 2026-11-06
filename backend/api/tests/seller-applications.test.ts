@@ -151,7 +151,7 @@ describe('the public form', () => {
     const sixth = await apply(body(45));
     expect(sixth.status).toBe(429);
     expect(sixth.body.error.code).toBe('TOO_MANY_REQUESTS');
-    expect(sixth.body.error.message).toMatch(/support@blynk\.lk/);
+    expect(sixth.body.error.message).toMatch(/blynkquickc@gmail\.com/);
     expect((await rows()).some((r) => r.shop_name === 'Zqxapp Stores 45')).toBe(false);
   });
 
@@ -160,7 +160,7 @@ describe('the public form', () => {
     const res = await apply(body(50));
     expect(res.status).toBe(503);
     expect(res.body.error.code).toBe('SELLER_APPLICATIONS_NOT_READY');
-    expect(res.body.error.message).toMatch(/support@blynk\.lk/);
+    expect(res.body.error.message).toMatch(/blynkquickc@gmail\.com/);
     for (const r of [
       await request(app).get('/api/v1/admin/seller-applications').set(auth(tokens.admin)),
       await request(app).patch('/api/v1/admin/seller-applications/a0000001-0000-0000-0000-000000000001').set(auth(tokens.admin)).send({ status: 'CONTACTED' }),

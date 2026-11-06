@@ -190,7 +190,7 @@ The old table in `play-store-listing.md` section 8.6 was written for the web sho
 | Is all user data encrypted in transit? | **Yes** (HTTPS only to the API; the WebViews only allow HTTPS origins) |
 | Account creation methods | **Username and other authentication** (mobile number + SMS code) |
 | Delete account URL | `https://blynk.lk/delete-account` |
-| Can users ask for some data to be deleted without deleting the account? | **Yes** (email `help@blynk.lk`, privacy policy) |
+| Can users ask for some data to be deleted without deleting the account? | **Yes** (email `blynkquickc@gmail.com`, privacy policy) |
 | Independent security review | No |
 | Follows Play Families policy | No (the app is not for children) |
 | Advertising ID | **No** (no `AD_ID` permission in the manifest) |
@@ -242,7 +242,7 @@ Menu names move around; the Dashboard "Set up your app" checklist lists what is 
 7. **Data safety**: section 5 (answers, delete-account URL `https://blynk.lk/delete-account`).
 8. **Other declarations**: Government app **No**; **News app: No**; COVID-19 contact tracing/status **No**; Financial features **none**; **Health apps**: declare appointment booking (listing doc 8.7); Advertising ID **No**; Privacy policy `https://blynk.lk/privacy`.
 9. **App signing**: keep **Google-generated key** (Play App Signing) when the first AAB is uploaded. Afterwards: **Test and release > Setup > App signing**, copy the **SHA-256 certificate fingerprint** and **send it to the lead** (the lead adds it to `apps/customer-site/.well-known/assetlinks.json` and redeploys the site; without it web links open the browser instead of the app).
-10. **Store settings**: category **Shopping**, tags, contact email `help@blynk.lk`, website `https://blynk.lk`.
+10. **Store settings**: category **Shopping**, tags, contact email `blynkquickc@gmail.com`, website `https://blynk.lk`.
 11. **Reach and devices / device catalog**: phones only (exclude tablets, Chromebooks, TV, cars, Wear). The portrait lock is not honoured on 600 dp+ screens at API 36.
 12. **Main store listing**: name, short and full description, icon 512, feature graphic 1024x500, **phone screenshots** (the native ones, section 8), Sinhala and Tamil translations ([`play-store-listing.md`](play-store-listing.md) section 5; native-speaker check pending).
 13. **Countries**: **Sri Lanka only**.

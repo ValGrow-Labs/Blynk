@@ -102,7 +102,7 @@ Play Console > **Grow users > Store presence > Main store listing**.
 >
 > Opening hours, delivery areas and delivery fees are shown in the app and can change.
 >
-> Need help? Use Help in the app, or email help@blynk.lk.
+> Need help? Use Help in the app, or email blynkquickc@gmail.com.
 >
 > Blynk is for customers in and around Dharga Town, Aluthgama, Bentota and Beruwala, Sri Lanka.
 
@@ -125,7 +125,7 @@ No Sinhala or Tamil full description is supplied: I could not write 1,700 charac
 | Free or paid | Free (the app has no in-app purchases through Google Play; goods are paid cash on delivery or by card through PayHere, which Play allows for physical goods) |
 | Category | **Shopping** |
 | Tags | Grocery delivery, Shopping, Food delivery (pick up to 5 from Play's list) |
-| Contact email | `help@blynk.lk` (the address in the privacy policy). Play shows it publicly. Owner: confirm or replace `<CONTACT_EMAIL>` |
+| Contact email | `blynkquickc@gmail.com` (the address in the privacy policy). Play shows it publicly. Owner: confirm or replace `<CONTACT_EMAIL>` |
 | Phone (optional) | `<CONTACT_PHONE>` (optional; public) |
 | Website | `https://blynk.lk` |
 | Privacy policy | `https://blynk.lk/privacy.html` (live, HTTP 200, checked 2026-10-24) |
@@ -201,7 +201,7 @@ Base: what the shop and API actually collect (2026-10-24 code), and the privacy 
 - Does your app collect or share any of the required user data types? **Yes**
 - Is all of the user data collected by your app encrypted in transit? **Yes** (HTTPS only)
 - Which of the following methods of account creation does your app support? **Username and other authentication** (phone number + SMS code). Account deletion: in the app (**Profile / Account > Delete account**) and on the web at **`https://blynk.lk/delete-account`** (put this URL in the "Delete account URL" field).
-- Do you provide a way for users to request that some or all of their data is deleted, without requiring them to delete their account? **Yes** (email help@blynk.lk, privacy policy section 8) or No, as the owner prefers.
+- Do you provide a way for users to request that some or all of their data is deleted, without requiring them to delete their account? **Yes** (email blynkquickc@gmail.com, privacy policy section 8) or No, as the owner prefers.
 
 Data types. "Collected" = sent off the phone to Blynk. "Shared" = sent to a third party that is not just processing it for Blynk. Riders, PayHere, SMS, hosting and Firebase messaging work on Blynk's behalf, which Play counts as **service providers, not sharing**. Google Analytics / Google Ads / Meta through Google Tag Manager are declared as **shared** for analytics and advertising, because the remarketing tags use the data for Google's and Meta's ads. (Tracking only runs when the `GTM_ID` build argument is set in Coolify; on 2026-10-24 the live shop had no GTM container. Declare it now anyway if it will be switched on; Play requires the form to be correct whenever the app is live.)
 
@@ -220,7 +220,7 @@ Data types. "Collected" = sent off the phone to Blynk. "Shared" = sent to a thir
 | App activity > **App interactions** | Yes | **Yes** (Analytics, Advertising or marketing) | Required | Analytics | Page views, add to cart, checkout events via Google Tag Manager |
 | App activity > **In-app search history** | Yes | **Yes** (Analytics, Advertising or marketing) | Optional | App functionality, Analytics | Search terms (the GA4 `search` event) |
 | App activity > **Other user-generated content** | Yes | No | Optional | App functionality | Product ratings and reviews, feedback, product requests ("Ask us") |
-| Messages > **Other in-app messages** | No | No | | | No customer-to-customer messaging (support is by email, support@blynk.lk, outside the app) |
+| Messages > **Other in-app messages** | No | No | | | No customer-to-customer messaging (support is by email, blynkquickc@gmail.com, outside the app) |
 | Device or other IDs | Yes | **Yes** (Analytics, Advertising or marketing) | Required | App functionality, Analytics | Firebase push token (for order notifications); cookie IDs used by GA4, Google Ads and Meta |
 | App info and performance (crash logs, diagnostics) | No | No | | | The shop sends no crash reports |
 | Photos, videos, audio, files, contacts, calendar, web browsing | No | No | | | |

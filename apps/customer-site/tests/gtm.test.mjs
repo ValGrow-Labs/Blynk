@@ -181,7 +181,7 @@ test('landing: get_blynk_click says which button, contact_click only the method'
   click(new Element({ '[data-install]': true, '.hero': new Element() }));
   click(new Element({ '[data-install]': true, '.nav': new Element() }));
   click(new Element({ '[data-install]': true, 'section[id]': section }));
-  click(new Element({ 'a[href]': true, footer: new Element() }, { href: 'mailto:support@blynk.lk' }));
+  click(new Element({ 'a[href]': true, footer: new Element() }, { href: 'mailto:blynkquickc@gmail.com' }));
   click(new Element({ '[data-walk-open]': true }));
   click(new Element({ 'a[href]': true }, { href: '#how' }));
   const events = layer.slice(1);
@@ -190,7 +190,7 @@ test('landing: get_blynk_click says which button, contact_click only the method'
   assert.deepEqual(events.slice(0, 3).map((e) => e.button_location), ['hero', 'header', 'about']);
   assert.equal(events[0].platform, 'ios');
   assert.deepEqual(events.slice(3, 4).map((e) => [e.method, e.link_location]), [['email', 'footer']]);
-  assert.ok(!JSON.stringify(events).includes('support@blynk.lk'), 'the email address is never sent');
+  assert.ok(!JSON.stringify(events).includes('blynkquickc@gmail.com'), 'the email address is never sent');
 });
 
 test('landing: no dataLayer (built without GTM) pushes nothing and never throws', () => {

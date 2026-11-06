@@ -6,7 +6,7 @@ import { localized } from '@/blynk/i18n/localized';
  */
 export const SUPPORT = {
   // Blynk gives no phone or WhatsApp number (owner, 2026-11-05): customers reach support by email.
-  email: 'support@blynk.lk',
+  email: 'blynkquickc@gmail.com',
   hubName: 'Dharga Town',
   country: 'Sri Lanka',
   serviceRadiusKm: 4,
